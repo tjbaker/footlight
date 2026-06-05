@@ -129,7 +129,7 @@ describe("serializeManifestCSV", () => {
 
     const csv = serializeManifestCSV(rows);
     expect(csv.split("\n")[0]).toBe(
-      "source_file,in_point,out_point,crop_offset,content_crop,out_name,notes",
+      "source_file,in_point,out_point,crop_offset,content_crop,out_name,hook,title,text_position,notes",
     );
 
     const parsed = parseCsv(csv);
@@ -143,6 +143,9 @@ describe("serializeManifestCSV", () => {
       crop_offset: "center",
       content_crop: "",
       out_name: "",
+      hook: "",
+      title: "",
+      text_position: "",
       notes: "",
     });
 
@@ -150,6 +153,24 @@ describe("serializeManifestCSV", () => {
     expect(parsed[1]!.content_crop).toBe("1800:1010:60:34");
     expect(parsed[1]!.crop_offset).toBe("0=center; 14.5=440");
     expect(parsed[1]!.notes).toBe("cuts to piano, then back");
+  });
+
+  it("round-trips caption columns (hook / title / text_position)", () => {
+    const rows: ClipRow[] = [
+      {
+        source_file: "a.mp4",
+        in_point: "0",
+        out_point: "10",
+        crop_offset: "center",
+        hook: "Watch this",
+        title: "the solo",
+        text_position: "top",
+      },
+    ];
+    const parsed = parseCsv(serializeManifestCSV(rows));
+    expect(parsed[0]!.hook).toBe("Watch this");
+    expect(parsed[0]!.title).toBe("the solo");
+    expect(parsed[0]!.text_position).toBe("top");
   });
 
   it("quotes fields containing quotes and newlines", () => {

@@ -49,6 +49,12 @@ export interface ClipRow {
   content_crop?: string;
   out_name?: string;
   notes?: string;
+  /** Big caption punch-line (burned only when captions are enabled; SPEC §6.5). */
+  hook?: string;
+  /** Secondary caption line, drawn below the hook. */
+  title?: string;
+  /** Caption block placement: `top` | `center` | `bottom`. */
+  text_position?: string;
 }
 
 /** Tolerance (px) within which a box x snaps to a named left/center/right offset. */
@@ -188,6 +194,9 @@ const MANIFEST_COLUMNS: Array<keyof ClipRow> = [
   "crop_offset",
   "content_crop",
   "out_name",
+  "hook",
+  "title",
+  "text_position",
   "notes",
 ];
 
@@ -229,6 +238,12 @@ export interface ClipSpec {
   content_crop?: string;
   out_name?: string;
   notes?: string;
+  /** Big caption punch-line (burned only when captions are enabled; SPEC §6.5). */
+  hook?: string;
+  /** Secondary caption line, drawn below the hook. */
+  title?: string;
+  /** Caption block placement: `top` | `center` | `bottom`. */
+  text_position?: string;
   /** Optional eased crop path; takes precedence over `crop_offset` at render. */
   cropPath?: CropPathPoint[];
   /**

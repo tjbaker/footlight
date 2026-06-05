@@ -33,6 +33,12 @@ export interface ClipRow {
   crop_offset?: string;
   content_crop?: string;
   out_name?: string;
+  /** Big punch-line caption text (burned only when captions are enabled). */
+  hook?: string;
+  /** Secondary caption line, drawn below the hook. */
+  title?: string;
+  /** Vertical placement of the caption block: `top` | `center` | `bottom`. */
+  text_position?: string;
   [key: string]: string | undefined;
 }
 
@@ -44,6 +50,23 @@ export interface RenderOptions {
   preset: string;
   /** Audio handling: "copy" (lossless passthrough) or an AAC bitrate like "256k". */
   audioBitrate: string;
+  /**
+   * Burn each row's `hook`/`title` text into the video at `text_position`
+   * (SPEC §6.5). Off by default — clips export clean. A render-wide toggle so
+   * the per-clip text can ride in the manifest as a shot-list without rendering.
+   */
+  burnCaptions?: boolean;
+  /**
+   * Caption font as a `.ttf`/`.otf` path (drawtext `fontfile=`). Takes
+   * precedence over `captionFontName`. Bring-your-own — never bundled.
+   */
+  captionFontFile?: string;
+  /**
+   * Caption font as a fontconfig family name (drawtext `font=`). Used when no
+   * `captionFontFile` is given; falls back to the system default sans
+   * (`DEFAULT_CAPTION_FONT`) when neither is set.
+   */
+  captionFontName?: string;
 }
 
 export const DEFAULT_RENDER_OPTIONS: RenderOptions = {
@@ -446,6 +469,9 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
   filters.push(cropFilter);
   filters.push(`scale=${TARGET_W}:${TARGET_H}:flags=lanczos`);
   filters.push("setsar=1");
+  // Optional burned captions, drawn LAST on the final 1080×1920 frame so text
+  // sizes/margins are relative to the output, not the source (SPEC §6.5).
+  filters.push(...buildCaptionFilters(row, opts));
   const vf = filters.join(",");
 
   // Audio: default to a lossless stream copy (same codec, bitrate and sample
@@ -485,6 +511,92 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
   ];
 
   return { args, outPath };
+}
+
+/** Vertical placement of the burned caption block in the 1080×1920 frame. */
+export type TextPosition = "top" | "center" | "bottom";
+
+/** Fontconfig family used when no caption font is configured (system default sans). */
+export const DEFAULT_CAPTION_FONT = "Sans";
+
+/**
+ * Default caption style (SPEC §6.5), sized to the 1920px-tall output: a big
+ * `hook` (~h/18) above a smaller `title` (~h/26), white fill with a black
+ * outline for legibility over busy stage footage, centered, inside ~12%
+ * top/bottom safe margins.
+ */
+const CAPTION_STYLE = {
+  hookSize: Math.round(TARGET_H / 18), // ~107px
+  titleSize: Math.round(TARGET_H / 26), // ~74px
+  margin: Math.round(TARGET_H * 0.12), // ~230px safe margin
+  gap: Math.round(TARGET_H * 0.012), // ~23px between hook and title
+  fontcolor: "white",
+  borderw: 4,
+  bordercolor: "black@0.8",
+} as const;
+
+function parseTextPosition(value: string | undefined): TextPosition {
+  const s = (value || "").trim().toLowerCase();
+  return s === "top" || s === "center" ? s : "bottom";
+}
+
+/**
+ * Escape a string for a single-quoted drawtext value inside a `-vf` chain.
+ * Wrapping in single quotes makes `:` and `,` literal at the filtergraph level
+ * (so they don't split options/filters); inside, `\` and `'` still need
+ * escaping, and `%` is escaped so drawtext doesn't treat it as an expansion.
+ * Newlines collapse to a space (hook/title are single lines).
+ */
+function drawtextQuote(value: string): string {
+  const inner = value
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/%/g, "\\%")
+    .replace(/\r?\n/g, " ");
+  return `'${inner}'`;
+}
+
+/**
+ * Build the `drawtext` filter(s) for one row's burned captions, or `[]` when
+ * captions are off or the row has no `hook`/`title`. Pure (SPEC §6.5): the hook
+ * sits above the title as one centered block, placed at `text_position`. The
+ * caller appends these after `setsar=1` so sizes are relative to the output.
+ */
+export function buildCaptionFilters(row: ClipRow, opts: RenderOptions): string[] {
+  if (!opts.burnCaptions) return [];
+  const lines: Array<{ text: string; size: number }> = [];
+  const hook = (row.hook || "").trim();
+  const title = (row.title || "").trim();
+  if (hook) lines.push({ text: hook, size: CAPTION_STYLE.hookSize });
+  if (title) lines.push({ text: title, size: CAPTION_STYLE.titleSize });
+  if (lines.length === 0) return [];
+
+  const pos = parseTextPosition(row.text_position);
+  const { gap, margin } = CAPTION_STYLE;
+  const blockH = lines.reduce((sum, l) => sum + l.size, 0) + gap * (lines.length - 1);
+  const blockTop =
+    pos === "top"
+      ? margin
+      : pos === "center"
+        ? Math.round((TARGET_H - blockH) / 2)
+        : TARGET_H - margin - blockH;
+
+  const fontArg = opts.captionFontFile
+    ? `fontfile=${drawtextQuote(opts.captionFontFile)}`
+    : `font=${drawtextQuote(opts.captionFontName || DEFAULT_CAPTION_FONT)}`;
+
+  const filters: string[] = [];
+  let y = blockTop;
+  for (const l of lines) {
+    filters.push(
+      `drawtext=${fontArg}:text=${drawtextQuote(l.text)}:` +
+        `fontsize=${l.size}:fontcolor=${CAPTION_STYLE.fontcolor}:` +
+        `borderw=${CAPTION_STYLE.borderw}:bordercolor=${CAPTION_STYLE.bordercolor}:` +
+        `x=(w-text_w)/2:y=${y}`,
+    );
+    y += l.size + gap;
+  }
+  return filters;
 }
 
 /** Extract the filename stem (basename without final extension) from a path. */
