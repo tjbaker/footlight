@@ -392,6 +392,9 @@ export const en: Messages = {
       providerOpenai: "OpenAI",
       providerConnected: "connected",
       providerAddKey: "+ add key",
+      notImplemented: "not yet implemented",
+      notImplementedBody:
+        "Only Google Gemini is wired today — Anthropic and OpenAI are on the roadmap.",
       apiKey: "API key",
       apiKeyPlaceholder: "Gemini API key (BYOK)",
       apiKeyShow: "Show",

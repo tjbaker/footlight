@@ -361,25 +361,20 @@ const MODEL_CATALOG = {
     },
     { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", cap: "Cheapest; good for dense sampling.", speed: "fastest", perFrame: 0.00015 },
   ],
-  claude: [
-    { id: "claude-opus-4-8", name: "Claude Opus 4.8", cap: "Most capable Claude — strongest reasoning.", speed: "slower", perFrame: 0.004 },
-    { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", recommended: true, cap: "Balanced quality and speed.", speed: "fast", perFrame: 0.001 },
-    { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", cap: "Fastest, cheapest Claude.", speed: "fastest", perFrame: 0.0003 },
-  ],
-  openai: [
-    { id: "gpt-5.1", name: "GPT-5.1", cap: "Flagship multimodal reasoning.", speed: "slower", perFrame: 0.002 },
-    { id: "gpt-5.1-mini", name: "GPT-5.1 mini", recommended: true, cap: "Faster, cheaper — good default.", speed: "fast", perFrame: 0.0005 },
-  ],
+  // Anthropic / OpenAI have no adapter yet (see IMPLEMENTED_PROVIDERS) — no models listed.
 } satisfies Record<string, ModelOpt[]>;
 
-/** Models for a provider, falling back to Gemini for an unknown id. */
+/** Providers with a working adapter today; others are shown but flagged "not yet implemented". */
+const IMPLEMENTED_PROVIDERS = new Set<string>(["gemini"]);
+
+/** Models for a provider; empty for a provider that isn't implemented yet. */
 function modelsFor(provider: string): ModelOpt[] {
-  return (MODEL_CATALOG as Record<string, ModelOpt[]>)[provider] ?? MODEL_CATALOG.gemini;
+  return (MODEL_CATALOG as Record<string, ModelOpt[]>)[provider] ?? [];
 }
-/** A provider's default model id (its recommended, else the first). */
+/** A provider's default model id (recommended, else first, else the global default). */
 function defaultModelFor(provider: string): string {
   const ms = modelsFor(provider);
-  return (ms.find((m) => m.recommended) ?? ms[0]!).id;
+  return (ms.find((m) => m.recommended) ?? ms[0])?.id ?? DEFAULT_AI.model;
 }
 
 /** Per-request flat cost the assistant adds on top of per-frame vision (illustrative). */
@@ -663,13 +658,22 @@ function buildAiPanel(): HTMLElement {
     { id: "openai", name: s.providerOpenai, connected: false },
   ];
   for (const p of providers) {
+    const implemented = IMPLEMENTED_PROVIDERS.has(p.id);
     const chip = el("div", p.id === prefs.provider ? "fl-prov on" : "fl-prov");
     if (!p.connected) chip.classList.add("add");
+    if (!implemented) {
+      chip.classList.add("soon");
+      chip.title = s.notImplementedBody;
+    }
     const dot = el("span", "pdot");
     const name = el("span", "pname");
     name.textContent = p.name;
     const stat = el("span", "pstat");
-    stat.textContent = p.connected ? s.providerConnected : s.providerAddKey;
+    stat.textContent = !implemented
+      ? s.notImplemented
+      : p.connected
+        ? s.providerConnected
+        : s.providerAddKey;
     chip.append(dot, name, stat);
     chip.addEventListener("click", () => {
       for (const c of Array.from(provRow.children)) c.classList.remove("on");
@@ -730,6 +734,13 @@ function buildAiPanel(): HTMLElement {
   optList.style.cssText = "display:flex; flex-direction:column; gap:9px;";
   function renderModels(): void {
     optList.replaceChildren();
+    if (!IMPLEMENTED_PROVIDERS.has(prefs.provider)) {
+      const notice = el("div", "fl-set-secsub");
+      notice.style.cssText = "padding:10px 2px; line-height:1.5;";
+      notice.textContent = s.notImplementedBody;
+      optList.append(notice);
+      return;
+    }
     for (const m of modelsFor(prefs.provider)) {
     const card = el("div", m.id === prefs.model ? "fl-opt sel" : "fl-opt");
     const radio = el("span", "radio");
@@ -792,9 +803,14 @@ function buildAiPanel(): HTMLElement {
   note.append(ct);
 
   function paintCost(): void {
+    const models = modelsFor(prefs.provider);
+    if (models.length === 0) {
+      note.style.display = "none"; // no cost line for a not-yet-implemented provider
+      return;
+    }
+    note.style.display = "";
     const interval = loadAutoTrackSettings().intervalSec || 0.75;
     const frames = Math.max(1, Math.round(20 / interval));
-    const models = modelsFor(prefs.provider);
     const model = models.find((m) => m.id === prefs.model) ?? models.find((m) => m.recommended) ?? models[0]!;
     const trackCost = frames * model.perFrame;
     noteText.innerHTML = `${s.costNote} ${interval.toFixed(2)}s ≈ <b>${frames} frames</b> ≈ <b>${fmtUsd(trackCost)}</b> with ${model.name}. The assistant adds only ~<b>${fmtUsd(ASSISTANT_PER_REQUEST)}</b> per request.`;

@@ -101,6 +101,8 @@ export interface SettingsMessages {
     providerOpenai: string;
     providerConnected: string;
     providerAddKey: string;
+    notImplemented: string;
+    notImplementedBody: string;
     apiKey: string;
     apiKeyPlaceholder: string;
     apiKeyShow: string;
