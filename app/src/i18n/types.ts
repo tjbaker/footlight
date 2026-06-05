@@ -120,6 +120,13 @@ export interface SettingsMessages {
     advancedSub: string;
     assistantModel: string;
     visionModel: string;
+    overlayTitle: string;
+    overlaySub: string;
+    overlayPlaceholder: string;
+    baseView: string;
+    baseViewSub: string;
+    baseViewShow: string;
+    baseViewHide: string;
   };
 
   shortcuts: {

@@ -82,8 +82,8 @@ export class GeminiAssistant implements AssistantModel {
     contents.push({ role: "user", parts: [{ text: req.message }] });
 
     const body = {
-      // The grounded-context system preamble (stills + state, NEVER audio).
-      systemInstruction: { parts: [{ text: systemPreamble(req.context) }] },
+      // Framing brain (base.md) + editor overlay + grounded operational preamble.
+      systemInstruction: { parts: [{ text: composeSystemPrompt(req.context) }] },
       contents,
       // Declare the assistant tools as Gemini function declarations.
       tools: [{ functionDeclarations: req.tools.map(toFunctionDeclaration) }],
@@ -184,9 +184,44 @@ function toFunctionDeclaration(tool: ToolSpec): {
 }
 
 /**
- * A compact grounded-context preamble. Cites that the model sees STILLS + project
- * state and NEVER audio, then summarizes the clip's In/Out, duration, scene cuts,
- * and loudness swells so the model can ground time-locating proposals in them.
+ * Compose the full system instruction sent on every turn, in three layers:
+ *
+ *   1. `ctx.basePrompt` — the read-only "framing brain" (`prompts/base.md`): the
+ *      domain expertise (pillarbox traps, cut-aligned schedules, verify-the-pixels).
+ *   2. `ctx.userOverlay` — the editor's append-only framing preferences, clearly
+ *      framed as refining (NOT overriding) the safety guidance above it.
+ *   3. `systemPreamble(ctx)` — the runtime grounding + operational discipline
+ *      (no frames in-conversation, never audio, the live In/Out / cuts / swells).
+ *
+ * Layers 1 and 2 are optional; the operational preamble is always present and
+ * comes LAST so its discipline can't be silently buried by a long overlay. PURE
+ * and exported so the composition is unit-testable offline.
+ */
+export function composeSystemPrompt(ctx: AssistantContext): string {
+  const sections: string[] = [];
+  const base = ctx.basePrompt?.trim();
+  if (base) sections.push(base);
+  const overlay = ctx.userOverlay?.trim();
+  if (overlay) {
+    sections.push(
+      "## Editor's framing preferences (overlay)\n" +
+        "The editor added the preferences below. They REFINE the guidance above " +
+        "for this editor's taste, but they do NOT override the safety rules " +
+        "(pillarbox warnings, verify-the-pixels, human-in-the-loop, clean export, " +
+        "lossless audio). If a preference conflicts with a safety rule, follow the " +
+        "safety rule and say so.\n\n" +
+        overlay,
+    );
+  }
+  sections.push(systemPreamble(ctx));
+  return sections.join("\n\n---\n\n");
+}
+
+/**
+ * A compact grounded-context preamble: the operational discipline (the model
+ * sees no frames in-conversation and NEVER audio) plus the live clip state —
+ * In/Out, duration, scene cuts, loudness swells — to ground time-locating
+ * proposals. This is the always-present last layer of `composeSystemPrompt`.
  */
 function systemPreamble(ctx: AssistantContext): string {
   const lines: string[] = [

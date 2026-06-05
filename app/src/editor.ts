@@ -90,7 +90,8 @@ function renderOptions(outdir: string): RenderOptions {
 }
 import type { HistoryEntry, SessionData, RenderOptions } from "./platform/types.js";
 import { createAssistant, type ConversationMessage } from "./assistant/index.js";
-import { openSettings, initTheme } from "./settings.js";
+import { openSettings, initTheme, loadAssistantOverlay } from "./settings.js";
+import { BASE_PROMPT } from "./assistant/base-prompt.js";
 import { openShortcuts } from "./shortcuts.js";
 import {
   loadAutoTrackSettings,
@@ -2410,11 +2411,14 @@ export function mountEditor(root: HTMLElement): void {
     }
     const region = currentRegion();
     const models = resolveModels(assistantSelection());
+    const overlay = loadAssistantOverlay(); // editor's append-only framing preferences
     const ctx = {
       region: { width: region.width, height: region.height },
       source: state.source,
       models,
       apiKey: apiKey.trim(),
+      basePrompt: BASE_PROMPT, // the read-only framing brain (prompts/base.md)
+      ...(overlay ? { userOverlay: overlay } : {}),
       ...(state.inPoint != null ? { inSec: state.inPoint } : {}),
       ...(state.outPoint != null ? { outSec: state.outPoint } : {}),
       ...(state.duration > 0 ? { duration: state.duration } : {}),
