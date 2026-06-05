@@ -303,7 +303,7 @@ export function mountEditor(root: HTMLElement): void {
   seg.style.margin = "16px 16px 4px";
   const frameTab = button("Frame", undefined, () => selectTab("frame"));
   const trackTab = button("", undefined, () => selectTab("track"));
-  trackTab.innerHTML = 'Track <span class="fl-pill" style="margin-left:4px;">AI</span>';
+  trackTab.textContent = "Track subject";
   seg.append(frameTab, trackTab);
 
   // -- Frame tab --
@@ -456,7 +456,7 @@ export function mountEditor(root: HTMLElement): void {
   // -- Track tab (auto-track) --
   const trackPane = el("div");
   const trackSect = el("div", "fl-sect");
-  trackSect.append(sectionHeader("Auto-track subject (AI)"));
+  trackSect.append(sectionHeader("Track subject"));
   const trackHelp = el("div", "fl-help");
   trackHelp.textContent =
     "Opt-in. Pans to follow a subject across one shot. Set your Gemini key in Settings.";
@@ -1998,7 +1998,7 @@ export function mountEditor(root: HTMLElement): void {
         trackStatus.textContent = `track: ON · ${path.length} keyframe(s). Clear track to revert.`;
         setOutput(
           `Auto-track: ${path.length} keyframe(s) from ${samples.length} sample(s). ` +
-            `The preview box now follows the subject across the shot — Add clip → manifest to render with the eased crop path.`,
+            `The preview box now follows the subject across the shot — Add clip → queue to render with the eased crop path.`,
           "ok",
         );
       }
@@ -2182,7 +2182,7 @@ export function mountEditor(root: HTMLElement): void {
   }
 
   async function doRender(): Promise<void> {
-    if (!state.clips.length) return flashErr("Add at least one clip to the manifest.");
+    if (!state.clips.length) return flashErr("Add at least one clip to the queue.");
     const manifestJson = serializeManifestJSON(state.clips);
     setOutput("Rendering… (this runs ffmpeg per clip; may take a while)");
     try {
