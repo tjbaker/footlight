@@ -18,7 +18,7 @@ Two surfaces, both first-class (see `CONTRIBUTING.md`):
    PRs to it are expected and welcome.
 
 `ffmpeg`/`ffprobe` must be on `PATH` for anything end-to-end; `yt-dlp` is optional
-for downloads. Requires **Node 20+**. `SPEC.md` is the full design/roadmap (section
+for downloads. Requires **Node 26+**. `SPEC.md` is the full design/roadmap (section
 numbers like "SPEC §6.9" referenced in code comments).
 
 ## Repo layout (two npm packages)

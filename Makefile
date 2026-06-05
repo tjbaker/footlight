@@ -1,7 +1,7 @@
 # Footlight — task runner.
 # Root package = render engine + `footlight` CLI (src/, dist/, bin/).
 # app/        = Tauri desktop GUI (separate npm package).
-# Requires Node 20+; ffmpeg/ffprobe on PATH for anything end-to-end.
+# Requires Node 26+; ffmpeg/ffprobe on PATH for anything end-to-end.
 
 .DEFAULT_GOAL := help
 
@@ -10,7 +10,7 @@
 # ---------------------------------------------------------------------------
 
 .PHONY: doctor
-doctor: ## Check required tools (node 20+, ffmpeg, ffprobe) + optional (yt-dlp, cargo)
+doctor: ## Check required tools (node 26+, ffmpeg, ffprobe) + optional (yt-dlp, cargo)
 	@bash scripts/doctor.sh
 
 .PHONY: setup
