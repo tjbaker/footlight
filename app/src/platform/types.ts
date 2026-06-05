@@ -31,6 +31,14 @@ export interface RenderOptions {
   audioBitrate?: string;
   /** Print the ffmpeg commands without running them (`--dry-run`). */
   dryRun?: boolean;
+  /** Burn each clip's hook/title into the video (`--burn-captions`); off by default. */
+  burnCaptions?: boolean;
+  /**
+   * Caption font: a `.ttf`/`.otf` file path or a system family name
+   * (`--caption-font`). The engine treats a value with a path separator or font
+   * extension as a file (drawtext `fontfile=`), otherwise a fontconfig name.
+   */
+  captionFont?: string;
 }
 
 /** A saved working session (project) — restored on next launch. */

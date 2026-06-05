@@ -81,6 +81,7 @@ const USAGE = `footlight — 16:9 -> 9:16 vertical clip batcher
 Usage:
   footlight render <manifest.csv|.json> [--outdir clips] [--crf 19] [--preset medium]
                                   [--audio-bitrate copy|256k] [--dry-run]
+                                  [--burn-captions [--caption-font <path|name>]]
   footlight probe  <source>         dims + cropdetect suggestion (black bars only)
   footlight scenes <source>         detected scene-cut timestamps (seconds)
   footlight track  <request.json>   locate a subject; print TrackSample[] JSON to stdout
@@ -129,7 +130,7 @@ interface RenderItem {
 async function cmdRender(argv: string[]): Promise<number> {
   const { positionals, flags } = parseArgs(
     argv,
-    new Set(["outdir", "crf", "preset", "audio-bitrate"]),
+    new Set(["outdir", "crf", "preset", "audio-bitrate", "caption-font"]),
   );
 
   const manifestPath = positionals[0];
@@ -143,6 +144,15 @@ async function cmdRender(argv: string[]): Promise<number> {
   const preset = String(flags.get("preset") ?? DEFAULT_RENDER_OPTIONS.preset);
   const audioBitrate = String(flags.get("audio-bitrate") ?? DEFAULT_RENDER_OPTIONS.audioBitrate);
   const dryRun = flags.get("dry-run") === true;
+
+  // Captions (SPEC §6.5): off unless --burn-captions. --caption-font takes a
+  // file path (.ttf/.otf, or anything with a path separator) → drawtext
+  // fontfile=, otherwise a fontconfig family name → font=.
+  const burnCaptions = flags.get("burn-captions") === true;
+  const captionFontArg = flags.has("caption-font") ? String(flags.get("caption-font")) : "";
+  const looksLikePath = /[\\/]/.test(captionFontArg) || /\.(ttf|otf|ttc)$/i.test(captionFontArg);
+  const captionFontFile = looksLikePath ? captionFontArg : undefined;
+  const captionFontName = !looksLikePath && captionFontArg ? captionFontArg : undefined;
 
   if (Number.isNaN(crf)) {
     console.error("render: --crf must be a number");
@@ -199,6 +209,9 @@ async function cmdRender(argv: string[]): Promise<number> {
         dims,
         cropPath,
         cropWindow: items[i]!.cropWindow,
+        burnCaptions,
+        ...(captionFontFile ? { captionFontFile } : {}),
+        ...(captionFontName ? { captionFontName } : {}),
       });
     } catch (err) {
       console.error(`${label} SKIP — ${errMsg(err)}`);
@@ -261,6 +274,9 @@ function parseJsonManifest(text: string): RenderItem[] {
     if (spec.content_crop !== undefined) row.content_crop = spec.content_crop;
     if (spec.out_name !== undefined) row.out_name = spec.out_name;
     if (spec.notes !== undefined) row.notes = spec.notes;
+    if (spec.hook !== undefined) row.hook = spec.hook;
+    if (spec.title !== undefined) row.title = spec.title;
+    if (spec.text_position !== undefined) row.text_position = spec.text_position;
 
     let cropPath: CropPathKeyframe[] | undefined;
     if (spec.cropPath !== undefined) {
