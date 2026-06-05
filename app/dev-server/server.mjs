@@ -387,7 +387,10 @@ const server = createServer(async (req, res) => {
 
     sendText(res, 404, "not found");
   } catch (err) {
-    sendText(res, 500, err instanceof Error ? err.message : String(err));
+    // Log the detail server-side; return a generic message so error internals
+    // (stack/paths) aren't exposed to the client (CodeQL js/stack-trace-exposure).
+    console.error("dev backend request failed:", err);
+    sendText(res, 500, "internal error");
   }
 });
 

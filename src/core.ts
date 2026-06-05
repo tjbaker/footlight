@@ -271,7 +271,14 @@ export function buildEasedCropX(keyframes: CropPathKeyframe[], _y?: number): str
 
 /** Sanitize text for use in a filename. */
 export function safeName(text: string): string {
-  return text.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "");
+  const collapsed = text.replace(/[^A-Za-z0-9._-]+/g, "_");
+  // Trim leading/trailing underscores with a linear scan rather than a
+  // backtracking-prone `^_+|_+$` regex (CodeQL js/polynomial-redos).
+  let start = 0;
+  let end = collapsed.length;
+  while (start < end && collapsed[start] === "_") start++;
+  while (end > start && collapsed[end - 1] === "_") end--;
+  return collapsed.slice(start, end);
 }
 
 /** Format a number to a fixed 3 decimal places (ffmpeg-friendly timestamps). */
@@ -328,9 +335,16 @@ export interface BuildOptions extends RenderOptions {
  * separator on the directory. Kept simple and POSIX-style for stable output
  * paths in tests; the CLI may pass an absolute or relative outdir.
  */
+/** Strip trailing path separators (`/` or `\`) with a linear scan (no backtracking regex). */
+function trimTrailingSeparators(p: string): string {
+  let end = p.length;
+  while (end > 0 && (p[end - 1] === "/" || p[end - 1] === "\\")) end--;
+  return p.slice(0, end);
+}
+
 function joinPath(dir: string, name: string): string {
-  if (dir === "" ) return name;
-  const trimmed = dir.replace(/[\\/]+$/, "");
+  if (dir === "") return name;
+  const trimmed = trimTrailingSeparators(dir);
   return `${trimmed}/${name}`;
 }
 
@@ -475,7 +489,7 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
 
 /** Extract the filename stem (basename without final extension) from a path. */
 function sourceStem(p: string): string {
-  const base = p.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? p;
+  const base = trimTrailingSeparators(p).split(/[\\/]/).pop() ?? p;
   const dot = base.lastIndexOf(".");
   return dot > 0 ? base.slice(0, dot) : base;
 }
