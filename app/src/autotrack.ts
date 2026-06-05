@@ -13,12 +13,24 @@
  */
 
 import type { CropPathKeyframe } from "@core";
+import { migrateApiKey } from "../../src/secret-migration.js";
+import type { FootlightPlatform } from "./platform/types.js";
 
-/** BYOK + tracking knobs, persisted in localStorage for the web/dev build. */
+/**
+ * The keychain account name under which the BYOK Gemini key is stored, via the
+ * platform `secretStore` (OS keychain natively; a DEV-ONLY localStorage shim on
+ * the web build). The key NO LONGER lives in the `footlight.autotrack` blob.
+ */
+export const GEMINI_API_KEY_SECRET = "footlight.apiKey.gemini";
+
+/**
+ * Non-secret tracking knobs, persisted in localStorage. The BYOK API key is
+ * deliberately NOT part of this shape any more — it lives in the OS keychain via
+ * `secretStore` (see `GEMINI_API_KEY_SECRET`). A legacy `apiKey` field in the
+ * stored blob is tolerated on read (for the one-time migration) but never written
+ * back; it is migrated out by `migrateLegacyApiKey`.
+ */
 export interface AutoTrackSettings {
-  /** BYOK API key. NOTE: localStorage is fine for the dev/web build; the
-   *  packaged Tauri app should move this to the OS keychain. */
-  apiKey: string;
   /** Natural-language subject anchor, e.g. "the person playing guitar". */
   subjectHint: string;
   /** Use the deterministic offline MockTracker (no key, for demo/testing). */
@@ -30,7 +42,6 @@ export interface AutoTrackSettings {
 const STORAGE_KEY = "footlight.autotrack";
 
 export const DEFAULT_AUTOTRACK: AutoTrackSettings = {
-  apiKey: "",
   subjectHint: "",
   mock: false,
   intervalSec: 0.75,
@@ -43,7 +54,6 @@ export function loadAutoTrackSettings(): AutoTrackSettings {
     if (!raw) return { ...DEFAULT_AUTOTRACK };
     const parsed = JSON.parse(raw) as Partial<AutoTrackSettings>;
     return {
-      apiKey: typeof parsed.apiKey === "string" ? parsed.apiKey : "",
       subjectHint: typeof parsed.subjectHint === "string" ? parsed.subjectHint : "",
       mock: parsed.mock === true,
       intervalSec:
@@ -59,9 +69,45 @@ export function loadAutoTrackSettings(): AutoTrackSettings {
 /** Persist settings (best effort; ignores quota/availability errors). */
 export function saveAutoTrackSettings(s: AutoTrackSettings): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    // Serialize ONLY the non-secret knobs — never the API key.
+    const safe: AutoTrackSettings = {
+      subjectHint: s.subjectHint,
+      mock: s.mock,
+      intervalSec: s.intervalSec,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(safe));
   } catch {
     /* localStorage unavailable (private mode etc.) — non-fatal. */
+  }
+}
+
+/**
+ * One-time first-run migration: pull a legacy inline `apiKey` out of the
+ * `footlight.autotrack` blob and into the OS keychain via `secretStore`.
+ *
+ * Order matters for safety: we only write back the cleaned (key-stripped) blob
+ * AFTER `setSecret` resolves, so a locked/unavailable keychain (or any failure)
+ * never strips the key from localStorage before it has been safely stored —
+ * the key is preserved for the next attempt. A no-op when there is no legacy key.
+ */
+export async function migrateLegacyApiKey(platform: FootlightPlatform): Promise<void> {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return; // localStorage unavailable — nothing to migrate.
+  }
+  if (!raw) return;
+
+  const { apiKey, remainder } = migrateApiKey(raw);
+  if (!apiKey) return; // no inline key to move.
+
+  // Store first; only rewrite the cleaned blob once the secret is safely saved.
+  await platform.setSecret(GEMINI_API_KEY_SECRET, apiKey);
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(remainder));
+  } catch {
+    /* non-fatal: the secret is stored; the stale inline copy is harmless. */
   }
 }
 
