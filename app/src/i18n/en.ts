@@ -414,6 +414,15 @@ export const en: Messages = {
         "Power-user path: cheap vision for tracking, a smarter model for the assistant. Off by default.",
       assistantModel: "Assistant model",
       visionModel: "Vision & tracking model",
+      overlayTitle: "Framing preferences",
+      overlaySub:
+        "Added on top of Footlight's framing guidance — your taste, not a replacement. e.g. “keep my face in the top third”, “this venue never letterboxes”, “prefer tighter crops on solos”. Safety guidance (verify the pixels, clean export, lossless audio) always wins on conflict.",
+      overlayPlaceholder: "Optional: your personal framing preferences…",
+      baseView: "Footlight's framing guidance",
+      baseViewSub:
+        "Read-only — the expertise applied to every assistant turn. Your preferences above compose on top of it.",
+      baseViewShow: "Show",
+      baseViewHide: "Hide",
     },
 
     shortcuts: {

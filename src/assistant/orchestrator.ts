@@ -65,6 +65,18 @@ export interface AssistantContext {
   models: ResolvedModels;
   /** BYOK key (opt-in; providers never ship one). */
   apiKey: string;
+  /**
+   * The read-only "framing brain" base system prompt (`prompts/base.md`),
+   * prepended to every turn so the model actually carries the domain expertise.
+   * Optional so tests and the offline mock can omit it.
+   */
+  basePrompt?: string;
+  /**
+   * The editor's append-only framing-preferences overlay (Settings → AI). It is
+   * composed ON TOP OF `basePrompt` — it refines, never replaces, the safety
+   * guidance. Empty/whitespace is treated as absent.
+   */
+  userOverlay?: string;
 }
 
 /** A prior conversation turn (for multi-turn context). */

@@ -7,7 +7,21 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { GeminiAssistant } from "../src/assistant/gemini.js";
+import { GeminiAssistant, composeSystemPrompt } from "../src/assistant/gemini.js";
+import type { AssistantContext } from "../src/assistant/orchestrator.js";
+
+/** A minimal valid context; spread overrides on top. */
+function ctx(over: Partial<AssistantContext> = {}): AssistantContext {
+  return {
+    region: { width: 1920, height: 1080 },
+    models: {
+      assistant: { provider: "gemini", model: "gemini-2.5-flash" },
+      vision: { provider: "gemini", model: "gemini-2.5-flash" },
+    },
+    apiKey: "k",
+    ...over,
+  };
+}
 
 /** Build a minimal Gemini response from a list of content parts. */
 function response(parts: unknown[]): unknown {
@@ -130,5 +144,47 @@ describe("GeminiAssistant constructor + BYOK", () => {
 
   it("exposes a stable name", () => {
     expect(new GeminiAssistant().name).toBe("gemini");
+  });
+});
+
+describe("composeSystemPrompt (pure, no network)", () => {
+  it("without base or overlay -> just the operational preamble", () => {
+    const out = composeSystemPrompt(ctx());
+    expect(out).toContain("Footlight's framing assistant");
+    expect(out).not.toContain("---"); // no section separators when single-layer
+    expect(out).not.toContain("framing preferences (overlay)");
+  });
+
+  it("prepends the base prompt before the operational preamble", () => {
+    const out = composeSystemPrompt(ctx({ basePrompt: "BRAIN: pillarbox trap." }));
+    expect(out.indexOf("BRAIN: pillarbox trap.")).toBeLessThan(
+      out.indexOf("Footlight's framing assistant"),
+    );
+    expect(out).toContain("\n\n---\n\n");
+  });
+
+  it("inserts the overlay between base and preamble, framed as non-overriding", () => {
+    const out = composeSystemPrompt(
+      ctx({ basePrompt: "BASE", userOverlay: "Keep my face in the top third." }),
+    );
+    expect(out.indexOf("BASE")).toBeLessThan(out.indexOf("Keep my face in the top third."));
+    expect(out.indexOf("Keep my face in the top third.")).toBeLessThan(
+      out.indexOf("Footlight's framing assistant"),
+    );
+    expect(out).toContain("framing preferences (overlay)");
+    expect(out).toContain("do NOT override the safety rules");
+  });
+
+  it("treats whitespace-only base/overlay as absent", () => {
+    const out = composeSystemPrompt(ctx({ basePrompt: "   ", userOverlay: "\n\t " }));
+    expect(out).not.toContain("---");
+    expect(out).not.toContain("framing preferences (overlay)");
+  });
+
+  it("the operational preamble always comes last", () => {
+    const out = composeSystemPrompt(ctx({ basePrompt: "BASE", userOverlay: "OVER" }));
+    expect(out.lastIndexOf("Footlight's framing assistant")).toBeGreaterThan(
+      out.lastIndexOf("OVER"),
+    );
   });
 });

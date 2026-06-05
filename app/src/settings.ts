@@ -25,6 +25,7 @@
 import { messages } from "./i18n/index.js";
 import { GEMINI_API_KEY_SECRET, loadAutoTrackSettings, saveAutoTrackSettings } from "./autotrack.js";
 import { platform } from "./platform/index.js";
+import { BASE_PROMPT } from "./assistant/base-prompt.js";
 import {
   APP_NAME,
   APP_VERSION,
@@ -165,9 +166,30 @@ const DEFAULT_RENDER: RenderPrefs = {
 interface AiPrefs {
   provider: string; // "gemini" | "claude" | "openai"
   model: string;
+  /**
+   * Append-only "framing preferences" overlay composed ON TOP of the read-only
+   * base prompt (never replaces it). Optional; whitespace-only is treated as
+   * absent. Capped at OVERLAY_MAX_CHARS.
+   */
+  overlay?: string;
 }
 
 const DEFAULT_AI: AiPrefs = { provider: "gemini", model: "gemini-3.5-flash" };
+
+/**
+ * Hard cap on the overlay length. Not a security boundary (the overlay is the
+ * user's own input on their own machine + key) — it just keeps a runaway paste
+ * from bloating every turn's tokens. The real safety boundary is structural: the
+ * base prompt is read-only, the operational/safety preamble is always composed
+ * LAST, and nothing the model proposes mutates state without a human Accept.
+ */
+const OVERLAY_MAX_CHARS = 2000;
+
+/** The editor's saved framing-preferences overlay (trimmed; "" when unset). */
+export function loadAssistantOverlay(): string {
+  const prefs = readJson<AiPrefs>(AI_KEY, DEFAULT_AI);
+  return (prefs.overlay ?? "").trim();
+}
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -894,6 +916,50 @@ function buildAiPanel(): HTMLElement {
   paintCost();
   modelBlock.body.append(note);
   root.append(modelBlock.root);
+
+  // Framing preferences — an append-only overlay composed ON TOP of the
+  // read-only base prompt (it refines, never replaces it; see composeSystemPrompt).
+  const overlayBlock = block(s.overlayTitle);
+  const overlaySub = el("div", "fl-set-secsub");
+  overlaySub.style.cssText = "margin-bottom:9px; line-height:1.5;";
+  overlaySub.textContent = s.overlaySub;
+  const overlayArea = document.createElement("textarea");
+  overlayArea.className = "fl-set-overlay mono";
+  overlayArea.rows = 4;
+  overlayArea.maxLength = OVERLAY_MAX_CHARS;
+  overlayArea.placeholder = s.overlayPlaceholder;
+  overlayArea.value = prefs.overlay ?? "";
+  const overlayCount = el("div", "fl-set-overlay-count");
+  const paintCount = (): void => {
+    overlayCount.textContent = `${overlayArea.value.length}/${OVERLAY_MAX_CHARS}`;
+  };
+  paintCount();
+  overlayArea.addEventListener("input", () => {
+    prefs.overlay = overlayArea.value;
+    save();
+    paintCount();
+  });
+  overlayBlock.body.append(overlaySub, overlayArea, overlayCount);
+
+  // Read-only base prompt (transparency): show exactly what the overlay sits on.
+  const baseSub = el("div", "fl-set-secsub");
+  baseSub.style.cssText = "margin:14px 0 7px; line-height:1.5;";
+  baseSub.textContent = s.baseViewSub;
+  const basePre = document.createElement("pre");
+  basePre.className = "fl-set-baseview mono";
+  basePre.textContent = BASE_PROMPT;
+  basePre.style.display = "none";
+  const baseBtn = button(s.baseViewShow, "fl-btn sm", () => {
+    const showing = basePre.style.display !== "none";
+    basePre.style.display = showing ? "none" : "block";
+    baseBtn.textContent = showing ? s.baseViewShow : s.baseViewHide;
+  });
+  const baseHead = el("div", "fl-set-baseview-head");
+  const baseLabel = el("span");
+  baseLabel.textContent = s.baseView;
+  baseHead.append(baseLabel, baseBtn);
+  overlayBlock.body.append(baseSub, baseHead, basePre);
+  root.append(overlayBlock.root);
 
   // Advanced: separate vision/tracking model (off by default)
   const advBlock = block("Advanced");
