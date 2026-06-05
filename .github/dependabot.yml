@@ -1,0 +1,71 @@
+# Dependabot version updates.
+#
+# Opens grouped dependency PRs on a weekly cadence across all four ecosystems in
+# the repo. Each PR is gated by the same CI + CodeQL as any other change
+# (Dependabot PRs trigger the `pull_request` workflows). Minor/patch updates are
+# grouped into one PR per ecosystem to cut noise; majors come as their own PRs so
+# they get a closer look. Commits use Conventional Commits so release-please
+# folds them in cleanly (`chore(deps)` / `ci(deps)` are hidden from the changelog).
+#
+# NOTE: Dependabot *security* updates are a separate switch — enable them under
+# Settings -> Code security -> "Dependabot security updates".
+version: 2
+updates:
+  # Root render engine + `footlight` CLI.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      npm-root:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # Desktop app frontend (Vite + TypeScript).
+  - package-ecosystem: npm
+    directory: "/app"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      npm-app:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # Tauri native shell (Rust / Cargo).
+  - package-ecosystem: cargo
+    directory: "/app/src-tauri"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      cargo:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # The CI / CodeQL / release-please workflow actions themselves.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions:
+        patterns: ["*"]
