@@ -99,6 +99,13 @@ The CLI is also available directly after `make build` — see **CLI usage** belo
 
 `make gui` (browser) or `make tauri-dev` (native) opens a frame-accurate cutter:
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/footlight-dark-annotated.png">
+    <img alt="Annotated Footlight editor: the 9:16 crop box (drag to reframe), the live 9:16 output preview, and the loudness timeline that flags quiet-to-loud swells" src="docs/images/footlight-light-annotated.png" width="900">
+  </picture>
+</p>
+
 - **Load** a source — Browse…, drag a video onto the window, or paste a path.
 - **Loudness timeline** is the scrubber/trimmer: **drag across it to set In/Out**,
   click to seek, hover to preview frames. It draws volume over time with suggested
