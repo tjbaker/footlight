@@ -2262,7 +2262,7 @@ export function mountEditor(root: HTMLElement): void {
     const title = el("div", "fl-assist-title");
     title.textContent = "Assistant";
     const sub = el("div", "fl-assist-sub");
-    sub.textContent = "Proposes framing — you accept. Grounded in stills, not audio.";
+    sub.textContent = "Proposes cuts & framing — you accept. Never hears the audio.";
     headText.append(title, sub);
     const closeBtn = button("", "fl-iconbtn sm", () => closeAssistant());
     closeBtn.innerHTML = ICON_X;
@@ -2344,8 +2344,9 @@ export function mountEditor(root: HTMLElement): void {
     appendBubble(
       "ai",
       "Tell me the moment or subject you want and I'll propose the cut and framing. " +
-        "I read sampled stills + your project state (scene cuts, loudness swells) — never audio — " +
-        "and every proposal previews before it changes anything.",
+        "I work from your project state — scene cuts and loudness swells — and look at " +
+        "specific frames when I frame or track a subject. I never hear the audio, and " +
+        "every proposal previews before it changes anything.",
     );
   }
 
