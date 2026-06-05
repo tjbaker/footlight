@@ -77,11 +77,16 @@ function renderOptions(outdir: string): RenderOptions {
         audio?: unknown;
         bitrate?: unknown;
         dryRun?: unknown;
+        burnCaptions?: unknown;
+        captionFont?: unknown;
       };
       if (typeof p.crf === "number") opts.crf = p.crf;
       if (typeof p.preset === "string") opts.preset = p.preset;
       if (p.audio === "reencode" && typeof p.bitrate === "string") opts.audioBitrate = p.bitrate;
       if (p.dryRun === true) opts.dryRun = true;
+      if (p.burnCaptions === true) opts.burnCaptions = true;
+      if (typeof p.captionFont === "string" && p.captionFont.trim())
+        opts.captionFont = p.captionFont.trim();
     }
   } catch {
     /* fall back to the engine's own defaults */
@@ -134,6 +139,12 @@ interface EditorState {
   loudness: number[] | null;
   /** Suggested quiet→loud "swell" moments (seconds), derived from loudness. */
   swells: { t: number; label: string }[];
+  /** Caption big line (`hook`) — shot-list data carried in the manifest. */
+  hook: string;
+  /** Caption secondary line (`title`). */
+  title: string;
+  /** Vertical caption placement: `top` | `center` | `bottom` (default bottom). */
+  textPosition: "top" | "center" | "bottom";
 }
 
 const DEFAULT_FPS = 30;
@@ -158,6 +169,9 @@ export function mountEditor(root: HTMLElement): void {
     sceneCuts: [],
     loudness: null,
     swells: [],
+    hook: "",
+    title: "",
+    textPosition: "bottom",
   };
 
   const autoTrack: AutoTrackSettings = loadAutoTrackSettings();
@@ -490,6 +504,46 @@ export function mountEditor(root: HTMLElement): void {
   const contentReadout = el("div", "hint");
   contentReadout.textContent = "content_crop: (off)";
 
+  // Captions (SPEC §6.5): shot-list text carried in the manifest (hook/title/
+  // text_position). It is stored regardless of whether burn-in is enabled in
+  // Settings → Rendering; the engine's drawtext is the authoritative render.
+  const capSect = el("div", "fl-sect");
+  capSect.append(sectionHeader("Captions"));
+  const hookField = el("div", "fl-field");
+  hookField.style.marginBottom = "8px";
+  const hookInput = input("text", "hook (big line, optional)");
+  hookInput.title = "The big caption line burned over the clip (when burn-in is on).";
+  hookInput.addEventListener("input", () => {
+    state.hook = hookInput.value;
+    drawPreview();
+  });
+  hookField.append(hookInput);
+  const titleCapField = el("div", "fl-field");
+  titleCapField.style.marginBottom = "8px";
+  const titleCapInput = input("text", "title (secondary line, optional)");
+  titleCapInput.title = "The secondary caption line, shown under the hook.";
+  titleCapInput.addEventListener("input", () => {
+    state.title = titleCapInput.value;
+    drawPreview();
+  });
+  titleCapField.append(titleCapInput);
+  const posField = el("div", "fl-field");
+  const posSelect = document.createElement("select");
+  posSelect.title = "Vertical placement of the caption.";
+  for (const v of ["top", "center", "bottom"] as const) {
+    const opt = document.createElement("option");
+    opt.value = v;
+    opt.textContent = v;
+    posSelect.append(opt);
+  }
+  posSelect.value = state.textPosition;
+  posSelect.addEventListener("change", () => {
+    state.textPosition = posSelect.value as EditorState["textPosition"];
+    drawPreview();
+  });
+  posField.append(posSelect);
+  capSect.append(hookField, titleCapField, posField);
+
   const kfSect = el("div", "fl-sect");
   kfSect.append(sectionHeader("Moving crop — keyframes"));
   const kfRow = el("div", "fl-rowg");
@@ -520,7 +574,7 @@ export function mountEditor(root: HTMLElement): void {
   const clipErr = el("div", "err-text");
   addSect.append(nameField, addClipBtn, clipErr);
 
-  framePane.append(srcSect, clipSect, framingSect, kfSect, addSect);
+  framePane.append(srcSect, clipSect, framingSect, capSect, kfSect, addSect);
 
   // -- Track tab (auto-track) --
   const trackPane = el("div");
@@ -1728,6 +1782,57 @@ export function mountEditor(root: HTMLElement): void {
       ctx.strokeRect(cw * 0.86, 0.5, cw * 0.14 - 0.5, ch - 1);
       ctx.setLineDash([]);
     }
+    drawPreviewCaptions(ctx, cw, ch);
+  }
+
+  /**
+   * Rough on-canvas approximation of the burned caption: hook above title,
+   * white fill with a dark outline, placed top/center/bottom per text_position.
+   * This is a runtime-visual hint only — the AUTHORITATIVE render is the
+   * engine's drawtext (`--burn-captions`); spacing/fonts will differ.
+   */
+  function drawPreviewCaptions(
+    ctx: CanvasRenderingContext2D,
+    cw: number,
+    ch: number,
+  ): void {
+    const hook = state.hook.trim();
+    const title = state.title.trim();
+    if (!hook && !title) return;
+
+    const hookSize = Math.round(ch * 0.052);
+    const titleSize = Math.round(ch * 0.036);
+    const gap = Math.round(ch * 0.012);
+    const pad = Math.round(ch * 0.03);
+
+    // Total block height to place per position.
+    const hookH = hook ? hookSize : 0;
+    const titleH = title ? titleSize : 0;
+    const blockH = hookH + titleH + (hook && title ? gap : 0);
+
+    let top: number;
+    if (state.textPosition === "top") top = pad;
+    else if (state.textPosition === "center") top = (ch - blockH) / 2;
+    else top = ch - blockH - pad;
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.lineJoin = "round";
+    const x = cw / 2;
+    let y = top;
+    const drawLine = (text: string, size: number): void => {
+      ctx.font = `700 ${size}px system-ui, sans-serif`;
+      ctx.lineWidth = Math.max(2, Math.round(size * 0.14));
+      ctx.strokeStyle = "rgba(0,0,0,0.85)";
+      ctx.strokeText(text, x, y);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(text, x, y);
+      y += size + gap;
+    };
+    if (hook) drawLine(hook, hookSize);
+    if (title) drawLine(title, titleSize);
+    ctx.restore();
   }
 
   // ---- dragging ----
@@ -2730,6 +2835,14 @@ export function mountEditor(root: HTMLElement): void {
     const name = nameInput.value.trim();
     if (name) spec.out_name = name;
 
+    // Caption shot-list data (SPEC §6.5) — carried in the manifest regardless
+    // of whether burn-in is enabled at render. Trim; omit empty fields.
+    const hook = state.hook.trim();
+    const title = state.title.trim();
+    if (hook) spec.hook = hook;
+    if (title) spec.title = title;
+    if ((hook || title) && state.textPosition !== "bottom") spec.text_position = state.textPosition;
+
     state.clips.push(spec);
     refreshManifest();
     nameInput.value = "";
@@ -3001,6 +3114,15 @@ export function mountEditor(root: HTMLElement): void {
     state.keyframes = r.keyframes;
     state.cropPath = r.cropPath;
     nameInput.value = r.name;
+    // Caption fields aren't part of specToEditorState (they live untouched in
+    // the manifest module); read them straight off the spec for round-trip.
+    state.hook = spec.hook ?? "";
+    state.title = spec.title ?? "";
+    state.textPosition =
+      spec.text_position === "top" || spec.text_position === "center" ? spec.text_position : "bottom";
+    hookInput.value = state.hook;
+    titleCapInput.value = state.title;
+    posSelect.value = state.textPosition;
     refreshContentReadout();
     refreshCropReadout();
     refreshKeyframes();
