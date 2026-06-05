@@ -30,7 +30,9 @@ This is an early build. Footlight is a **TypeScript render engine + CLI** with a
 **desktop GUI** (Tauri) for visual frame-accurate cutting and crop authoring —
 including punch-in/zoom framing and **optional AI-assisted subject tracking**
 (provider-agnostic, with Gemini as the reference vision provider) as an opt-in
-accelerant, never a gate. See [SPEC.md](SPEC.md) for the full design and roadmap.
+accelerant, never a gate. See [SPEC.md](SPEC.md) for the design rationale; the
+roadmap lives in [issues](https://github.com/tjbaker/footlight/issues) and
+[releases](https://github.com/tjbaker/footlight/releases).
 
 You **run it from source** — there is no prebuilt/signed download. The browser
 GUI needs only Node; the native window additionally needs the Rust toolchain.
