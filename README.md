@@ -48,14 +48,18 @@ See **[Running Footlight](#running-footlight)** below.
   CLI do not need it.
 
 Footlight does **not** bundle ffmpeg/ffprobe/Node — it invokes whatever is on
-your `PATH`. Run **`make doctor`** to verify your environment in one shot.
+your `PATH`. Run **`make doctor`** to verify your environment in one shot. On
+**macOS**, **`make setup-system`** installs the system tools (ffmpeg, yt-dlp) via
+Homebrew; on other platforms, `make doctor` prints the exact install command for
+anything missing.
 
 ## Getting started
 
 From zero to your first vertical clip:
 
-1. **Install the prerequisites** — at minimum `ffmpeg`, `ffprobe`, and Node 26+
-   (see [Requirements](#requirements)).
+1. **Install the prerequisites** — `ffmpeg`, `ffprobe`, and Node 26+
+   (see [Requirements](#requirements)). On **macOS**, `make setup-system`
+   installs ffmpeg + yt-dlp via Homebrew.
 2. **Set up and verify your environment:**
    ```bash
    make setup     # install all dependencies (root engine + GUI)
