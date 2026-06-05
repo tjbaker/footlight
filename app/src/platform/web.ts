@@ -16,6 +16,7 @@ import type {
   TrackSample,
   HistoryEntry,
   SessionData,
+  RenderOptions,
 } from "./types.js";
 
 const BASE = "http://localhost:8787";
@@ -75,11 +76,16 @@ export const webPlatform: FootlightPlatform = {
 
   async render(
     manifestJson: string,
-    opts?: { outdir?: string },
+    opts?: RenderOptions,
   ): Promise<{ ok: boolean; log: string }> {
-    const url = opts?.outdir
-      ? `${BASE}/render?outdir=${encodeURIComponent(opts.outdir)}`
-      : `${BASE}/render`;
+    const q = new URLSearchParams();
+    if (opts?.outdir) q.set("outdir", opts.outdir);
+    if (opts?.crf != null) q.set("crf", String(opts.crf));
+    if (opts?.preset) q.set("preset", opts.preset);
+    if (opts?.audioBitrate) q.set("audioBitrate", opts.audioBitrate);
+    if (opts?.dryRun) q.set("dryRun", "1");
+    const qs = q.toString();
+    const url = qs ? `${BASE}/render?${qs}` : `${BASE}/render`;
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },

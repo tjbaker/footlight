@@ -63,9 +63,33 @@ function assistantSelection(): { assistantModel: { provider: string; model: stri
   }
   return { assistantModel };
 }
-import type { HistoryEntry, SessionData } from "./platform/types.js";
+
+/** Render flags from Settings → Rendering (persisted under `footlight.render`). */
+function renderOptions(outdir: string): RenderOptions {
+  const opts: RenderOptions = { outdir };
+  try {
+    const raw = localStorage.getItem("footlight.render");
+    if (raw) {
+      const p = JSON.parse(raw) as {
+        crf?: unknown;
+        preset?: unknown;
+        audio?: unknown;
+        bitrate?: unknown;
+        dryRun?: unknown;
+      };
+      if (typeof p.crf === "number") opts.crf = p.crf;
+      if (typeof p.preset === "string") opts.preset = p.preset;
+      if (p.audio === "reencode" && typeof p.bitrate === "string") opts.audioBitrate = p.bitrate;
+      if (p.dryRun === true) opts.dryRun = true;
+    }
+  } catch {
+    /* fall back to the engine's own defaults */
+  }
+  return opts;
+}
+import type { HistoryEntry, SessionData, RenderOptions } from "./platform/types.js";
 import { createAssistant, type ConversationMessage } from "./assistant/index.js";
-import { openSettings } from "./settings.js";
+import { openSettings, initTheme } from "./settings.js";
 import { openShortcuts } from "./shortcuts.js";
 import {
   loadAutoTrackSettings,
@@ -141,7 +165,10 @@ export function mountEditor(root: HTMLElement): void {
   let apiKey = "";
 
   root.innerHTML = "";
-  document.documentElement.setAttribute("data-theme", loadTheme());
+  // Resolve light/dark/System and install the live OS listener (handles a
+  // persisted "system" theme correctly on boot — the top-bar toggle below is a
+  // quick light<->dark override).
+  initTheme();
 
   // Whether the live 9:16 output preview is shown (persisted, default on).
   let previewOn = loadPreviewPref();
@@ -2709,7 +2736,7 @@ export function mountEditor(root: HTMLElement): void {
     try {
       const outdir = outdirInput.value.trim() || "clips";
       saveOutdir(outdir);
-      const result = await platform.render(manifestJson, { outdir });
+      const result = await platform.render(manifestJson, renderOptions(outdir));
       setOutput(
         result.log || (result.ok ? "OK (no output)" : "Render failed."),
         result.ok ? "ok" : "err",
@@ -3292,14 +3319,6 @@ function pushRecent(path: string): void {
 
 // ---- Theme (light default, persisted) ----
 const THEME_KEY = "footlight.theme";
-
-function loadTheme(): "light" | "dark" {
-  try {
-    return localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light";
-  } catch {
-    return "light";
-  }
-}
 
 function saveTheme(t: "light" | "dark"): void {
   try {

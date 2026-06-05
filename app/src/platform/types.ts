@@ -19,6 +19,20 @@ export interface HistoryEntry {
   outdir: string; // the output dir used
 }
 
+/** Render options that map 1:1 to the footlight CLI render flags. */
+export interface RenderOptions {
+  /** Output directory (`--outdir`). */
+  outdir?: string;
+  /** H.264 quality (`--crf`); lower = better/larger. */
+  crf?: number;
+  /** x264 speed/efficiency preset (`--preset`). */
+  preset?: string;
+  /** `--audio-bitrate`: `"copy"` (lossless passthrough) or a bitrate like `"256k"`. */
+  audioBitrate?: string;
+  /** Print the ffmpeg commands without running them (`--dry-run`). */
+  dryRun?: boolean;
+}
+
 /** A saved working session (project) — restored on next launch. */
 export interface SessionData {
   source: string;     // last-loaded source path ("" if none)
@@ -98,8 +112,9 @@ export interface FootlightPlatform {
    * Render a JSON manifest via the footlight CLI engine. `manifestJson` is the
    * string produced by `serializeManifestJSON` (clips may carry a `cropPath`).
    * The backend writes it to a temp `.json` so the CLI takes the JSON path.
+   * `opts` map 1:1 to the CLI render flags (from Settings → Rendering).
    */
-  render(manifestJson: string, opts?: { outdir?: string }): Promise<{ ok: boolean; log: string }>;
+  render(manifestJson: string, opts?: RenderOptions): Promise<{ ok: boolean; log: string }>;
   /** Open a URL in the user's default browser. */
   openExternal(url: string): Promise<void>;
   /**
