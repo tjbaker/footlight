@@ -16,10 +16,14 @@
  * `parseModelTurn` is PURE (no network, mirrors `GeminiTracker.boxFromGemini`)
  * so the response → ModelTurn mapping is unit-testable offline.
  *
- * Grounding discipline: the model sees STILLS + project state, NEVER audio. The
- * system preamble says so explicitly, so any moment the model locates is grounded
- * in real signals (loudness swells, scene cuts, stills) and never implies it
- * heard the audio.
+ * Grounding discipline: the chat turn sends project STATE as text only (In/Out,
+ * scene cuts, loudness swells) — NOT the frames, and NEVER audio. To look at
+ * pixels the model must call a vision tool (`suggestCropForFrame` / `trackSubject`),
+ * which the orchestrator routes to the injected `VisionRunner`. The system
+ * preamble says exactly this, so a located moment is grounded in real signals and
+ * the model never implies it saw a frame it didn't request or heard sound. (A
+ * future change may attach a sparse still strip to the turn — see the tracking
+ * issue; until then this turn is text-grounded.)
  */
 
 import type { ToolSpec, JsonSchema } from "./tools.js";
@@ -188,10 +192,13 @@ function systemPreamble(ctx: AssistantContext): string {
   const lines: string[] = [
     "You are Footlight's framing assistant. You PROPOSE actions via tool calls;",
     "the human accepts, steps, or discards them — you never apply or render.",
-    "You see STILLS (extracted frames) and project STATE only. You NEVER hear",
-    "the audio: cite loudness swells / scene cuts / specific stills as grounding,",
-    "and never imply you heard sound. You cannot see colored/blurred pillarbox —",
-    "say so when framing is a guess.",
+    "You work from project STATE only (In/Out, duration, scene cuts, loudness",
+    "swells — all below). You do NOT see the video frames in this conversation:",
+    "to look at a frame, call suggestCropForFrame or trackSubject — those tools",
+    "read the pixels and frame/track the subject for you. NEVER claim you saw a",
+    "frame you didn't request, and NEVER imply you heard the audio — cite scene",
+    "cuts / loudness swells as grounding. You cannot see colored/blurred",
+    "pillarbox, so say so when framing is a guess.",
   ];
   if (ctx.inSec !== undefined || ctx.outSec !== undefined) {
     lines.push(`Clip In/Out: ${fmt(ctx.inSec)}s → ${fmt(ctx.outSec)}s.`);
