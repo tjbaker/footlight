@@ -84,6 +84,8 @@ export const webPlatform: FootlightPlatform = {
     if (opts?.preset) q.set("preset", opts.preset);
     if (opts?.audioBitrate) q.set("audioBitrate", opts.audioBitrate);
     if (opts?.dryRun) q.set("dryRun", "1");
+    if (opts?.burnCaptions) q.set("burnCaptions", "1");
+    if (opts?.captionFont) q.set("captionFont", opts.captionFont);
     const qs = q.toString();
     const url = qs ? `${BASE}/render?${qs}` : `${BASE}/render`;
     const res = await fetch(url, {

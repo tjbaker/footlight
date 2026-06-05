@@ -270,6 +270,8 @@ async function handleRender(body, opts, res) {
   if (opts.preset) args.push("--preset", opts.preset);
   if (opts.audioBitrate) args.push("--audio-bitrate", opts.audioBitrate);
   if (opts.dryRun) args.push("--dry-run");
+  if (opts.burnCaptions) args.push("--burn-captions");
+  if (opts.captionFont) args.push("--caption-font", opts.captionFont);
   args.push("--outdir", outDir);
   const result = await run("node", args);
   const log = `$ node ${args.join(" ")}\n\n${result.stdout}${result.stderr}`;
@@ -373,6 +375,8 @@ const server = createServer(async (req, res) => {
         preset: url.searchParams.get("preset") || undefined,
         audioBitrate: url.searchParams.get("audioBitrate") || undefined,
         dryRun: url.searchParams.get("dryRun") === "1",
+        burnCaptions: url.searchParams.get("burnCaptions") === "1",
+        captionFont: url.searchParams.get("captionFont") || undefined,
       };
       return await handleRender(body, opts, res);
     }

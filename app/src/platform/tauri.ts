@@ -70,6 +70,8 @@ export const tauriPlatform: FootlightPlatform = {
       preset: opts?.preset ?? null,
       audioBitrate: opts?.audioBitrate ?? null,
       dryRun: opts?.dryRun ?? false,
+      burnCaptions: opts?.burnCaptions ?? false,
+      captionFont: opts?.captionFont ?? null,
     });
   },
 
