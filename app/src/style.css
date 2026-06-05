@@ -452,6 +452,105 @@ pre.log { max-height: 240px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .fl-iconbtn.rm:hover { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
 .fl-btn.ghost.danger:hover { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
 
+/* ===== Settings — 5-panel left-nav modal (General/Rendering/AI/Shortcuts/About) =====
+   Re-tokenized against the app's CSS vars; mirrors the design handoff classes. */
+.fl-modal.settings { width: 760px; height: 600px; max-height: 86vh; }
+.fl-set { display: flex; flex: 1; min-height: 0; }
+.fl-set-nav { width: 178px; flex: none; border-right: 1px solid var(--line-soft); padding: 10px; background: var(--bg-2); display: flex; flex-direction: column; gap: 2px; }
+.fl-set-navitem { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 9px; color: var(--muted); font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid transparent; }
+.fl-set-navitem:hover { color: var(--text); background: var(--panel); }
+.fl-set-navitem.on { color: var(--text); background: var(--panel); border-color: var(--line); }
+.fl-set-navitem svg { width: 16px; height: 16px; flex: none; color: var(--faint); }
+.fl-set-navitem.on svg { color: var(--accent); }
+.fl-set-main { flex: 1; min-width: 0; padding: 18px 20px; overflow-y: auto; }
+.fl-set-secth { font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 16px; letter-spacing: -0.01em; color: var(--text); }
+.fl-set-secsub { color: var(--muted); font-size: 12.5px; margin-top: 3px; line-height: 1.5; }
+.fl-set-block { margin-top: 20px; }
+.fl-set-blockh { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; }
+
+/* provider chips */
+.fl-prov-row { display: flex; gap: 9px; flex-wrap: wrap; }
+.fl-prov { display: flex; align-items: center; gap: 9px; padding: 10px 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--field-bg); cursor: pointer; }
+.fl-prov.on { border-color: var(--accent-line); background: var(--accent-soft); }
+.fl-prov.add { border-style: dashed; color: var(--muted); }
+.fl-prov .pdot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+.fl-prov.on .pdot { background: var(--ok); box-shadow: 0 0 7px var(--ok); }
+.fl-prov .pname { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.fl-prov .pstat { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--faint); white-space: nowrap; }
+
+/* selectable option card (a model) */
+.fl-opt { display: flex; gap: 12px; padding: 13px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; align-items: flex-start; background: var(--panel); transition: border-color .12s, background .12s; }
+.fl-opt:hover { border-color: var(--faint); }
+.fl-opt.sel { border-color: var(--accent-line); background: var(--accent-soft); }
+.fl-opt .radio { width: 17px; height: 17px; border-radius: 50%; border: 2px solid var(--line); flex: none; margin-top: 1px; position: relative; }
+.fl-opt.sel .radio { border-color: var(--accent); }
+.fl-opt.sel .radio::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); }
+.fl-opt-body { flex: 1; min-width: 0; }
+.fl-opt-top { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.fl-opt-name { font-size: 14px; font-weight: 700; white-space: nowrap; color: var(--text); }
+.fl-opt-cap { color: var(--muted); font-size: 12.5px; margin-top: 4px; line-height: 1.45; }
+.fl-opt-meta { display: flex; align-items: center; gap: 7px; margin-top: 9px; flex-wrap: wrap; }
+.fl-tag-cost { font-family: "JetBrains Mono", monospace; font-size: 11px; padding: 3px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--field-bg); color: var(--accent-2); }
+.fl-tag-cost .tier { color: var(--faint); }
+.fl-tag-speed { font-family: "JetBrains Mono", monospace; font-size: 11px; padding: 3px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--field-bg); color: var(--muted); }
+
+/* cost callout */
+.fl-costnote { display: flex; gap: 11px; align-items: flex-start; margin-top: 14px; padding: 13px 14px; border: 1px solid var(--accent-line); border-radius: 11px; background: var(--accent-soft); }
+.fl-costnote svg { width: 18px; height: 18px; color: var(--accent); flex: none; margin-top: 1px; }
+.fl-costnote .ct { font-size: 12.5px; line-height: 1.5; color: var(--text); }
+.fl-costnote .ct b { color: var(--accent-2); font-family: "JetBrains Mono", monospace; font-weight: 600; }
+.fl-set-key { display: flex; align-items: center; gap: 9px; }
+.fl-keyhint { font-size: 11.5px; color: var(--faint); margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+.fl-keyhint svg { width: 13px; height: 13px; flex: none; }
+
+/* advanced disclosure + switch */
+.fl-adv-toggle { display: flex; gap: 12px; align-items: flex-start; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--field-bg); }
+.fl-adv-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.fl-adv-sub { color: var(--muted); font-size: 12px; margin-top: 3px; line-height: 1.45; }
+.fl-switch { width: 38px; height: 22px; border-radius: 999px; background: var(--panel-3); border: 1px solid var(--line); flex: none; position: relative; margin-top: 1px; transition: background .15s; cursor: pointer; }
+.fl-switch.on { background: var(--accent); border-color: var(--accent-deep); }
+.fl-switch .knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: var(--shadow-sm); }
+.fl-switch.on .knob { left: 18px; }
+.fl-adv-body { margin-top: 13px; padding-left: 2px; }
+
+/* rendering: range slider + preset chips */
+.fl-range { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 999px; background: var(--panel-3); outline: none; }
+.fl-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); cursor: pointer; box-shadow: var(--shadow-sm); }
+.fl-range::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); cursor: pointer; }
+.fl-range-ends { display: flex; justify-content: space-between; margin-top: 7px; font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--faint); gap: 8px; }
+.fl-preset-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.fl-preset { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--muted); border: 1px solid var(--line); background: var(--field-bg); border-radius: 8px; padding: 6px 11px; cursor: pointer; transition: color .12s, border-color .12s, background .12s; }
+.fl-preset:hover { color: var(--text); border-color: var(--faint); }
+.fl-preset.on { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); font-weight: 600; }
+
+/* general: labeled rows + select */
+.fl-row2 { display: flex; align-items: center; gap: 12px; margin-bottom: 11px; flex-wrap: wrap; }
+.fl-rowlab { width: 118px; flex: none; font-size: 13px; color: var(--muted); }
+.fl-rowhint { font-size: 11.5px; color: var(--faint); font-family: "JetBrains Mono", monospace; }
+.fl-select { font-family: inherit; font-size: 13px; color: var(--text); background: var(--field-bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; outline: none; cursor: pointer; min-width: 180px; }
+.fl-select:focus { border-color: var(--accent-line); }
+
+/* shortcuts list */
+.fl-kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 7px; font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; }
+.fl-sc-list { display: flex; flex-direction: column; }
+.fl-sc-row { display: flex; align-items: center; gap: 12px; padding: 9px 4px; border-top: 1px solid var(--line-soft); border-radius: 8px; }
+.fl-sc-row:first-child { border-top: none; }
+.fl-sc-row:hover { background: var(--field-bg); padding-left: 8px; padding-right: 8px; }
+.fl-sc-desc { flex: 1; font-size: 13px; color: var(--text); }
+.fl-sc-keys { display: flex; align-items: center; gap: 5px; }
+.fl-sc-keys .plus { color: var(--faint); font-size: 11px; }
+
+/* about */
+.fl-about-id { display: flex; align-items: center; gap: 15px; margin-bottom: 14px; }
+.fl-about-id .fl-lamp { width: 44px; }
+.fl-link-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.fl-link-row .fl-btn svg { width: 15px; height: 15px; }
+.fl-env { display: flex; flex-direction: column; gap: 2px; margin-bottom: 11px; }
+.fl-env-row { display: flex; align-items: center; gap: 10px; padding: 7px 9px; border-radius: 8px; background: var(--field-bg); border: 1px solid var(--line); font-family: "JetBrains Mono", monospace; font-size: 12.5px; }
+.fl-env-row .fl-dot { background: var(--ok); box-shadow: 0 0 6px -1px var(--ok); }
+.fl-env-k { color: var(--muted); width: 80px; }
+.fl-env-v { color: var(--text); }
+
 /* ----- keyboard shortcuts overlay ----- */
 .modal.shortcuts { max-width: 520px; width: 92vw; }
 .shortcuts-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 26px; margin: 12px 0 4px; }

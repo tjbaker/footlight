@@ -30,15 +30,107 @@ export interface HelpMessages {
   sections: GuideSection[];
 }
 
-/** Strings for the Settings dialog. */
+/** Strings for the Settings dialog — a 5-panel left-nav modal. */
 export interface SettingsMessages {
   menuLabel: string;
   title: string;
-  apiKeySection: string;
-  apiKeyLabel: string;
-  apiKeyPlaceholder: string;
-  apiKeyHint: string;
+  /** Left-nav item labels. */
+  nav: {
+    general: string;
+    rendering: string;
+    ai: string;
+    shortcuts: string;
+    about: string;
+  };
+  /** Shared footer actions. */
+  cancel: string;
+  save: string;
+  saved: string;
   close: string;
+
+  general: {
+    title: string;
+    subtitle: string;
+    appearance: string;
+    theme: string;
+    themeLight: string;
+    themeDark: string;
+    themeSystem: string;
+    timecode: string;
+    timecodeFrames: string;
+    defaults: string;
+    destination: string;
+    destinationBrowse: string;
+    destinationHint: string;
+    trackingInterval: string;
+    trackingIntervalHint: string;
+    session: string;
+    autosave: string;
+    autosaveHint: string;
+    clearSession: string;
+    sessionCleared: string;
+  };
+
+  rendering: {
+    title: string;
+    subtitle: string;
+    quality: string;
+    qualityNearLossless: string;
+    qualityHigh: string;
+    qualityGood: string;
+    qualitySmaller: string;
+    preset: string;
+    presetHint: string;
+    audio: string;
+    audioCopy: string;
+    audioReencode: string;
+    audioCopyHint: string;
+    audioReencodeHint: string;
+    bitrate: string;
+    dryRun: string;
+    dryRunHint: string;
+    gapNote: string;
+  };
+
+  ai: {
+    title: string;
+    subtitle: string;
+    provider: string;
+    providerGemini: string;
+    providerClaude: string;
+    providerOpenai: string;
+    providerConnected: string;
+    providerAddKey: string;
+    apiKey: string;
+    apiKeyPlaceholder: string;
+    apiKeyShow: string;
+    apiKeyHide: string;
+    apiKeyTest: string;
+    apiKeyHint: string;
+    model: string;
+    recommended: string;
+    costNote: string;
+    costInterval: string;
+    advanced: string;
+    advancedSub: string;
+    assistantModel: string;
+    visionModel: string;
+  };
+
+  shortcuts: {
+    title: string;
+    subtitle: string;
+  };
+
+  about: {
+    title: string;
+    subtitle: string;
+    repo: string;
+    reportBug: string;
+    licenses: string;
+    environment: string;
+    environmentHint: string;
+  };
 }
 
 /** The full message catalog for one locale. */
