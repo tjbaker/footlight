@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.log
+
+# Tauri / Rust build output
+src-tauri/target/
+src-tauri/gen/

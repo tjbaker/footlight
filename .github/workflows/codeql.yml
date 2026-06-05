@@ -1,0 +1,50 @@
+name: CodeQL
+
+# Static analysis (GitHub code scanning) for both surfaces: the
+# TypeScript/JavaScript render engine, CLI, and app frontend, and the Rust
+# Tauri shell (app/src-tauri). Both use build-mode `none` so the Rust analysis
+# extracts from source via the committed Cargo.lock without compiling — this
+# avoids installing Tauri's Linux system build dependencies (webkit2gtk, gtk)
+# in CI and keeps the run reliable.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, so newly disclosed query updates surface even without a push.
+    - cron: '21 4 * * 1'
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+          - language: rust
+            build-mode: none
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

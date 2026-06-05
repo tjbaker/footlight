@@ -1,0 +1,7 @@
+# Keep blank issues enabled so feature requests and questions aren't blocked
+# (there is no separate feature-request template yet).
+blank_issues_enabled: true
+contact_links:
+  - name: Contributing (code & the "framing brain")
+    url: https://github.com/tjbaker/footlight/blob/main/CONTRIBUTING.md
+    about: How to contribute code or prose framing knowledge (prompts/base.md).

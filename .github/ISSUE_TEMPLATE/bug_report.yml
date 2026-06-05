@@ -1,0 +1,86 @@
+name: Bug report
+description: Report something in the engine, CLI, or desktop app that doesn't work as expected.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Footlight wraps `ffmpeg`/`ffprobe`, so the
+        **exact command and its output** (the app's Activity window, or CLI stderr)
+        is usually the fastest path to a fix. Please fill in as much as you can.
+
+        For a *framing* question (a crop that looks wrong but renders fine), note
+        that `cropdetect` can't see colored/blurred pillarbox — see the README
+        "Framing gotchas" first; it may not be a bug.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, and what you expected instead.
+      placeholder: I rendered a clip and …  / I expected … but got …
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce it? Include the manifest row or GUI actions.
+      placeholder: |
+        1. Load source X
+        2. Drag In/Out to …
+        3. Frame with crop_offset=…
+        4. Render
+    validations:
+      required: true
+
+  - type: textarea
+    id: command-output
+    attributes:
+      label: ffmpeg command & output
+      description: >
+        The exact ffmpeg command and its output. In the app, open the **Activity**
+        window (toolbar icon); from the CLI, copy the printed command (or run with
+        `--dry-run`) and any error.
+      render: shell
+    validations:
+      required: false
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: How were you running Footlight?
+      options:
+        - Browser GUI (make gui)
+        - Native desktop window (make tauri-dev / built .app)
+        - CLI (footlight …)
+    validations:
+      required: true
+
+  - type: textarea
+    id: source-traits
+    attributes:
+      label: Source characteristics
+      description: >
+        Helps reproduce framing/crop issues. Resolution and aspect, and whether the
+        source is letterboxed/pillarboxed (black bars or colored banners), edited
+        (cuts between shots) or a single shot.
+      placeholder: e.g. 1920×1080, full-frame, single continuous shot — or 1800×1010 letterboxed edit
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: "Run `make doctor` and paste it, or fill in manually."
+      value: |
+        - OS:
+        - Node (`node --version`):
+        - ffmpeg (`ffmpeg -version` first line):
+        - Footlight version / commit:
+      render: markdown
+    validations:
+      required: true

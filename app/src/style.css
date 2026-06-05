@@ -1,0 +1,472 @@
+/* Copyright 2026 Trevor Baker, all rights reserved. */
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Bundled UI fonts (local woff2, no runtime CDN) — must precede all other rules. */
+@import "./fonts.css";
+
+/* Footlight "Studio" design system — warm, characterful, themeable, control-first.
+   Tokens live on :root (dark default) and [data-theme="light"]. Components are the
+   .fl-* classes from the design handoff; the app's modals/Activity reuse the same
+   tokens (with --border / --err aliases for back-compat).
+   Fonts (Hanken Grotesk / Bricolage Grotesque / JetBrains Mono) are bundled locally
+   as latin-subset woff2 via fonts.css; font-display:swap falls back to system. */
+
+:root {
+  --bg: #141009;
+  --bg-2: #1b150d;
+  --panel: #201a11;
+  --panel-2: #2a2217;
+  --panel-3: #332a1c;
+  --line: #3a3022;
+  --line-soft: #2b2317;
+  --text: #f4ece0;
+  --muted: #ab9c84;
+  --faint: #756853;
+  --accent: #ff7a45;
+  --accent-2: #ffb27a;
+  --accent-deep: #e9622f;
+  --accent-soft: rgba(255, 122, 69, 0.15);
+  --accent-line: rgba(255, 122, 69, 0.42);
+  --ok: #74cf95;
+  --ok-soft: rgba(116, 207, 149, 0.16);
+  --err: #ff6b6b;
+  --shadow: 0 18px 50px -18px rgba(0, 0, 0, 0.7);
+  --shadow-sm: 0 2px 8px -2px rgba(0, 0, 0, 0.5);
+  --field-bg: rgba(0, 0, 0, 0.28);
+  --stage: #0a0805;
+  /* back-compat aliases for the modal / Activity styles */
+  --border: var(--line);
+}
+
+[data-theme="light"] {
+  --bg: #f3ede2;
+  --bg-2: #ece4d6;
+  --panel: #fffdf8;
+  --panel-2: #f7f0e3;
+  --panel-3: #f0e7d6;
+  --line: #e3d8c4;
+  --line-soft: #ece3d3;
+  --text: #271f15;
+  --muted: #8a7c66;
+  --faint: #b3a68e;
+  --accent: #ed5f2b;
+  --accent-2: #c2761d;
+  --accent-deep: #d2511f;
+  --accent-soft: rgba(237, 95, 43, 0.12);
+  --accent-line: rgba(237, 95, 43, 0.4);
+  --ok: #2f9e63;
+  --ok-soft: rgba(47, 158, 99, 0.12);
+  --err: #c0392b;
+  --shadow: 0 18px 50px -20px rgba(86, 60, 30, 0.28);
+  --shadow-sm: 0 2px 8px -3px rgba(86, 60, 30, 0.22);
+  --field-bg: rgba(120, 90, 40, 0.05);
+  --stage: #0a0805;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+/* Theme flip: never transition background (caused a cross-fade flash). */
+body, .fl-topbar, .fl-card, .fl-btn, .fl-iconbtn, .fl-field {
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* generic helpers reused by modals / Activity */
+.hint { color: var(--muted); font-size: 12px; }
+.stat { color: var(--accent-2); font-variant-numeric: tabular-nums; }
+.err-text { color: var(--err); font-size: 12px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.row label { color: var(--muted); min-width: 70px; }
+.grow { flex: 1; min-width: 120px; }
+.pill { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.pill.on { color: var(--accent); border-color: var(--accent); }
+.toggle { display: flex; align-items: center; gap: 6px; }
+
+/* base button (modals, generic). Studio UI uses .fl-btn / .fl-iconbtn below. */
+button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+}
+button:hover { background: var(--panel-3); }
+button.primary { background: var(--accent); color: #1a1207; border-color: var(--accent); font-weight: 600; }
+button.primary:hover { background: var(--accent-2); }
+button.iconbtn { padding: 3px 9px; font-size: 12px; white-space: nowrap; }
+
+input[type="text"], input[type="number"], input[type="password"] {
+  background: var(--field-bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+/* ============================================================
+   Studio shell layout
+   ============================================================ */
+.fl-app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+/* ----- top bar ----- */
+.fl-topbar {
+  display: flex; align-items: center; gap: 18px;
+  height: 60px; padding: 0 22px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+}
+.fl-brand { display: flex; align-items: center; gap: 11px; }
+/* The brand mark — the "row of footlights" three-lamp SVG (same motif as the app
+   icon, so brand reads as one). currentColor = accent; beams at low opacity. */
+.fl-lamp { width: 30px; height: auto; flex: none; color: var(--accent); display: block; }
+.fl-lamp .beam { fill-opacity: 0.22; }
+.fl-word { font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 19px; letter-spacing: -0.02em; }
+.fl-crumb {
+  display: flex; align-items: center; gap: 10px; margin: 0 auto; max-width: 50%;
+  padding: 6px 12px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 9px; color: var(--muted); font-size: 12.5px; min-width: 0;
+}
+.fl-crumb .path { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-crumb .sep { color: var(--line); }
+.fl-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex: none; }
+.fl-dot.live { background: var(--ok); box-shadow: 0 0 8px -1px var(--ok); }
+.fl-actions { display: flex; align-items: center; gap: 8px; }
+.fl-iconbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--muted); border-radius: 9px; cursor: pointer;
+}
+.fl-iconbtn:hover { color: var(--text); border-color: var(--faint); }
+.fl-iconbtn svg { width: 17px; height: 17px; display: block; }
+.fl-iconbtn.on { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
+.fl-iconbtn.has-output { position: relative; }
+.fl-iconbtn.has-output::after {
+  content: ""; position: absolute; top: 5px; right: 5px; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent);
+}
+
+/* ----- pills / labels / spacer ----- */
+.fl-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.13em; color: var(--muted); white-space: nowrap; }
+.fl-label .n { color: var(--faint); margin-left: 4px; font-weight: 500; }
+.fl-pill { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--accent-line); color: var(--accent); background: var(--accent-soft); }
+.fl-pill.ghost { border-color: var(--line); color: var(--muted); background: transparent; }
+.fl-spacer { flex: 1; }
+
+/* ----- buttons ----- */
+.fl-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--panel-2); color: var(--text);
+  font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;
+}
+.fl-btn:hover { background: var(--panel-3); border-color: var(--faint); }
+.fl-btn:active { transform: translateY(1px); }
+.fl-btn svg { width: 15px; height: 15px; }
+.fl-btn.primary {
+  background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+  border-color: var(--accent-deep); color: #2a1606; font-weight: 700;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 6px 16px -8px var(--accent-line);
+}
+.fl-btn.primary:hover { filter: brightness(1.05); }
+.fl-btn.ghost { background: transparent; }
+.fl-btn.ghost:hover { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
+.fl-btn.lg { padding: 12px 16px; font-size: 14px; width: 100%; }
+.fl-btn.sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
+.fl-btn[disabled] { opacity: 0.45; cursor: default; }
+
+/* ----- segmented tabs ----- */
+.fl-seg { display: inline-flex; padding: 3px; background: var(--field-bg); border: 1px solid var(--line); border-radius: 11px; gap: 3px; }
+.fl-seg button {
+  flex: 1; border: none; background: transparent; color: var(--muted);
+  font-family: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 8px;
+  cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; justify-content: center;
+}
+.fl-seg button:hover { color: var(--text); }
+.fl-seg button.on { background: var(--panel); color: var(--text); box-shadow: var(--shadow-sm); }
+
+/* ----- fields ----- */
+.fl-field { display: flex; align-items: center; gap: 9px; background: var(--field-bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; min-width: 0; }
+.fl-field:focus-within { border-color: var(--accent-line); }
+.fl-field .ic { color: var(--faint); flex: none; display: flex; }
+.fl-field .ic svg { width: 15px; height: 15px; }
+.fl-field input { flex: 1; min-width: 0; background: none; border: none; outline: none; color: var(--text); font-family: inherit; font-size: 13px; }
+.fl-field input.mono { font-family: "JetBrains Mono", monospace; font-size: 12.5px; }
+.fl-field input::placeholder { color: var(--faint); }
+.fl-field.path input { color: var(--accent-2); }
+
+/* ----- readouts ----- */
+.fl-readout { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.fl-readout .k { color: var(--faint); }
+.fl-readout .v { color: var(--text); }
+.fl-readout .v.accent { color: var(--accent-2); }
+.fl-readout .v.ok { color: var(--ok); }
+.fl-readout .sep { color: var(--line); }
+.fl-rdchip { display: inline-flex; align-items: center; gap: 7px; background: var(--field-bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; font-family: "JetBrains Mono", monospace; font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fl-rdchip .lab { color: var(--faint); }
+.fl-rdchip .val { color: var(--accent-2); }
+/* Two-column readout grid so values in the 2nd column align across rows. */
+.fl-readgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 16px; font-family: "JetBrains Mono", monospace; font-size: 12px; font-variant-numeric: tabular-nums; }
+.fl-readgrid > div { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.fl-readgrid .k { color: var(--faint); }
+.fl-readgrid .v { color: var(--text); }
+.fl-readgrid .v.accent { color: var(--accent-2); }
+.idot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.idot.in { background: var(--ok); }
+.idot.out { background: var(--accent); }
+.idot.dur { background: var(--accent-2); }
+
+/* ----- inspector sections ----- */
+.fl-sect { padding: 12px 16px; }
+.fl-sect + .fl-sect { border-top: 1px solid var(--line-soft); }
+.fl-sect-h { display: flex; align-items: center; gap: 9px; margin-bottom: 13px; }
+.fl-help { color: var(--muted); font-size: 12px; line-height: 1.5; margin: -4px 0 12px; }
+.fl-stack { display: flex; flex-direction: column; gap: 10px; }
+.fl-rowg { display: flex; gap: 8px; }
+.fl-rowg > * { flex: 1; }
+
+/* keyframe rows */
+.fl-kf-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.fl-kf { display: flex; align-items: center; gap: 10px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--field-bg); font-family: "JetBrains Mono", monospace; font-size: 12px; }
+.fl-kf .diamond { width: 8px; height: 8px; background: var(--accent); transform: rotate(45deg); flex: none; }
+.fl-kf .x { margin-left: auto; }
+
+/* ----- main row: viewer + inspector ----- */
+.fl-main { display: flex; flex: 1; min-height: 0; }
+.fl-viewer { flex: 1; min-width: 0; min-height: 0; padding: 20px 20px 16px; display: flex; flex-direction: column; gap: 14px; }
+/* Inspector scrolls internally so its section stack never pushes the app taller
+   than the viewport (the shell is pinned to 100vh). */
+.fl-inspector { width: 340px; flex: none; border-left: 1px solid var(--line); background: var(--bg-2); display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+
+/* ----- stage / viewer ----- */
+.fl-stage {
+  position: relative; background: var(--stage); border: 1px solid var(--line);
+  border-radius: 11px; overflow: hidden;
+  /* Fill the viewer column (matches the inspector height) — NO fixed/vh height,
+     which was the cause of dead space below the transport. The inspector scrolls
+     if it overflows; the stage never does. */
+  flex: 1; min-height: 360px;
+  display: flex; align-items: center; justify-content: center;
+}
+.fl-stage.empty::before {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(70% 95% at 50% 112%, rgba(255, 150, 90, 0.32), rgba(255, 120, 60, 0.1) 38%, transparent 64%),
+    radial-gradient(40% 55% at 50% 8%, rgba(120, 150, 210, 0.1), transparent 70%);
+}
+.fl-stage-meta { position: absolute; top: 12px; left: 12px; display: flex; gap: 7px; z-index: 4; }
+.fl-stage-tag { font-family: "JetBrains Mono", monospace; font-size: 10.5px; letter-spacing: 0.04em; padding: 4px 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.5); color: rgba(255, 255, 255, 0.72); border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(3px); }
+.fl-stage-tag.rec { color: #ff7a45; }
+.fl-stage-tag.rec::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #ff5a3c; margin-right: 6px; vertical-align: 1px; box-shadow: 0 0 7px #ff5a3c; }
+.fl-stage-center { position: relative; z-index: 2; text-align: center; color: rgba(255, 255, 255, 0.45); font-family: "JetBrains Mono", monospace; font-size: 12px; letter-spacing: 0.03em; padding: 0 28px; max-width: 560px; }
+.fl-stage-center .big { font-size: 13px; color: rgba(255, 255, 255, 0.6); margin-bottom: 5px; }
+.fl-hero-h { font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: clamp(26px, 4vw, 38px); letter-spacing: -0.02em; line-height: 1.05; color: #fff; }
+.fl-hero-sub { margin-top: 12px; font-family: "Hanken Grotesk", system-ui, sans-serif; font-size: 14.5px; line-height: 1.5; letter-spacing: 0; color: rgba(255, 255, 255, 0.66); }
+.fl-hero-cta { margin-top: 16px; font-size: 11.5px; color: rgba(255, 255, 255, 0.4); }
+.fl-stage #frame, .fl-stage #preview-video { display: block; max-width: 100%; max-height: 100%; z-index: 2; }
+.fl-stage #overlay { position: absolute; z-index: 3; cursor: grab; }
+.fl-stage #overlay.dragging { cursor: grabbing; }
+.fl-stage.dropping { outline: 2px dashed var(--accent); outline-offset: -6px; }
+.fl-stage.dropping::after { content: "Drop a video to load"; position: absolute; inset: 0; z-index: 7; display: flex; align-items: center; justify-content: center; font-family: "Hanken Grotesk", sans-serif; font-size: 16px; font-weight: 600; color: #fff; letter-spacing: 0.01em; background: rgba(255, 122, 69, 0.16); backdrop-filter: blur(1px); pointer-events: none; }
+
+/* ----- live 9:16 output preview (floats over the stage) ----- */
+/* The panel is pointer-transparent so crop-box drags/resizes underneath it still
+   work; only the header strip is interactive (drag handle + zoom tag + guides). */
+.fl-preview { position: absolute; right: 12px; bottom: 12px; z-index: 5; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.16); box-shadow: 0 8px 24px -8px #000a; background: #000; line-height: 0; pointer-events: none; }
+.fl-preview.empty { display: none; }
+.fl-preview-canvas { display: block; height: clamp(150px, 34vh, 280px); width: auto; aspect-ratio: 9 / 16; pointer-events: none; }
+.fl-preview-head { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 5px 6px; pointer-events: auto; cursor: grab; background: linear-gradient(rgba(0,0,0,0.55), transparent); }
+.fl-preview.dragging .fl-preview-head { cursor: grabbing; }
+.fl-preview-tag { font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: 0.04em; padding: 2px 6px; border-radius: 5px; background: rgba(0,0,0,0.5); color: rgba(255,255,255,0.82); line-height: 1.2; }
+.fl-preview-safe { font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: 0.03em; padding: 2px 7px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.22); background: rgba(0,0,0,0.5); color: rgba(255,255,255,0.7); cursor: pointer; line-height: 1.2; pointer-events: auto; }
+.fl-preview-safe:hover { color: #fff; }
+.fl-preview-safe.on { background: var(--accent); border-color: var(--accent); color: #2a1606; }
+
+/* ----- transport ----- */
+.fl-transport { display: flex; align-items: center; gap: 13px; }
+.fl-tp-side { flex: 1 1 0; min-width: 0; display: flex; align-items: center; }
+.fl-tp-side.end { justify-content: flex-end; }
+.fl-jog { display: flex; align-items: center; gap: 10px; flex: none; }
+.fl-play { width: 42px; height: 42px; flex: none; border-radius: 11px; border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 15px; }
+.fl-play:hover { background: var(--accent); color: #2a1606; }
+.fl-play[disabled] { opacity: 0.45; cursor: default; }
+.fl-play svg { width: 15px; height: 15px; display: block; }
+.fl-steps { display: flex; gap: 6px; }
+.fl-step { border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); cursor: pointer; font-family: "JetBrains Mono", monospace; font-size: 12px; padding: 6px 11px; border-radius: 8px; font-variant-numeric: tabular-nums; }
+.fl-step:hover { color: var(--text); border-color: var(--faint); background: var(--panel-3); }
+.fl-time { font-family: "JetBrains Mono", monospace; font-variant-numeric: tabular-nums; font-size: 15px; color: var(--accent-2); min-width: 86px; text-align: right; white-space: nowrap; }
+.fl-time .ms { color: var(--faint); }
+
+/* ----- filmstrip queue ----- */
+.fl-filmstrip { display: flex; align-items: stretch; gap: 12px; padding: 10px 20px; overflow-x: auto; border-top: 1px solid var(--line-soft); background: var(--bg-2); }
+.fl-strip-card { display: flex; align-items: center; gap: 10px; padding: 9px 12px 9px 9px; border-radius: 11px; background: var(--panel); border: 1px solid var(--line); flex: none; }
+.fl-strip-card.add { border-style: dashed; color: var(--muted); justify-content: center; min-width: 150px; cursor: pointer; }
+.fl-strip-card.edit { cursor: pointer; }
+.fl-strip-card.edit:hover { border-color: var(--accent-line); background: var(--panel-2); }
+.fl-strip-card.dragging { opacity: 0.5; }
+.fl-strip-card .fl-clip-x svg { width: 13px; height: 13px; display: block; }
+.fl-thumb { width: 34px; height: 60px; flex: none; border-radius: 5px; overflow: hidden; background: var(--stage); position: relative; }
+.fl-thumb::before { content: ""; position: absolute; inset: 0; background: radial-gradient(80% 90% at 50% 112%, rgba(255, 150, 90, 0.5), transparent 60%); }
+.fl-thumb.has-img { background-size: cover; background-position: center; }
+.fl-thumb.has-img::before { display: none; }
+
+/* hover-scrub frame preview over the timeline */
+.fl-tl-hover { position: fixed; z-index: 60; transform: translateY(-100%); pointer-events: none; border-radius: 8px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.18); box-shadow: 0 10px 28px -10px #000c; background: #000; line-height: 0; }
+.fl-tl-hover-img { display: block; width: 124px; aspect-ratio: 16 / 9; object-fit: cover; background: var(--stage); }
+.fl-tl-hover-t { position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-family: "JetBrains Mono", monospace; font-size: 10px; color: #fff; background: linear-gradient(transparent, rgba(0, 0, 0, 0.7)); padding: 8px 0 2px; line-height: 1.2; }
+.fl-clip-meta { min-width: 0; }
+.fl-clip-name { font-weight: 600; font-size: 13px; }
+.fl-clip-sub { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.fl-clip-x { margin-left: 4px; color: var(--faint); cursor: pointer; border: none; background: none; font-size: 13px; padding: 2px 6px; }
+.fl-clip-x:hover { color: var(--accent); }
+
+/* ----- loudness timeline ----- */
+.fl-timeline { background: var(--panel); border-top: 1px solid var(--line); padding: 14px 20px; display: flex; align-items: center; gap: 18px; }
+.fl-tl-cluster { display: flex; align-items: center; gap: 6px; }
+.fl-tl-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.fl-tl-suggest { position: relative; height: 25px; }
+.fl-suggest-tag { position: absolute; left: 2px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 6px; font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
+.sparkdot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px var(--accent); }
+.fl-suggest { position: absolute; bottom: 0; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px 4px 8px; border-radius: 8px; background: var(--accent-soft); border: 1px solid var(--accent-line); color: var(--accent); font-family: inherit; font-size: 11.5px; font-weight: 600; white-space: nowrap; cursor: pointer; line-height: 1; box-shadow: 0 3px 12px -5px var(--accent-line); transition: transform 0.12s ease, background 0.12s; }
+.fl-suggest:hover { transform: translateX(-50%) translateY(-2px); background: var(--accent); color: #2a1606; }
+.fl-suggest:hover .spark i { background: #2a1606; }
+.fl-suggest .spark { display: inline-flex; align-items: flex-end; gap: 1.5px; height: 12px; }
+.fl-suggest .spark i { width: 2px; background: var(--accent); border-radius: 1px; }
+.fl-suggest::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--accent-line); }
+.fl-tl-track { width: 100%; position: relative; height: 72px; background: var(--field-bg); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; cursor: pointer; }
+.fl-tl-ruler { position: absolute; inset: 0; pointer-events: none; }
+.fl-tl-tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line-soft); }
+.fl-tl-label { position: absolute; top: 4px; font-family: "JetBrains Mono", monospace; font-size: 9.5px; color: var(--faint); transform: translateX(4px); }
+.fl-tl-wave { position: absolute; left: 3px; right: 3px; top: 19px; bottom: 6px; display: flex; align-items: center; gap: 1px; pointer-events: none; }
+.fl-tl-wave span { flex: 1 1 0; min-width: 0; border-radius: 1px; }
+.fl-tl-wave.loading { opacity: 0.4; }
+.fl-tl-region { position: absolute; top: 0; bottom: 0; background: var(--accent-soft); border-left: 2px solid var(--ok); border-right: 2px solid var(--accent); pointer-events: none; }
+.fl-tl-region.sel-in { border-left-width: 4px; box-shadow: -2px 0 8px -1px var(--ok); }
+.fl-tl-region.sel-out { border-right-width: 4px; box-shadow: 2px 0 8px -1px var(--accent); }
+.fl-tl-cut { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--accent-2); opacity: 0.5; pointer-events: none; }
+.fl-tl-suggest-mark { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed var(--accent-line); pointer-events: none; }
+.fl-tl-suggest-mark::before { content: ""; position: absolute; top: -2px; left: -3px; width: 6px; height: 6px; background: var(--accent); transform: rotate(45deg); }
+.fl-tl-kf { position: absolute; bottom: 7px; width: 9px; height: 9px; background: var(--accent); transform: translateX(-50%) rotate(45deg); border: 1px solid rgba(0, 0, 0, 0.25); pointer-events: none; }
+.fl-tl-playhead { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #fff; box-shadow: 0 0 8px rgba(255, 255, 255, 0.6); pointer-events: none; }
+.fl-tl-playhead::before { content: ""; position: absolute; top: -1px; left: 50%; transform: translateX(-50%); border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid #fff; }
+.fl-tl-bubble { position: absolute; top: -26px; left: 50%; transform: translateX(-50%); font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: #2a1606; background: var(--accent-2); padding: 2px 7px; border-radius: 5px; white-space: nowrap; }
+.fl-rdchip.swell { border-color: var(--accent-line); }
+.fl-rdchip.swell .lab, .fl-rdchip.swell .val { color: var(--accent); }
+
+/* ============================================================
+   App dialogs (modals / Activity window) — reuse the tokens above
+   ============================================================ */
+textarea, pre.csv, pre.log {
+  width: 100%; background: #0d0f12; color: #c7d0dd;
+  border: 1px solid var(--line); border-radius: 6px; padding: 8px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px;
+  white-space: pre; overflow: auto; min-height: 90px; margin: 0;
+}
+pre.log { max-height: 240px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.log.ok { border-color: var(--ok); }
+.log.err { border-color: var(--err); }
+.logbar { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.logbar .hint { flex: 1; min-width: 0; word-break: break-all; }
+
+/* in-app floating Activity panel (web build) */
+.activity-toggle { position: fixed; bottom: 14px; right: 14px; z-index: 60; font-size: 12px; }
+.activity-toggle.on { background: var(--accent); color: #1a1207; border-color: var(--accent); }
+.activity-toggle.has-output::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 6px; background: var(--accent); border-radius: 50%; vertical-align: 1px; }
+.activity { position: fixed; bottom: 56px; right: 14px; z-index: 59; width: min(680px, 92vw); height: 46vh; min-width: 300px; min-height: 150px; max-width: 96vw; max-height: 92vh; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 12px; resize: both; overflow: hidden; }
+.activity[hidden] { display: none; }
+.activity-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; cursor: move; }
+.activity-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+.activity-head .hint { flex: 1; min-width: 0; word-break: break-all; }
+.activity pre.log { flex: 1; max-height: none; min-height: 120px; }
+
+/* separate native Activity window */
+.activity-window { display: flex; flex-direction: column; height: 100vh; padding: 12px; }
+.activity-window .activity-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.activity-window .activity-head .hint { flex: 1; min-width: 0; word-break: break-all; }
+.activity-window pre.log { flex: 1; max-height: none; min-height: 0; }
+
+/* spinner for in-progress hints */
+@keyframes spin { to { transform: rotate(360deg); } }
+.hint.working::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -1px; }
+
+/* ---- modals ---- */
+.modal-backdrop { position: fixed; inset: 0; background: #000a; display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal-backdrop[hidden] { display: none; }
+.modal { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 26px; max-width: 420px; box-shadow: var(--shadow); }
+.modal h3 { margin: 0 0 6px; }
+.modal .ver { color: var(--muted); margin-bottom: 14px; }
+.modal a { color: var(--accent-2); cursor: pointer; }
+.modal .about-tagline { font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 18px; letter-spacing: -0.02em; color: var(--accent); margin: 2px 0 12px; }
+.modal .thanks { margin-top: 8px; color: var(--muted); }
+.modal .close { margin-top: 16px; }
+
+/* ----- render history modal (§5.5) ----- */
+.fl-modal-backdrop { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 40px; background: color-mix(in srgb, var(--stage) 62%, transparent); backdrop-filter: blur(5px); }
+.fl-modal { width: 760px; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
+.fl-modal-h { display: flex; align-items: center; gap: 10px; padding: 16px 16px 14px 18px; border-bottom: 1px solid var(--line-soft); }
+.fl-modal-tools { display: flex; align-items: center; gap: 10px; padding: 13px 18px; border-bottom: 1px solid var(--line-soft); background: var(--bg-2); }
+.fl-modal-body { padding: 8px 12px 12px; overflow-y: auto; flex: 1; min-height: 0; }
+.fl-modal-foot { display: flex; align-items: center; gap: 9px; padding: 12px 18px; border-top: 1px solid var(--line-soft); background: var(--bg-2); font-size: 12.5px; color: var(--muted); }
+.fl-modal-foot b { color: var(--text); font-weight: 600; }
+.fl-hist-day { display: flex; align-items: center; gap: 10px; padding: 14px 6px 8px; font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
+.fl-hist-day .line { flex: 1; height: 1px; background: var(--line-soft); }
+.fl-hist-day .c { color: var(--faint); }
+.fl-hist { display: flex; align-items: center; gap: 13px; padding: 10px; border-radius: 11px; border: 1px solid transparent; }
+.fl-hist:hover { background: var(--field-bg); border-color: var(--line); }
+.fl-hist .fl-thumb { width: 30px; height: 53px; }
+.fl-hist-meta { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.fl-hist-top { display: flex; align-items: center; gap: 9px; }
+.fl-hist-top .nm { font-weight: 600; font-size: 13.5px; }
+.fl-hist-src { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px; }
+.fl-hist .fl-readout { font-size: 11.5px; }
+.fl-hist .fl-readout .arrow { color: var(--faint); }
+.fl-hist .fl-readout .path { color: var(--accent-2); }
+.fl-hist-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex: none; }
+.fl-hist-time { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--faint); }
+.fl-hist-actions { display: flex; align-items: center; gap: 6px; }
+.fl-iconbtn.sm { width: 30px; height: 30px; border-radius: 8px; }
+.fl-iconbtn.sm svg { width: 15px; height: 15px; }
+.fl-iconbtn.rm:hover { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
+.fl-btn.ghost.danger:hover { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
+
+/* ----- keyboard shortcuts overlay ----- */
+.modal.shortcuts { max-width: 520px; width: 92vw; }
+.shortcuts-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 26px; margin: 12px 0 4px; }
+.shortcuts-group { margin-bottom: 8px; }
+.shortcuts-group h4 { margin: 6px 0 6px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.shortcut-row { display: flex; align-items: baseline; gap: 10px; padding: 3px 0; }
+.shortcut-keys { flex: none; display: inline-flex; align-items: center; gap: 3px; min-width: 92px; }
+.shortcut-desc { color: var(--muted); font-size: 12.5px; }
+.modal.shortcuts kbd { font-family: "JetBrains Mono", monospace; font-size: 11px; line-height: 1; padding: 3px 6px; border-radius: 5px; background: var(--field-bg); border: 1px solid var(--line); box-shadow: 0 1px 0 var(--line); color: var(--text); }
+
+.modal.settings { max-width: 480px; }
+.modal.settings h4 { margin: 4px 0 10px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.modal.settings .hint { margin-top: 8px; line-height: 1.5; }
+
+.modal.guide { max-width: 840px; width: 92vw; max-height: 86vh; display: flex; flex-direction: column; }
+.guide-cols { display: grid; grid-template-columns: 180px 1fr; gap: 18px; flex: 1; min-height: 0; }
+.guide-toc { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; border-right: 1px solid var(--line); padding-right: 12px; }
+.guide-toc-label { color: var(--muted); text-transform: uppercase; font-size: 11px; letter-spacing: 0.6px; margin-bottom: 6px; }
+.guide-toc a { color: var(--accent-2); cursor: pointer; font-size: 13px; padding: 3px 0; }
+.guide-toc a:hover { color: var(--accent); }
+.guide-body { overflow-y: auto; padding-right: 8px; }
+.guide-section { margin-bottom: 18px; }
+.guide-section h4 { margin: 0 0 8px; font-size: 14px; }
+.guide-body p { margin: 0 0 10px; line-height: 1.5; }
+.guide-body ul, .guide-body ol { margin: 0 0 10px; padding-left: 20px; line-height: 1.5; }
+.guide-body li { margin-bottom: 4px; }
+.guide-tip { border-left: 3px solid var(--accent); background: var(--panel-2); padding: 8px 10px; border-radius: 4px; margin: 0 0 10px; font-size: 13px; }
+.guide-tip::before { content: "Tip — "; color: var(--accent); font-weight: 600; }

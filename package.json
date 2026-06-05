@@ -1,0 +1,34 @@
+{
+  "name": "footlight",
+  "version": "0.1.0",
+  "description": "Turn 16:9 source videos into 1080x1920 (9:16) vertical clips by wrapping ffmpeg.",
+  "author": "Trevor Baker",
+  "license": "Apache-2.0",
+  "repository": { "type": "git", "url": "https://github.com/tjbaker/footlight" },
+  "bugs": { "url": "https://github.com/tjbaker/footlight/issues" },
+  "homepage": "https://github.com/tjbaker/footlight",
+  "type": "module",
+  "bin": {
+    "footlight": "bin/footlight.js"
+  },
+  "exports": {
+    ".": "./dist/engine.js"
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

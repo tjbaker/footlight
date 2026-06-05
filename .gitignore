@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+
+# Footlight working directories
+clips/
+downloads/
+
+# Runtime session autosave (machine-specific)
+.footlight-session.json
+
+# Media artifacts
+*.mp4
+*.webm
+*.part
+
+# Environment / secrets
+.env
+.env.*
+
+# Editor / OS cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Claude Code local (machine-specific) settings
+.claude/settings.local.json

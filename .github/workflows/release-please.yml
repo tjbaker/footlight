@@ -1,0 +1,22 @@
+name: release-please
+
+# On every push to main, release-please maintains a "release PR" that bumps the
+# version and updates CHANGELOG.md from the Conventional Commits since the last
+# release. Merging that PR tags the release and creates a GitHub Release.
+# Config: release-please-config.json + .release-please-manifest.json (repo root).
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
