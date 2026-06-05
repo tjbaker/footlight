@@ -160,6 +160,16 @@ input[type="text"], input[type="number"], input[type="password"] {
   border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent);
 }
 
+/* ----- cards / panels ----- */
+/* Panel surface for grouped controls (radius 14, 1px --line, shadow-sm). Listed in
+   the theme-flip transition above but had no rule until now (HANDOFF §4). */
+.fl-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
 /* ----- pills / labels / spacer ----- */
 .fl-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.13em; color: var(--muted); white-space: nowrap; }
 .fl-label .n { color: var(--faint); margin-left: 4px; font-weight: 500; }
