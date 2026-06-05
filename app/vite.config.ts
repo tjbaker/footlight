@@ -19,6 +19,16 @@ export default defineConfig({
       "@provider-types": fileURLToPath(
         new URL("../src/providers/types.ts", import.meta.url),
       ),
+      // Pure, browser-safe model selection + assistant contract/tools, for the
+      // coming AI-assistant UI. The orchestrator's network call runs in the
+      // backend (like the tracker), never in these modules.
+      "@model": fileURLToPath(new URL("../src/model.ts", import.meta.url)),
+      "@assistant-types": fileURLToPath(
+        new URL("../src/assistant/types.ts", import.meta.url),
+      ),
+      "@assistant-tools": fileURLToPath(
+        new URL("../src/assistant/tools.ts", import.meta.url),
+      ),
     },
   },
   server: {
