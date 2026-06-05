@@ -153,6 +153,17 @@ interface RenderPrefs {
   audio: AudioMode;
   bitrate: string; // "192k" | "256k" | "320k"
   dryRun: boolean;
+  /**
+   * Burn captions into the exported video (off by default — a clean export is
+   * the default). The caption content/position comes from the clip; this is the
+   * global opt-in to render them at all.
+   */
+  burnCaptions: boolean;
+  /**
+   * Bring-your-own caption font: a `.ttf`/`.otf` path or an installed font
+   * family name. Empty means the system default — fonts are NEVER bundled.
+   */
+  captionFont: string;
 }
 
 const DEFAULT_RENDER: RenderPrefs = {
@@ -161,6 +172,8 @@ const DEFAULT_RENDER: RenderPrefs = {
   audio: "copy",
   bitrate: "256k",
   dryRun: false,
+  burnCaptions: false,
+  captionFont: "",
 };
 
 interface AiPrefs {
@@ -702,6 +715,51 @@ function buildRenderingPanel(): HTMLElement {
   );
   dryBlock.body.append(dryToggle);
   root.append(dryBlock.root);
+
+  // Captions — global opt-in (off by default) + bring-your-own font
+  const capBlock = block(s.captions);
+
+  const capToggle = el("div", "fl-adv-toggle");
+  capToggle.style.cursor = "default";
+  const capBody = el("div");
+  capBody.style.flex = "1";
+  const capTitle = el("div", "fl-adv-title");
+  capTitle.textContent = s.burnCaptions;
+  const capSub = el("div", "fl-adv-sub");
+  capSub.textContent = s.burnCaptionsHint;
+  capBody.append(capTitle, capSub);
+  capToggle.append(
+    capBody,
+    toggleSwitch(prefs.burnCaptions, (v) => {
+      prefs.burnCaptions = v;
+      save();
+    }),
+  );
+
+  const fontField = el("div", "fl-field path");
+  fontField.style.flex = "1";
+  const fontInput = document.createElement("input");
+  fontInput.type = "text";
+  fontInput.className = "mono";
+  fontInput.placeholder = s.captionFontPlaceholder;
+  fontInput.value = prefs.captionFont;
+  fontInput.addEventListener("change", () => {
+    prefs.captionFont = fontInput.value.trim();
+    save();
+  });
+  fontField.append(fontInput);
+  const fontRow = labeledRow(s.captionFont, fontField);
+
+  const fontHint = el("div", "fl-set-secsub");
+  fontHint.style.marginTop = "8px";
+  fontHint.textContent = s.captionFontHint;
+
+  const styleNote = el("div", "fl-set-secsub");
+  styleNote.style.marginTop = "8px";
+  styleNote.textContent = s.captionStyleNote;
+
+  capBlock.body.append(capToggle, fontRow, fontHint, styleNote);
+  root.append(capBlock.root);
 
   return root;
 }

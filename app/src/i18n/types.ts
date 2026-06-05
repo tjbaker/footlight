@@ -90,6 +90,13 @@ export interface SettingsMessages {
     dryRun: string;
     dryRunHint: string;
     gapNote: string;
+    captions: string;
+    burnCaptions: string;
+    burnCaptionsHint: string;
+    captionFont: string;
+    captionFontPlaceholder: string;
+    captionFontHint: string;
+    captionStyleNote: string;
   };
 
   ai: {
