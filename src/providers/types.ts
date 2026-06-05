@@ -12,6 +12,7 @@
  */
 
 import type { Box, Dims } from "../studio.js";
+import type { ModelRef } from "../model.js";
 
 /** A located subject at a clip-relative time. `box` is in SOURCE/working-region pixels. */
 export interface TrackSample {
@@ -43,6 +44,12 @@ export interface TrackRequest {
   subjectHint?: string;
   /** BYOK API key. Required — providers never ship a key. */
   apiKey: string;
+  /**
+   * The resolved provider + model to use for the pixel work (the `vision` half
+   * of `resolveModels`). Optional today so existing call sites keep working; the
+   * `makeTracker` factory selects the provider from `model.provider`.
+   */
+  model?: ModelRef;
   /** Optional cancellation signal. */
   signal?: AbortSignal;
   /**

@@ -21,7 +21,10 @@
       "@core": ["../src/core.ts"],
       "@studio": ["../src/studio.ts"],
       "@track": ["../src/track.ts"],
-      "@provider-types": ["../src/providers/types.ts"]
+      "@provider-types": ["../src/providers/types.ts"],
+      "@model": ["../src/model.ts"],
+      "@assistant-types": ["../src/assistant/types.ts"],
+      "@assistant-tools": ["../src/assistant/tools.ts"]
     }
   },
   "include": ["src", "vite.config.ts"]
