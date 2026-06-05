@@ -167,7 +167,7 @@ interface AiPrefs {
   model: string;
 }
 
-const DEFAULT_AI: AiPrefs = { provider: "gemini", model: "gemini-2.5-flash" };
+const DEFAULT_AI: AiPrefs = { provider: "gemini", model: "gemini-3.5-flash" };
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -342,18 +342,45 @@ interface ModelOpt {
   /** Illustrative cost in USD per sampled still frame. */
   perFrame: number;
 }
-const GEMINI_MODELS: ModelOpt[] = [
-  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", cap: "Highest quality reasoning + vision.", speed: "slower", perFrame: 0.0012 },
-  {
-    id: "gemini-2.5-flash",
-    name: "Gemini 2.5 Flash",
-    recommended: true,
-    cap: "Fast, capable multimodal — the sweet spot for tracking.",
-    speed: "fast",
-    perFrame: 0.0003,
-  },
-  { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash-Lite", cap: "Cheapest; good for dense sampling.", speed: "fastest", perFrame: 0.00012 },
-];
+/**
+ * Model catalog, keyed by provider. Pricing is illustrative. Only Gemini is
+ * wired today (the vision/assistant adapters); the Anthropic/OpenAI lists are
+ * shown for the provider-agnostic picker and should be confirmed before those
+ * providers are implemented.
+ */
+const MODEL_CATALOG = {
+  gemini: [
+    { id: "gemini-3.5-pro", name: "Gemini 3.5 Pro", cap: "Highest-quality reasoning + vision.", speed: "slower", perFrame: 0.0015 },
+    {
+      id: "gemini-3.5-flash",
+      name: "Gemini 3.5 Flash",
+      recommended: true,
+      cap: "Fast, capable multimodal — the sweet spot for tracking.",
+      speed: "fast",
+      perFrame: 0.0004,
+    },
+    { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", cap: "Cheapest; good for dense sampling.", speed: "fastest", perFrame: 0.00015 },
+  ],
+  claude: [
+    { id: "claude-opus-4-8", name: "Claude Opus 4.8", cap: "Most capable Claude — strongest reasoning.", speed: "slower", perFrame: 0.004 },
+    { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", recommended: true, cap: "Balanced quality and speed.", speed: "fast", perFrame: 0.001 },
+    { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", cap: "Fastest, cheapest Claude.", speed: "fastest", perFrame: 0.0003 },
+  ],
+  openai: [
+    { id: "gpt-5.1", name: "GPT-5.1", cap: "Flagship multimodal reasoning.", speed: "slower", perFrame: 0.002 },
+    { id: "gpt-5.1-mini", name: "GPT-5.1 mini", recommended: true, cap: "Faster, cheaper — good default.", speed: "fast", perFrame: 0.0005 },
+  ],
+} satisfies Record<string, ModelOpt[]>;
+
+/** Models for a provider, falling back to Gemini for an unknown id. */
+function modelsFor(provider: string): ModelOpt[] {
+  return (MODEL_CATALOG as Record<string, ModelOpt[]>)[provider] ?? MODEL_CATALOG.gemini;
+}
+/** A provider's default model id (its recommended, else the first). */
+function defaultModelFor(provider: string): string {
+  const ms = modelsFor(provider);
+  return (ms.find((m) => m.recommended) ?? ms[0]!).id;
+}
 
 /** Per-request flat cost the assistant adds on top of per-frame vision (illustrative). */
 const ASSISTANT_PER_REQUEST = 0.004;
@@ -648,7 +675,14 @@ function buildAiPanel(): HTMLElement {
       for (const c of Array.from(provRow.children)) c.classList.remove("on");
       chip.classList.add("on");
       prefs.provider = p.id;
+      // The selected model must belong to the new provider — reset to its default
+      // if not, then re-render the model list and recompute the cost.
+      if (!modelsFor(p.id).some((m) => m.id === prefs.model)) {
+        prefs.model = defaultModelFor(p.id);
+      }
       save();
+      renderModels();
+      paintCost();
     });
     provRow.append(chip);
   }
@@ -694,7 +728,9 @@ function buildAiPanel(): HTMLElement {
   const modelBlock = block(s.model);
   const optList = el("div");
   optList.style.cssText = "display:flex; flex-direction:column; gap:9px;";
-  for (const m of GEMINI_MODELS) {
+  function renderModels(): void {
+    optList.replaceChildren();
+    for (const m of modelsFor(prefs.provider)) {
     const card = el("div", m.id === prefs.model ? "fl-opt sel" : "fl-opt");
     const radio = el("span", "radio");
     const body = el("div", "fl-opt-body");
@@ -725,7 +761,9 @@ function buildAiPanel(): HTMLElement {
       paintCost();
     });
     optList.append(card);
+    }
   }
+  renderModels();
   modelBlock.body.append(optList);
 
   // Cost callout with a live interval recompute
@@ -756,7 +794,8 @@ function buildAiPanel(): HTMLElement {
   function paintCost(): void {
     const interval = loadAutoTrackSettings().intervalSec || 0.75;
     const frames = Math.max(1, Math.round(20 / interval));
-    const model = GEMINI_MODELS.find((m) => m.id === prefs.model) ?? GEMINI_MODELS[1]!;
+    const models = modelsFor(prefs.provider);
+    const model = models.find((m) => m.id === prefs.model) ?? models.find((m) => m.recommended) ?? models[0]!;
     const trackCost = frames * model.perFrame;
     noteText.innerHTML = `${s.costNote} ${interval.toFixed(2)}s ≈ <b>${frames} frames</b> ≈ <b>${fmtUsd(trackCost)}</b> with ${model.name}. The assistant adds only ~<b>${fmtUsd(ASSISTANT_PER_REQUEST)}</b> per request.`;
   }
