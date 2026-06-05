@@ -162,7 +162,7 @@ export const en: Messages = {
             kind: "list",
             items: [
               "Drag it by its header to any corner so it doesn't cover what you're framing; the preview button in the top bar hides/shows it.",
-              "“guides” shades the bottom caption strip and right button rail that TikTok / Reels / Shorts overlay on top of your video — so you don't frame the subject where the app chrome will cover it.",
+              "“guides” shades the bottom caption strip and right button rail that Reels / TikTok / Shorts overlay on top of your video — so you don't frame the subject where the app chrome will cover it.",
             ],
           },
           {

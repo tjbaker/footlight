@@ -1,8 +1,9 @@
 # Footlight — Tauri (native) shell
 
-This directory is the **native desktop shell** for Footlight. It is **ready-to-build
-code, but it was NOT compiled in the environment where it was authored** — that
-environment has Node + ffmpeg but **no Rust toolchain**.
+This directory is the **native desktop shell** for Footlight. It **needs the Rust
+toolchain to build** — which the engine, CLI, and browser GUI do not. If you only
+have Node + ffmpeg, use `make gui` for the browser UI; install Rust (below) to
+build the native window.
 
 ## Requirements to build
 

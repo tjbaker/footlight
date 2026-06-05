@@ -214,7 +214,7 @@ a deliberate differentiator from cloud auto-clippers that upload source video.
 
 ### 6.5 Captions / branding (optional, off by default)
 - Clips export **clean** by default — no burned-in text. Native per-platform
-  captions are added later in-app (Reels/TikTok/Shorts), which also avoids the
+  captions are added later in-app (Reels / TikTok / Shorts), which also avoids the
   ranking penalty platforms apply to non-native on-screen text.
 - The manifest carries **`hook`**, **`title`**, **`text_position`** fields as a
   self-contained shot-list regardless of rendering.

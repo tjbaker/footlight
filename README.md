@@ -1,7 +1,14 @@
-# Footlight
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="icons/lockup-dark.svg">
+    <img alt="Footlight" src="icons/lockup-light.svg" width="320">
+  </picture>
+</p>
 
-Turn 16:9 performance and music videos into clean **1080×1920 (9:16) H.264 MP4**
-clips for Reels / TikTok / YouTube Shorts. A thin wrapper around `ffmpeg`.
+<p align="center">
+Turn 16:9 performance and music videos into clean <strong>1080×1920 (9:16) H.264 MP4</strong><br>
+clips for Reels / TikTok / YouTube Shorts. A thin wrapper around <code>ffmpeg</code>.
+</p>
 
 ## Philosophy — control-first, not auto-magic
 
@@ -21,19 +28,13 @@ moves across the frame. You make the calls; Footlight does the rendering.
 
 This is an early build. Footlight is a **TypeScript render engine + CLI** with a
 **desktop GUI** (Tauri) for visual frame-accurate cutting and crop authoring —
-including punch-in/zoom framing and an **optional AI assistant** (provider-
-agnostic, Gemini-capable vision for subject tracking) as an opt-in accelerant,
-never a gate. See [SPEC.md](SPEC.md) for the full design and roadmap.
+including punch-in/zoom framing and **optional AI-assisted subject tracking**
+(provider-agnostic, with Gemini as the reference vision provider) as an opt-in
+accelerant, never a gate. See [SPEC.md](SPEC.md) for the full design and roadmap.
 
 You **run it from source** — there is no prebuilt/signed download. The browser
 GUI needs only Node; the native window additionally needs the Rust toolchain.
 See **[Running Footlight](#running-footlight)** below.
-
-## Bugs & feedback
-
-Found a bug or have a request? Please [open an issue](https://github.com/tjbaker/footlight/issues/new).
-Repository: <https://github.com/tjbaker/footlight>. The desktop app's **Help → Report a Bug**
-menu links to the same place.
 
 ## Requirements
 
@@ -49,20 +50,37 @@ menu links to the same place.
 Footlight does **not** bundle ffmpeg/ffprobe/Node — it invokes whatever is on
 your `PATH`. Run **`make doctor`** to verify your environment in one shot.
 
+## Getting started
+
+From zero to your first vertical clip:
+
+1. **Install the prerequisites** — at minimum `ffmpeg`, `ffprobe`, and Node 20+
+   (see [Requirements](#requirements)).
+2. **Set up and verify your environment:**
+   ```bash
+   make setup     # install all dependencies (root engine + GUI)
+   make doctor    # verify Node 20+, ffmpeg, ffprobe are on PATH
+   ```
+3. **Launch the GUI in your browser** (no Rust needed):
+   ```bash
+   make gui
+   ```
+   This starts the dev backend (ffmpeg/ffprobe/CLI on :8787) and the Vite
+   frontend together; open the printed localhost URL. Ctrl-C stops both.
+4. **Cut your first clip:**
+   - **Load** a source — Browse…, drag a video onto the window, or paste a path.
+   - **Drag across the loudness timeline** to set In / Out.
+   - **Frame** with the orange 9:16 box — drag to move, drag a corner to punch in.
+   - **Add clip → queue**, choose a **Destination**, and **Render**.
+
+Your clip lands in the Destination folder. Prefer a native window or the command
+line? See **Running Footlight** and **CLI usage** below.
+
 ## Running Footlight
 
-Everything is driven by `make` (run `make help` for the full list):
-
-```bash
-make setup     # install all dependencies (root engine + GUI)
-make doctor    # verify node 20+, ffmpeg, ffprobe are on PATH
-make gui       # run the GUI in your browser  (no Rust needed)
-```
-
-`make gui` starts the dev backend (ffmpeg/ffprobe/CLI on :8787) and the Vite
-frontend together; open the printed localhost URL. Ctrl-C stops both.
-
-Prefer a native window? With the Rust toolchain installed:
+Everything is driven by `make` (run `make help` for the full list). The browser
+GUI (`make gui`) is covered in **[Getting started](#getting-started)**; for a
+native desktop window, with the Rust toolchain installed:
 
 ```bash
 make tauri-dev     # native desktop window (hot-reloads)
@@ -201,6 +219,21 @@ ffmpeg -ss 60 -i FILE -vf cropdetect=limit=24:round=2 -frames:v 300 -f null -
 
 …then read the suggested `crop=` value. `footlight probe` surfaces the same
 suggestion.
+
+## Contributing
+
+Contributions are welcome — and not only code. Footlight has **two contribution
+surfaces**: the render engine / CLI / GUI, and the **"framing brain"**
+(`prompts/base.md`) — the prose that encodes framing domain knowledge. A newly
+discovered pillarbox trap or a crop recipe for a new source type makes a valuable
+prose-only PR, no code required. See **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+
+## Bugs & feedback
+
+Found a bug or have a request? Please
+[open an issue](https://github.com/tjbaker/footlight/issues/new/choose).
+Repository: <https://github.com/tjbaker/footlight>. The desktop app's
+**Help → Report a Bug** menu links to the same place.
 
 ## License
 

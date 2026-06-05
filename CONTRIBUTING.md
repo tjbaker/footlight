@@ -44,7 +44,12 @@ exercises the engine end to end — Footlight does not bundle them.
 
 ## Code style
 
-- **TypeScript.** Keep it clean, readable, and well-typed.
+- **TypeScript** (strict, ESM, `.js` extensions on relative imports). Keep it
+  clean, readable, and well-typed.
+- Mind the **pure / Node split**: browser-safe transforms go in `src/core.ts`;
+  only fs/subprocess code goes in `src/engine.ts`. See `CLAUDE.md` for the full
+  architecture conventions (SPDX headers, even-dimension crop math, the
+  two-backend app split).
 - Keep changes focused and tested.
 
 ## Pull request expectations
