@@ -9,7 +9,7 @@
  * needs to know which one it is running against.
  */
 
-import type { ClipSpec } from "@studio";
+import type { ClipSpec } from "@manifest";
 
 /** One past render, persisted locally so it can be re-opened and tweaked. */
 export interface HistoryEntry {

@@ -29,7 +29,7 @@
 
 import { planSampleTimes } from "@track";
 import type { AssistantContext, VisionRunner } from "../../../src/assistant/orchestrator.js";
-import type { Box } from "@studio";
+import type { Box } from "@manifest";
 import type { TrackSample } from "@provider-types";
 import type { FootlightPlatform, TrackRequest } from "../platform/types.js";
 

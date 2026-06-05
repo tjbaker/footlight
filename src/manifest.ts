@@ -1,7 +1,7 @@
 // Copyright 2026 Trevor Baker, all rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Footlight studio-core: pure logic the desktop GUI uses to turn drawn crop
+ * Footlight manifest core: pure logic the desktop GUI uses to turn drawn crop
  * boxes / selections into the CSV manifest the render engine consumes.
  *
  * This is the INVERSE of the engine's `computeCrop`: where the engine maps a
@@ -252,7 +252,7 @@ export function serializeManifestJSON(clips: ClipSpec[]): string {
 /**
  * Editor-facing state for one clip — the rehydrated form of a `ClipSpec`. This
  * is the INVERSE of how the GUI builds a spec (its `addClip`): every drawn box
- * and selection that the studio helpers collapse into manifest strings is
+ * and selection that the manifest helpers collapse into manifest strings is
  * reconstructed here so the GUI can re-open an existing manifest for editing.
  */
 export interface RehydratedClip {

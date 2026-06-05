@@ -1,6 +1,6 @@
 // Copyright 2026 Trevor Baker, all rights reserved.
 // SPDX-License-Identifier: Apache-2.0
-/** App entry: mount the Studio editor (which builds its own top bar). */
+/** App entry: mount the editor (which builds its own top bar). */
 
 import "./style.css";
 import { openAbout } from "./menu.js";

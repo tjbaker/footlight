@@ -32,7 +32,7 @@ import {
   type Dims,
   type ClipSpec,
   type CropKeyframe,
-} from "@studio";
+} from "@manifest";
 import { planSampleTimes, samplesToCropPath } from "@track";
 import { platform, platformName } from "./platform/index.js";
 import type { HistoryEntry, SessionData } from "./platform/types.js";
@@ -123,7 +123,7 @@ export function mountEditor(root: HTMLElement): void {
   const topbar = el("div", "fl-topbar");
   const brand = el("div", "fl-brand");
   // Brand mark: the "row of footlights" three-lamp SVG (same motif as the app
-  // icon). "studio" was a codename — no tagline.
+  // icon). No tagline.
   brand.innerHTML = `${ICON_BRAND}<div class="fl-word">Footlight</div>`;
 
   const crumb = el("div", "fl-crumb mono");
@@ -2781,7 +2781,7 @@ function pushRecent(path: string): void {
   }
 }
 
-// ---- Studio theme (light default, persisted) ----
+// ---- Theme (light default, persisted) ----
 const THEME_KEY = "footlight.theme";
 
 function loadTheme(): "light" | "dark" {

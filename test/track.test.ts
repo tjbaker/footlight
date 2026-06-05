@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { buildEasedCropX, TARGET_AR, type CropPathKeyframe } from "../src/core.js";
-import type { Dims } from "../src/studio.js";
+import type { Dims } from "../src/manifest.js";
 import {
   planSampleTimes,
   refineByMotion,

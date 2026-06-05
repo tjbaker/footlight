@@ -76,7 +76,7 @@ import them without pulling Node into the bundle.
 and `run` (subprocess spawn) — and `export * from "./core.js"` so existing
 `import { ... } from "./engine.js"` call sites keep working. **Rule: anything pure
 goes in `core.ts`; only put code in `engine.ts` if it touches fs/subprocess.** The
-same split applies to `studio.ts` and `track.ts` (both pure, frontend-safe).
+same split applies to `manifest.ts` and `track.ts` (both pure, frontend-safe).
 
 ### The render pipeline
 
@@ -114,9 +114,9 @@ limit). Detection is **injected** via the `VisionTracker` interface
 path stays within a single shot (cuts are the hard-switch schedule's job). Output is
 a human-in-the-loop *suggestion* — review/edit before render.
 
-### studio.ts — GUI ↔ manifest
+### manifest.ts — GUI ↔ manifest
 
-`studio.ts` is the **inverse of the engine**: it turns drawn crop boxes/selections
+`manifest.ts` is the **inverse of the engine**: it turns drawn crop boxes/selections
 back into `crop_offset` / `content_crop` / schedule strings and serializes manifests
 (CSV and JSON). Its crop-width/maxX/even-rounding math mirrors `computeCrop` exactly
 so the round-trip box → offset → crop is consistent.

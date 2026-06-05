@@ -11,7 +11,7 @@
  * plugs in — opt-in and BYOK, so no provider runs without the user's own key.
  */
 
-import type { Box, Dims } from "../studio.js";
+import type { Box, Dims } from "../manifest.js";
 import type { ModelRef } from "../model.js";
 
 /** A located subject at a clip-relative time. `box` is in SOURCE/working-region pixels. */

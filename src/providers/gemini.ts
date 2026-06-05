@@ -27,7 +27,7 @@
  * (fetch only) — it never reads the filesystem.
  */
 
-import type { Box, Dims } from "../studio.js";
+import type { Box, Dims } from "../manifest.js";
 import type { TrackSample, TrackRequest, VisionTracker } from "./types.js";
 
 /** Configurable model/endpoint — defaults target a current vision-capable Gemini. */

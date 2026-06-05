@@ -6,7 +6,7 @@
  * Two surfaces:
  *   - `TOOLS` — the function-call SCHEMAS the orchestrator hands the model.
  *   - builders — turn a model's tool call (or a vision result) into a typed
- *     `ProposedAction` (display + ghost + commit), reusing the engine/studio crop
+ *     `ProposedAction` (display + ghost + commit), reusing the engine/manifest crop
  *     math so every proposed `x`/offset is engine-valid by construction.
  *
  * The tools split three ways:
@@ -19,7 +19,7 @@
  */
 
 import { TARGET_AR, parseContentCrop, type CropPathKeyframe } from "../core.js";
-import { cropBoxToOffset, roundEven, type Box, type Dims } from "../studio.js";
+import { cropBoxToOffset, roundEven, type Box, type Dims } from "../manifest.js";
 import { samplesToCropPath } from "../track.js";
 import type { TrackSample } from "../providers/types.js";
 import type { ProposedAction, ToolName } from "./types.js";
@@ -137,7 +137,7 @@ export const TOOL_BY_NAME: ReadonlyMap<ToolName, ToolSpec> = new Map(
   TOOLS.map((t) => [t.name, t]),
 );
 
-// ---- crop math (mirrors the engine / studio exactly) ----
+// ---- crop math (mirrors the engine / manifest exactly) ----
 
 /** Fixed 9:16 crop width for a landscape region: `even(round(height * 9/16))`. */
 function cropWidth(region: Dims): number {

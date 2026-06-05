@@ -2,7 +2,7 @@
 # Copyright 2026 Trevor Baker, all rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Fetch the latin-subset woff2 web fonts that the Footlight "Studio" UI bundles
+# Fetch the latin-subset woff2 web fonts that the Footlight UI bundles
 # locally (the app runs offline; no Google Fonts CDN at runtime). Downloads into
 # app/src/fonts/ with filenames that match the @font-face rules in
 # app/src/fonts.css. All three families are SIL Open Font License (OFL), which

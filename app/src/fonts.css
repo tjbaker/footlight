@@ -2,7 +2,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 /*
- * Local web-font bundling for the Footlight "Studio" UI.
+ * Local web-font bundling for the Footlight UI.
  *
  * The app runs offline, so fonts are bundled locally as latin-subset woff2
  * (no Google Fonts CDN at runtime). Run `bash scripts/fetch-fonts.sh` to
