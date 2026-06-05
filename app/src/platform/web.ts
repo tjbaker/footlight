@@ -20,6 +20,9 @@ import type {
 
 const BASE = "http://localhost:8787";
 
+// localStorage key prefix for the DEV-ONLY secret shim (see getSecret below).
+const SECRET_PREFIX = "footlight.secret.";
+
 export const webPlatform: FootlightPlatform = {
   async extractFrame(source: string, tSeconds: number): Promise<string> {
     const url = `${BASE}/frame?source=${encodeURIComponent(source)}&t=${encodeURIComponent(
@@ -142,6 +145,38 @@ export const webPlatform: FootlightPlatform = {
     });
     if (!res.ok) {
       throw new Error(`saveSession failed (${res.status}): ${await res.text()}`);
+    }
+  },
+
+  // --- Secret storage (DEV-ONLY boundary) -----------------------------------
+  // A localhost dev server CANNOT reach the OS keychain — that's an inherently
+  // native capability. So on the web/dev build we keep secrets in the browser's
+  // own `localStorage` (prefixed to avoid colliding with the auto-track blob and
+  // other app keys). This is acceptable ONLY for local dev: the packaged Tauri
+  // build (`tauriPlatform`) is the one that actually puts the key in the OS
+  // keychain. Do not ship the web build as a product surface for real keys.
+  async getSecret(key: string): Promise<string | null> {
+    try {
+      return localStorage.getItem(`${SECRET_PREFIX}${key}`);
+    } catch {
+      // localStorage unavailable (private mode etc.) — treat as "no secret".
+      return null;
+    }
+  },
+
+  async setSecret(key: string, value: string): Promise<void> {
+    try {
+      localStorage.setItem(`${SECRET_PREFIX}${key}`, value);
+    } catch {
+      /* localStorage unavailable — non-fatal in the dev build. */
+    }
+  },
+
+  async deleteSecret(key: string): Promise<void> {
+    try {
+      localStorage.removeItem(`${SECRET_PREFIX}${key}`);
+    } catch {
+      /* localStorage unavailable — non-fatal in the dev build. */
     }
   },
 };

@@ -29,6 +29,11 @@ use tauri_plugin_opener::OpenerExt;
 const REPO_URL: &str = "https://github.com/tjbaker/footlight";
 const ISSUES_NEW_URL: &str = "https://github.com/tjbaker/footlight/issues/new";
 
+/// Keyring service name for the secretStore commands. MUST match the bundle
+/// identifier in tauri.conf.json (`com.tjbaker.footlight`) so stored secrets are
+/// namespaced to this app in the OS keychain.
+const KEYRING_SERVICE: &str = "com.tjbaker.footlight";
+
 #[derive(Serialize)]
 struct ProbeResult {
     width: u32,
@@ -439,6 +444,46 @@ async fn save_session(app: AppHandle, data: serde_json::Value) -> Result<(), Str
     Ok(())
 }
 
+/// Build a keyring entry for `key` under this app's service. The platform
+/// secretStore seam (app/src/platform/tauri.ts) maps `getSecret`/`setSecret`/
+/// `deleteSecret` to the three commands below.
+fn secret_entry(key: &str) -> Result<keyring::Entry, String> {
+    keyring::Entry::new(KEYRING_SERVICE, key).map_err(|e| format!("keyring entry: {e}"))
+}
+
+/// Read a secret from the OS keychain. Returns `None` when the entry is absent
+/// (a missing key is not an error); other keyring failures surface as `Err`.
+#[tauri::command]
+async fn get_secret(key: String) -> Result<Option<String>, String> {
+    let entry = secret_entry(&key)?;
+    match entry.get_password() {
+        Ok(value) => Ok(Some(value)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(format!("read secret: {e}")),
+    }
+}
+
+/// Store (or overwrite) a secret in the OS keychain.
+#[tauri::command]
+async fn set_secret(key: String, value: String) -> Result<(), String> {
+    let entry = secret_entry(&key)?;
+    entry
+        .set_password(&value)
+        .map_err(|e| format!("write secret: {e}"))
+}
+
+/// Delete a secret from the OS keychain. A missing entry is treated as success
+/// so callers can delete idempotently.
+#[tauri::command]
+async fn delete_secret(key: String) -> Result<(), String> {
+    let entry = secret_entry(&key)?;
+    match entry.delete_credential() {
+        Ok(()) => Ok(()),
+        Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(format!("delete secret: {e}")),
+    }
+}
+
 /// Build the separate Activity window. Its own close button HIDES it (rather than
 /// destroying it) and emits `activity-hidden` so the main window keeps the toggle
 /// state in sync — and reopening is instant.
@@ -578,6 +623,9 @@ fn main() {
             save_history,
             load_session,
             save_session,
+            get_secret,
+            set_secret,
+            delete_secret,
             toggle_activity_window,
             show_activity_window
         ])

@@ -124,4 +124,19 @@ export const tauriPlatform: FootlightPlatform = {
   async saveSession(data: SessionData): Promise<void> {
     await invoke<void>("save_session", { data });
   },
+
+  // Secret storage backed by the OS keychain via the Rust `keyring` crate (see
+  // get_secret / set_secret / delete_secret in app/src-tauri/src/main.rs). The
+  // bundle identifier is the keyring service; `key` is the account name.
+  async getSecret(key: string): Promise<string | null> {
+    return invoke<string | null>("get_secret", { key });
+  },
+
+  async setSecret(key: string, value: string): Promise<void> {
+    await invoke<void>("set_secret", { key, value });
+  },
+
+  async deleteSecret(key: string): Promise<void> {
+    await invoke<void>("delete_secret", { key });
+  },
 };
