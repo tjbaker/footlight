@@ -41,7 +41,10 @@ See **[Running Footlight](#running-footlight)** below.
 ## Requirements
 
 - **`ffmpeg`** and **`ffprobe`** — e.g. `brew install ffmpeg`. Footlight invokes
-  these to do all cut/crop/scale/encode work.
+  these to do all cut/crop/scale/encode work. **Burned captions** additionally
+  need an ffmpeg built with **libfreetype** (the `drawtext` filter); minimal
+  builds omit it — `make doctor` reports whether yours has it, and on macOS
+  `brew install homebrew-ffmpeg/ffmpeg/ffmpeg` provides a build that does.
 - **Node 26+**
 - **`yt-dlp`** (optional) — for downloading source footage, e.g.
   `brew install yt-dlp`.

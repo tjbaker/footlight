@@ -599,6 +599,17 @@ export function buildCaptionFilters(row: ClipRow, opts: RenderOptions): string[]
   return filters;
 }
 
+/**
+ * Whether `ffmpeg -filters` output advertises a filter named `name`. Pure so the
+ * caption preflight (which needs `drawtext`, present only when ffmpeg is built
+ * with libfreetype) is testable without a subprocess. Matches the listing line
+ * `<flags> <name> <in>-><out> <desc>`, not a stray mention inside a description.
+ */
+export function ffmpegListHasFilter(filtersOutput: string, name: string): boolean {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^\\s*\\S{1,4}\\s+${escaped}\\s+\\S+->\\S+`, "m").test(filtersOutput);
+}
+
 /** Extract the filename stem (basename without final extension) from a path. */
 function sourceStem(p: string): string {
   const base = trimTrailingSeparators(p).split(/[\\/]/).pop() ?? p;
