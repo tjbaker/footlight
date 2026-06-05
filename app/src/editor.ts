@@ -42,6 +42,27 @@ import type {
   Grounding,
 } from "@assistant-types";
 import { platform, platformName } from "./platform/index.js";
+
+/**
+ * The assistant model the user picked in Settings → AI & models (persisted under
+ * `footlight.ai` as `{ provider, model }`), defaulting to Gemini 3.5 Flash. Read
+ * fresh per turn so a change in Settings takes effect without a reload.
+ */
+function assistantSelection(): { assistantModel: { provider: string; model: string } } {
+  let assistantModel = { provider: "gemini", model: "gemini-3.5-flash" };
+  try {
+    const raw = localStorage.getItem("footlight.ai");
+    if (raw) {
+      const p = JSON.parse(raw) as { provider?: unknown; model?: unknown };
+      if (typeof p.provider === "string" && typeof p.model === "string") {
+        assistantModel = { provider: p.provider, model: p.model };
+      }
+    }
+  } catch {
+    /* fall back to the default */
+  }
+  return { assistantModel };
+}
 import type { HistoryEntry, SessionData } from "./platform/types.js";
 import { createAssistant, type ConversationMessage } from "./assistant/index.js";
 import { openSettings } from "./settings.js";
@@ -2257,9 +2278,7 @@ export function mountEditor(root: HTMLElement): void {
       };
     }
     const region = currentRegion();
-    const models = resolveModels({
-      assistantModel: { provider: "gemini", model: "gemini-2.5-flash" },
-    });
+    const models = resolveModels(assistantSelection());
     const ctx = {
       region: { width: region.width, height: region.height },
       source: state.source,
@@ -2295,7 +2314,7 @@ export function mountEditor(root: HTMLElement): void {
     const dispose = appendThinking();
     try {
       const assistant = createAssistant({
-        selection: { assistantModel: { provider: "gemini", model: "gemini-2.5-flash" } },
+        selection: assistantSelection(),
         platform,
       });
       const reply: AssistantReply = await assistant.turn({
