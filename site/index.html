@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Footlight — vertical clips from performance video, control-first</title>
+<meta name="description" content="Footlight turns 16:9 performance and music videos into clean 1080×1920 (9:16) clips for Reels, TikTok and Shorts. A control-first cutter — you make the creative calls, it handles frame-accurate cut, crop, scale and encode. Open source." />
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+<link rel="icon" type="image/png" href="assets/favicon.png" />
+<meta property="og:title" content="Footlight — control-first vertical video cutter" />
+<meta property="og:description" content="Turn 16:9 performance & music video into clean 9:16 clips. You make the creative calls; Footlight handles frame-accurate cut, crop, scale and encode. Open source." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://footlight.dev" />
+<meta property="og:image" content="https://footlight.dev/assets/footlight-dark.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<!-- Self-hosted brand fonts (OFL) — no third-party font CDN; honors no-telemetry. -->
+<link rel="stylesheet" href="fonts.css" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top" aria-label="Footlight home">
+      <svg viewBox="0 0 100 100" aria-hidden="true"><defs>
+        <linearGradient id="nbeam" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff8a4a" stop-opacity="0.8"></stop><stop offset="1" stop-color="#ff8a4a" stop-opacity="0"></stop></linearGradient>
+        <radialGradient id="nlamp" cx="0.5" cy="0.3" r="0.9"><stop offset="0" stop-color="#ffd8b4"></stop><stop offset="0.6" stop-color="#ff8a4a"></stop><stop offset="1" stop-color="#ff8a4a"></stop></radialGradient>
+        <radialGradient id="nglow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#ff9a5a" stop-opacity="0.55"></stop><stop offset="1" stop-color="#ff9a5a" stop-opacity="0"></stop></radialGradient>
+      </defs><ellipse cx="50" cy="40" rx="38" ry="32" fill="url(#nglow)"></ellipse><g fill="url(#nbeam)"><polygon points="27,66 37,66 44,20 20,20"></polygon><polygon points="45,66 55,66 62,20 38,20"></polygon><polygon points="63,66 73,66 80,20 56,20"></polygon></g><rect x="20" y="69" width="60" height="5.5" rx="2.75" fill="#ff8a4a"></rect><g fill="url(#nlamp)"><path d="M24.5,69 A7.5 7.5 0 0 1 39.5,69 Z"></path><path d="M42.5,69 A7.5 7.5 0 0 1 57.5,69 Z"></path><path d="M60.5,69 A7.5 7.5 0 0 1 75.5,69 Z"></path></g></svg>
+      <span class="wm">Footlight</span>
+    </a>
+    <nav class="nav-links">
+      <a class="lk" href="#philosophy">Philosophy</a>
+      <a class="lk" href="#features">Features</a>
+      <a class="lk" href="#workflow">Workflow</a>
+      <a class="lk" href="#cli">CLI</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-ghost" href="https://github.com/tjbaker/footlight" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.7.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.5 11.5 0 0 0 23.5 12C23.5 5.7 18.3.5 12 .5z"></path></svg>
+        GitHub
+      </a>
+      <a class="btn btn-primary" href="#get-started">Get started</a>
+    </div>
+  </div>
+</header>
+
+<a id="top"></a>
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Open source · frame-accurate</span>
+    <h1>Vertical clips from performance video. <span class="em">You make the calls.</span></h1>
+    <p class="lede">Footlight turns 16:9 music and live-performance footage into clean <b>1080×1920 (9:16) H.264</b> clips for Reels, TikTok and Shorts. It automates the mechanical part — <b>cut → crop → scale → encode</b> — <b>after</b> a human decides the moment and the framing. No transcript guessing. No auto-magic.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="#get-started">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 6 4 12 8 18"></polyline><polyline points="16 6 20 12 16 18"></polyline></svg>
+        Run from source
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/tjbaker/footlight" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.7.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.5 11.5 0 0 0 23.5 12C23.5 5.7 18.3.5 12 .5z"></path></svg>
+        Star on GitHub
+      </a>
+    </div>
+    <div class="hero-meta">
+      <span>Apache-2.0</span>
+      <span>TypeScript engine + CLI</span>
+      <span>Desktop GUI (Tauri)</span>
+      <span>Lossless audio passthrough</span>
+    </div>
+
+    <div class="hero-shot reveal">
+      <div class="shot-frame">
+        <img src="assets/footlight-dark.png" alt="The Footlight editor: a 9:16 crop box over a live performance, a 9:16 output preview, and a loudness timeline flagging quiet-to-loud swells." width="2284" height="1604" loading="eager" />
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PHILOSOPHY ============ -->
+<section class="philo" id="philosophy">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">Philosophy</span>
+      <h2>Control-first, not auto-magic.</h2>
+      <p>Transcript-based auto-clippers read speech to decide what to clip — so they're built for talking heads and fall apart on instrumental and live-performance footage where there's no transcript to key off. Footlight serves that underserved case: <b style="color:var(--ink)">music and live performance</b>, where the editor already knows the moment and the subject moves across the frame.</p>
+    </div>
+    <div class="philo-grid">
+      <div class="compare them reveal">
+        <span class="tag">Transcript auto-clippers</span>
+        <h3>Guess the moment for you</h3>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>Read speech, so they need a talking head</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>Blind to a song's dynamics and a player's movement</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>A black box you fight, not a tool you drive</li>
+        </ul>
+      </div>
+      <div class="compare us reveal">
+        <span class="tag">Footlight</span>
+        <h3>Hands you the controls</h3>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>You pick the moment; a loudness timeline surfaces quiet→loud swells as hints</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>You frame with a 9:16 box; AI subject-tracking is an opt-in accelerant, never a gate</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>Frame-accurate, reviewable, repeatable — driven by you</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FEATURES ============ -->
+<section class="features" id="features">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">What's inside</span>
+      <h2>A frame-accurate cutter, tuned for performance.</h2>
+      <p>Everything is built around the way you actually clip a song — by ear and by eye.</p>
+    </div>
+    <div class="feat-grid">
+      <div class="feat span2 reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="20" x2="3" y2="14"></line><line x1="7" y1="20" x2="7" y2="8"></line><line x1="11" y1="20" x2="11" y2="11"></line><line x1="15" y1="20" x2="15" y2="4"></line><line x1="19" y1="20" x2="19" y2="13"></line><line x1="23" y1="20" x2="23" y2="9"></line></svg></div>
+        <h3>The loudness timeline is your scrubber</h3>
+        <p>Drag across it to set In / Out, click to seek, hover to preview frames. It draws volume over time and flags suggested quiet→loud <b style="color:var(--ember-hi)">swells</b> — the drops and builds you actually want to clip — plus scene-cut ticks and ⏮ / ⏭ cut-jumps from auto scene detection.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="8" height="18" rx="1.5"></rect><path d="M3 8h2M3 16h2M19 8h2M19 16h2"></path></svg></div>
+        <h3>9:16 framing box</h3>
+        <p>Drag the orange box to reposition; drag a corner to punch in and zoom. A live 9:16 output preview — with optional social safe-area guides — shows the real vertical result as you frame.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.5"></circle><circle cx="18" cy="6" r="2.5"></circle><circle cx="18" cy="18" r="2.5"></circle><path d="M8.2 11l7.6-4M8.2 13l7.6 4"></path></svg></div>
+        <h3>Moving crop, keyframed</h3>
+        <p>Drop keyframes for a time-keyed schedule that hard-switches the crop at cuts — align switches to the source's own scene-cuts and the change is invisible.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"></path><circle cx="12" cy="12" r="3.2"></circle></svg></div>
+        <h3>Optional AI auto-track</h3>
+        <p>Bring your own key: AI subject tracking builds a smooth eased crop path across a shot — a reviewable suggestion you edit before rendering. Provider-agnostic, Gemini as reference. Opt-in, never a gate.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1.5"></rect><rect x="3" y="11" width="18" height="5" rx="1.5"></rect><path d="M7 18.5h10"></path></svg></div>
+        <h3>Queue, render, re-frame</h3>
+        <p>Add clips to a queue — reorder, duplicate, click to re-edit — pick a destination, and render. Past renders are saved to History for one-click re-framing; your session autosaves.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M6 9h.01M10 9h.01M14 9h.01M7 13h10"></path></svg></div>
+        <h3>Keyboard-driven</h3>
+        <p>Space, ← / →, I / O, [ / ], S and more. Press <b style="color:var(--ember-hi)">?</b> for the shortcuts overlay. Lossless audio passthrough keeps the source as the quality ceiling.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WORKFLOW ============ -->
+<section class="flow" id="workflow">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">From source to short</span>
+      <h2>Four moves to a vertical clip.</h2>
+    </div>
+    <div class="flow-steps">
+      <div class="step reveal">
+        <span class="n">01</span>
+        <h3>Load</h3>
+        <p>Browse, drag a video onto the window, or paste a path. Scenes are auto-detected on load.</p>
+      </div>
+      <div class="step reveal">
+        <span class="n">02</span>
+        <h3>Cut</h3>
+        <p>Drag across the loudness timeline to set In / Out. Let the swell markers point you to the moment.</p>
+      </div>
+      <div class="step reveal">
+        <span class="n">03</span>
+        <h3>Frame</h3>
+        <p>Move the 9:16 box, punch in on a corner, double-click to reset. Watch the live vertical preview.</p>
+      </div>
+      <div class="step reveal">
+        <span class="n">04</span>
+        <h3>Render</h3>
+        <p>Add to the queue, choose a destination, render. Clean 1080×1920 H.264 lands in your folder.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CLI ============ -->
+<section class="cli" id="cli">
+  <div class="wrap">
+    <div class="cli-grid">
+      <div class="cli-copy reveal">
+        <span class="pill">prefer the terminal?</span>
+        <h2>The engine is a CLI, too.</h2>
+        <p>The same render engine drives a scriptable command line. Describe clips in a CSV or JSON manifest — one row per clip — and batch the whole queue. Inspect a source or list scene-cuts to seed a crop schedule.</p>
+        <div class="cmds">
+          <div class="cm"><code>render</code><span>batch every clip in a manifest</span></div>
+          <div class="cm"><code>probe</code><span>dimensions + a cropdetect suggestion</span></div>
+          <div class="cm"><code>scenes</code><span>detected cut timestamps</span></div>
+        </div>
+      </div>
+      <div class="terminal reveal">
+        <div class="term-bar"><i></i><i></i><i></i><span class="tt">footlight — zsh</span></div>
+        <div class="term-body">
+<div class="row"><span class="c"># inspect a source — dims + a cropdetect hint</span></div>
+<div class="row"><span class="pr">$</span> <span class="cmd">footlight probe</span> <span class="fl">show.mp4</span></div>
+<div class="row"><span class="ok">1920×1080</span> · ar 1.778 · crop=1920:1080:0:0</div>
+<div class="row"> </div>
+<div class="row"><span class="c"># render every clip in a manifest → 9:16 H.264</span></div>
+<div class="row"><span class="pr">$</span> <span class="cmd">footlight render</span> <span class="fl">clips.csv</span> <span class="fl">--outdir</span> clips <span class="fl">--crf</span> 19</div>
+<div class="row"><span class="ok">✓</span> rise-in-the-river_2-04_2-19.mp4</div>
+<div class="row"><span class="ok">✓</span> rise-in-the-river_2-46_3-02.mp4</div>
+<div class="row"> </div>
+<div class="row"><span class="c"># list scene-cuts to seed a crop schedule</span></div>
+<div class="row"><span class="pr">$</span> <span class="cmd">footlight scenes</span> <span class="fl">show.mp4</span></div>
+<div class="row">0.00  14.52  41.08  83.71  124.4 …</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CTA / GET STARTED ============ -->
+<section class="cta-band" id="get-started">
+  <div class="wrap">
+    <div class="inner">
+      <div class="mark-glow reveal">
+        <svg viewBox="0 0 100 100" aria-hidden="true"><defs>
+          <linearGradient id="cbeam" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff8a4a" stop-opacity="0.8"></stop><stop offset="1" stop-color="#ff8a4a" stop-opacity="0"></stop></linearGradient>
+          <radialGradient id="clamp" cx="0.5" cy="0.3" r="0.9"><stop offset="0" stop-color="#ffd8b4"></stop><stop offset="0.6" stop-color="#ff8a4a"></stop><stop offset="1" stop-color="#ff8a4a"></stop></radialGradient>
+          <radialGradient id="cglow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#ff9a5a" stop-opacity="0.55"></stop><stop offset="1" stop-color="#ff9a5a" stop-opacity="0"></stop></radialGradient>
+        </defs><ellipse cx="50" cy="40" rx="38" ry="32" fill="url(#cglow)"></ellipse><g fill="url(#cbeam)"><polygon points="27,66 37,66 44,20 20,20"></polygon><polygon points="45,66 55,66 62,20 38,20"></polygon><polygon points="63,66 73,66 80,20 56,20"></polygon></g><rect x="20" y="69" width="60" height="5.5" rx="2.75" fill="#ff8a4a"></rect><g fill="url(#clamp)"><path d="M24.5,69 A7.5 7.5 0 0 1 39.5,69 Z"></path><path d="M42.5,69 A7.5 7.5 0 0 1 57.5,69 Z"></path><path d="M60.5,69 A7.5 7.5 0 0 1 75.5,69 Z"></path></g></svg>
+      </div>
+      <h2>Run it from source.</h2>
+      <p>There's no signed download — Footlight is open and you run it yourself. The browser GUI needs only Node; the native window adds the Rust toolchain. <code style="font-family:var(--font-mono);font-size:0.85em;color:var(--ember)">make doctor</code> checks your setup in one shot.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="https://github.com/tjbaker/footlight" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.7.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.5 11.5 0 0 0 23.5 12C23.5 5.7 18.3.5 12 .5z"></path></svg>
+          Clone the repo
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/tjbaker/footlight/blob/main/README.md" target="_blank" rel="noopener">Read the docs</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="wrap foot-inner">
+    <a class="brand" href="#top">
+      <svg viewBox="0 0 100 100" aria-hidden="true"><defs>
+        <radialGradient id="flamp" cx="0.5" cy="0.3" r="0.9"><stop offset="0" stop-color="#ffd8b4"></stop><stop offset="0.6" stop-color="#ff8a4a"></stop><stop offset="1" stop-color="#ff8a4a"></stop></radialGradient>
+      </defs><g fill="#ff8a4a" fill-opacity="0.26"><polygon points="27,66 37,66 44,20 20,20"></polygon><polygon points="45,66 55,66 62,20 38,20"></polygon><polygon points="63,66 73,66 80,20 56,20"></polygon></g><rect x="20" y="69" width="60" height="5.5" rx="2.75" fill="#ff8a4a"></rect><g fill="url(#flamp)"><path d="M24.5,69 A7.5 7.5 0 0 1 39.5,69 Z"></path><path d="M42.5,69 A7.5 7.5 0 0 1 57.5,69 Z"></path><path d="M60.5,69 A7.5 7.5 0 0 1 75.5,69 Z"></path></g></svg>
+      <span class="wm">Footlight</span>
+    </a>
+    <nav class="foot-links">
+      <a href="#philosophy">Philosophy</a>
+      <a href="#features">Features</a>
+      <a href="#cli">CLI</a>
+      <a href="https://github.com/tjbaker/footlight" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/tjbaker/footlight/issues/new/choose" target="_blank" rel="noopener">Report a bug</a>
+    </nav>
+  </div>
+  <div class="wrap">
+    <p class="foot-legal">Apache-2.0 · open source · purpose-built for music &amp; live performance.</p>
+  </div>
+</footer>
+
+<script src="main.js"></script>
+</body>
+</html>
