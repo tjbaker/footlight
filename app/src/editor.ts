@@ -1197,7 +1197,7 @@ export function mountEditor(root: HTMLElement): void {
       srcInput.value = picked;
       await load();
     } catch (err) {
-      dimsLine.innerHTML = `<span class="err-text">${errMsg(err)}</span>`;
+      dimsLine.innerHTML = `<span class="err-text">${escapeHtml(errMsg(err))}</span>`;
     }
   }
 
@@ -1253,7 +1253,7 @@ export function mountEditor(root: HTMLElement): void {
       initCropBox();
       await setT(state.t, true);
     } catch (err) {
-      dimsLine.innerHTML = `<span class="err-text">${errMsg(err)}</span>`;
+      dimsLine.innerHTML = `<span class="err-text">${escapeHtml(errMsg(err))}</span>`;
     }
   }
 
@@ -2098,7 +2098,7 @@ export function mountEditor(root: HTMLElement): void {
         : spec.cropWindow
           ? "punch-in"
           : (spec.crop_offset ?? "center");
-      sub.innerHTML = `${dur} · <span style="color:var(--accent-2)">${framing}</span>`;
+      sub.innerHTML = `${dur} · <span style="color:var(--accent-2)">${escapeHtml(framing)}</span>`;
       meta.append(name, sub);
 
       const dup = el("button", "fl-clip-x") as HTMLButtonElement;
