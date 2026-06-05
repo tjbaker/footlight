@@ -33,13 +33,13 @@ The repo is two npm packages: the root render engine + `footlight` CLI, and the
 
 ```bash
 make setup     # install both packages (root engine + app/)
-make doctor    # verify Node 20+, ffmpeg, ffprobe are on your PATH
+make doctor    # verify Node 26+, ffmpeg, ffprobe are on your PATH
 make test      # run the engine test suite (vitest)
 make gui       # run the GUI in a browser (no Rust needed)
 make tauri-dev # run the native window (needs the Rust toolchain)
 ```
 
-Requires **Node 20+**, plus `ffmpeg` / `ffprobe` on your `PATH` for anything that
+Requires **Node 26+**, plus `ffmpeg` / `ffprobe` on your `PATH` for anything that
 exercises the engine end to end — Footlight does not bundle them.
 
 ## Code style

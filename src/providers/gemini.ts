@@ -6,7 +6,7 @@
  * Locates the subject at the requested timestamps via the Gemini
  * `generateContent` REST API and maps Gemini's normalized boxes into pixel
  * `Box`es in the working region. Uses `fetch` only — no `node:` builtins — so
- * it works in Node 20+/26 and in the browser/Tauri frontend.
+ * it works in Node 26+ and in the browser/Tauri frontend.
  *
  * BYOK & opt-in (SPEC §6.7): the key comes from `req.apiKey`; this class CANNOT
  * run without one and is never invoked in tests. The model and endpoint are

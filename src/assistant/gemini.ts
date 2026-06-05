@@ -5,7 +5,7 @@
  *
  * Parallels `providers/gemini.ts` (the vision `GeminiTracker`): it talks to the
  * Gemini `generateContent` REST API with `fetch` only — no `node:` builtins — so
- * it works in Node 20+/26 and in the browser/Tauri frontend. It declares the
+ * it works in Node 26+ and in the browser/Tauri frontend. It declares the
  * assistant `TOOLS` as `functionDeclarations`, sends the user's message plus a
  * compact grounded-context preamble, and parses the model's reply into a
  * `ModelTurn` (prose + tool-call PROPOSALS). It NEVER executes a tool — the

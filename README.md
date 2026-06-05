@@ -40,7 +40,7 @@ See **[Running Footlight](#running-footlight)** below.
 
 - **`ffmpeg`** and **`ffprobe`** — e.g. `brew install ffmpeg`. Footlight invokes
   these to do all cut/crop/scale/encode work.
-- **Node 20+**
+- **Node 26+**
 - **`yt-dlp`** (optional) — for downloading source footage, e.g.
   `brew install yt-dlp`.
 - **Rust toolchain** (optional) — only for the *native* desktop window
@@ -54,12 +54,12 @@ your `PATH`. Run **`make doctor`** to verify your environment in one shot.
 
 From zero to your first vertical clip:
 
-1. **Install the prerequisites** — at minimum `ffmpeg`, `ffprobe`, and Node 20+
+1. **Install the prerequisites** — at minimum `ffmpeg`, `ffprobe`, and Node 26+
    (see [Requirements](#requirements)).
 2. **Set up and verify your environment:**
    ```bash
    make setup     # install all dependencies (root engine + GUI)
-   make doctor    # verify Node 20+, ffmpeg, ffprobe are on PATH
+   make doctor    # verify Node 26+, ffmpeg, ffprobe are on PATH
    ```
 3. **Launch the GUI in your browser** (no Rust needed):
    ```bash

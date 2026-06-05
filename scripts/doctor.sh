@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Footlight preflight: verify the external tools Footlight shells out to.
 #
-#   Required : node 20+, ffmpeg, ffprobe
+#   Required : node 26+, ffmpeg, ffprobe
 #   Optional : yt-dlp (source downloads), cargo (native desktop build)
 #
 # Footlight does NOT bundle these — it invokes whatever is on your PATH. Exits
@@ -37,14 +37,14 @@ echo "Required:"
 if found node; then
   v=$(node -v); v=${v#v}; major=${v%%.*}
   case "$major" in '' | *[!0-9]*) major=0 ;; esac
-  if [ "$major" -ge 20 ]; then
+  if [ "$major" -ge 26 ]; then
     printf '  ok        %-8s  v%s\n' "node" "$v"
   else
-    printf '  TOO OLD   %-8s  v%s (need 20+) — https://nodejs.org or `brew install node`\n' "node" "$v"
+    printf '  TOO OLD   %-8s  v%s (need 26+) — https://nodejs.org or `brew install node`\n' "node" "$v"
     fail=1
   fi
 else
-  printf '  MISSING   %-8s  %s\n' "node" "Node 20+ — https://nodejs.org or \`brew install node\`"
+  printf '  MISSING   %-8s  %s\n' "node" "Node 26+ — https://nodejs.org or \`brew install node\`"
   fail=1
 fi
 

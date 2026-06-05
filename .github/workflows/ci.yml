@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 26
           cache: npm
       # The test suite shells real ffmpeg (eased-expression render checks), so
       # it must be on PATH — Footlight does not bundle it.
@@ -35,7 +35,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 26
           cache: npm
           cache-dependency-path: app/package-lock.json
       - run: npm ci
