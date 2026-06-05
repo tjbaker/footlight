@@ -10,7 +10,7 @@
  * function of `t`, so runs are reproducible.
  */
 
-import type { Box, Dims } from "../studio.js";
+import type { Box, Dims } from "../manifest.js";
 import type { TrackSample, TrackRequest, VisionTracker } from "./types.js";
 
 export interface MockTrackerOpts {

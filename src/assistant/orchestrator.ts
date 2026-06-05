@@ -7,14 +7,14 @@
  * prose + tool-call PROPOSALS, then materialize each proposal into a
  * preview-only `ProposedAction`. Deterministic tools resolve via `interpretTool`;
  * the two vision tools run an injected `VisionRunner` (frames + the vision model,
- * supplied by the backend) and use the studio/track builders. **Nothing mutates
+ * supplied by the backend) and use the manifest/track builders. **Nothing mutates
  * editor state** — every action is a proposal the human Accepts / Steps /
  * Discards, and `render` only ever stages. Both the model and the vision runner
  * are injected so this file stays pure and testable (see `MockAssistant` /
  * `MockVisionRunner`); the network/ffmpeg lives behind those seams.
  */
 
-import type { Box, Dims } from "../studio.js";
+import type { Box, Dims } from "../manifest.js";
 import type { ResolvedModels } from "../model.js";
 import type { TrackSample } from "../providers/types.js";
 import type { AssistantReply, Grounding, ProposedAction, ToolName } from "./types.js";

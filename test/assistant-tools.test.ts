@@ -10,7 +10,7 @@ import {
   buildSuggestCropAction,
   buildTrackSubjectAction,
 } from "../src/assistant/tools.js";
-import { cropBoxToOffset, type Box, type Dims } from "../src/studio.js";
+import { cropBoxToOffset, type Box, type Dims } from "../src/manifest.js";
 import { samplesToCropPath } from "../src/track.js";
 import type { TrackSample } from "../src/providers/types.js";
 
@@ -51,7 +51,7 @@ describe("tool registry", () => {
   });
 });
 
-describe("clampCropX parity with the engine/studio", () => {
+describe("clampCropX parity with the engine/manifest", () => {
   it("even-rounds and clamps into [0, maxX]", () => {
     expect(clampCropX(-50, region)).toBe(0);
     expect(clampCropX(99999, region)).toBe(MAX_X);

@@ -1,7 +1,7 @@
 // Copyright 2026 Trevor Baker, all rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect } from "vitest";
-import { specToEditorState, type ClipSpec, type Dims } from "../src/studio.js";
+import { specToEditorState, type ClipSpec, type Dims } from "../src/manifest.js";
 
 const dims: Dims = { width: 1920, height: 1080 };
 

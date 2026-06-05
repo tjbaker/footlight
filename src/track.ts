@@ -23,7 +23,7 @@
  */
 
 import { TARGET_AR, type CropPathKeyframe } from "./core.js";
-import type { Box, Dims } from "./studio.js";
+import type { Box, Dims } from "./manifest.js";
 import type { TrackSample, VisionTracker } from "./providers/types.js";
 
 /** Round to the nearest even integer (H.264 needs even crop dimensions). */

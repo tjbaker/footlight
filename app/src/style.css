@@ -3,7 +3,7 @@
 /* Bundled UI fonts (local woff2, no runtime CDN) — must precede all other rules. */
 @import "./fonts.css";
 
-/* Footlight "Studio" design system — warm, characterful, themeable, control-first.
+/* Footlight design system — warm, characterful, themeable, control-first.
    Tokens live on :root (dark default) and [data-theme="light"]. Components are the
    .fl-* classes from the design handoff; the app's modals/Activity reuse the same
    tokens (with --border / --err aliases for back-compat).
@@ -92,7 +92,7 @@ body, .fl-topbar, .fl-card, .fl-btn, .fl-iconbtn, .fl-field {
 .pill.on { color: var(--accent); border-color: var(--accent); }
 .toggle { display: flex; align-items: center; gap: 6px; }
 
-/* base button (modals, generic). Studio UI uses .fl-btn / .fl-iconbtn below. */
+/* base button (modals, generic). the app UI uses .fl-btn / .fl-iconbtn below. */
 button {
   background: var(--panel-2);
   color: var(--text);
@@ -119,7 +119,7 @@ input[type="text"], input[type="number"], input[type="password"] {
 }
 
 /* ============================================================
-   Studio shell layout
+   Shell layout
    ============================================================ */
 .fl-app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 

@@ -30,8 +30,8 @@ import {
   type CropWindowSpec,
   DEFAULT_RENDER_OPTIONS,
 } from "./engine.js";
-import type { ClipSpec } from "./studio.js";
-import type { Dims } from "./studio.js";
+import type { ClipSpec } from "./manifest.js";
+import type { Dims } from "./manifest.js";
 import type { TrackSample, TrackFrame, VisionTracker } from "./providers/types.js";
 import { GeminiTracker } from "./providers/gemini.js";
 import { MockTracker } from "./providers/mock.js";

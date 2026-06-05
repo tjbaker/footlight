@@ -14,7 +14,7 @@ import {
   type Dims,
   type ClipRow,
   type ClipSpec,
-} from "../src/studio.js";
+} from "../src/manifest.js";
 import { computeCrop } from "../src/engine.js";
 import { parseCsv } from "../src/csv.js";
 

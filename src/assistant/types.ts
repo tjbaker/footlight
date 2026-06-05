@@ -17,7 +17,7 @@
  * cuts, specific stills) and must never imply it heard audio.
  */
 
-import type { Box } from "../studio.js";
+import type { Box } from "../manifest.js";
 import type { CropPathKeyframe } from "../core.js";
 
 /** The assistant's tool surface (mirrors SPEC §6.7). */

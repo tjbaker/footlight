@@ -13,7 +13,7 @@
 
 import { MockTracker } from "../providers/mock.js";
 import { planSampleTimes } from "../track.js";
-import type { Box } from "../studio.js";
+import type { Box } from "../manifest.js";
 import type { TrackSample } from "../providers/types.js";
 import type { Grounding } from "./types.js";
 import type {

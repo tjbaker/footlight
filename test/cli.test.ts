@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 import {
   serializeManifestJSON,
   type ClipSpec,
-} from "../src/studio.js";
+} from "../src/manifest.js";
 import { computeCrop } from "../src/engine.js";
 import type { TrackSample } from "../src/providers/types.js";
 

@@ -19,7 +19,7 @@
     "verbatimModuleSyntax": true,
     "paths": {
       "@core": ["../src/core.ts"],
-      "@studio": ["../src/studio.ts"],
+      "@manifest": ["../src/manifest.ts"],
       "@track": ["../src/track.ts"],
       "@provider-types": ["../src/providers/types.ts"],
       "@model": ["../src/model.ts"],

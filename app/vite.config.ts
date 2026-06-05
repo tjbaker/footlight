@@ -3,7 +3,7 @@
 import { defineConfig } from "vite";
 import { fileURLToPath, URL } from "node:url";
 
-// `@core` / `@studio` alias the existing browser-safe pure modules in the
+// `@core` / `@manifest` alias the existing browser-safe pure modules in the
 // parent repo's `src/`. `server.fs.allow` is widened to the repo root so Vite's
 // dev server is permitted to read those files from outside the app dir.
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -12,7 +12,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@core": fileURLToPath(new URL("../src/core.ts", import.meta.url)),
-      "@studio": fileURLToPath(new URL("../src/studio.ts", import.meta.url)),
+      "@manifest": fileURLToPath(new URL("../src/manifest.ts", import.meta.url)),
       "@track": fileURLToPath(new URL("../src/track.ts", import.meta.url)),
       // Browser-safe TYPE-only import (TrackSample). NOT providers/gemini.ts —
       // the Gemini network call runs in the backend via the CLI, never here.
