@@ -251,7 +251,7 @@ async function handleTrack(body, res) {
 }
 
 /** POST /render — write manifest to a temp .json, invoke footlight CLI render. */
-async function handleRender(body, outdir, res) {
+async function handleRender(body, opts, res) {
   const dir = await mkdtemp(join(tmpdir(), "footlight-"));
   // .json extension so the CLI auto-detects the JSON manifest path (not CSV).
   const manifestPath = join(dir, "manifest.json");
@@ -260,11 +260,19 @@ async function handleRender(body, outdir, res) {
   // Resolve a relative outdir against the repo root, not this server's cwd
   // (app/), so renders land in the project-root clips/. An absolute outdir is
   // honored as-is.
-  const outDir = isAbsolute(outdir || "clips")
-    ? outdir
-    : resolve(REPO_ROOT, outdir || "clips");
-  const result = await run("node", [CLI_PATH, "render", manifestPath, "--outdir", outDir]);
-  const log = `$ node ${CLI_PATH} render ${manifestPath} --outdir ${outDir}\n\n${result.stdout}${result.stderr}`;
+  const outDir = isAbsolute(opts.outdir || "clips")
+    ? opts.outdir
+    : resolve(REPO_ROOT, opts.outdir || "clips");
+  // Render flags from Settings -> CLI. --outdir is appended LAST so the log's
+  // trailing `--outdir <dir>` still parses cleanly on the client.
+  const args = [CLI_PATH, "render", manifestPath];
+  if (opts.crf) args.push("--crf", String(opts.crf));
+  if (opts.preset) args.push("--preset", opts.preset);
+  if (opts.audioBitrate) args.push("--audio-bitrate", opts.audioBitrate);
+  if (opts.dryRun) args.push("--dry-run");
+  args.push("--outdir", outDir);
+  const result = await run("node", args);
+  const log = `$ node ${args.join(" ")}\n\n${result.stdout}${result.stderr}`;
   sendJson(res, 200, { ok: result.code === 0, log });
 }
 
@@ -359,8 +367,14 @@ const server = createServer(async (req, res) => {
       const chunks = [];
       for await (const chunk of req) chunks.push(chunk);
       const body = Buffer.concat(chunks).toString("utf8");
-      const outdir = url.searchParams.get("outdir") || undefined;
-      return await handleRender(body, outdir, res);
+      const opts = {
+        outdir: url.searchParams.get("outdir") || undefined,
+        crf: url.searchParams.get("crf") || undefined,
+        preset: url.searchParams.get("preset") || undefined,
+        audioBitrate: url.searchParams.get("audioBitrate") || undefined,
+        dryRun: url.searchParams.get("dryRun") === "1",
+      };
+      return await handleRender(body, opts, res);
     }
 
     if (req.method === "GET" && url.pathname === "/history") {

@@ -19,6 +19,7 @@ import type {
   TrackSample,
   HistoryEntry,
   SessionData,
+  RenderOptions,
 } from "./types.js";
 
 async function invoke<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
@@ -60,11 +61,15 @@ export const tauriPlatform: FootlightPlatform = {
 
   async render(
     manifestJson: string,
-    opts?: { outdir?: string },
+    opts?: RenderOptions,
   ): Promise<{ ok: boolean; log: string }> {
     return invoke<{ ok: boolean; log: string }>("render", {
       manifestJson,
       outdir: opts?.outdir ?? null,
+      crf: opts?.crf ?? null,
+      preset: opts?.preset ?? null,
+      audioBitrate: opts?.audioBitrate ?? null,
+      dryRun: opts?.dryRun ?? false,
     });
   },
 

@@ -346,6 +346,10 @@ async fn render(
     app: AppHandle,
     manifest_json: String,
     outdir: Option<String>,
+    crf: Option<i64>,
+    preset: Option<String>,
+    audio_bitrate: Option<String>,
+    dry_run: Option<bool>,
 ) -> Result<RenderResult, String> {
     let mut manifest_path = std::env::temp_dir();
     manifest_path.push(format!("footlight_manifest_{}.json", std::process::id()));
@@ -355,20 +359,41 @@ async fn render(
     let cli = locate_cli(&app);
     let out_dir = resolve_outdir(&cli, outdir);
 
+    // Render flags from Settings -> CLI. --outdir is appended LAST so the log's
+    // trailing `--outdir <dir>` parses cleanly on the client.
+    let mut args: Vec<String> = vec!["render".into(), manifest_path.to_string_lossy().into_owned()];
+    if let Some(c) = crf {
+        args.push("--crf".into());
+        args.push(c.to_string());
+    }
+    if let Some(p) = preset {
+        if !p.is_empty() {
+            args.push("--preset".into());
+            args.push(p);
+        }
+    }
+    if let Some(a) = audio_bitrate {
+        if !a.is_empty() {
+            args.push("--audio-bitrate".into());
+            args.push(a);
+        }
+    }
+    if dry_run.unwrap_or(false) {
+        args.push("--dry-run".into());
+    }
+    args.push("--outdir".into());
+    args.push(out_dir.clone());
+
     let output = Command::new("node")
         .arg(&cli)
-        .arg("render")
-        .arg(&manifest_path)
-        .arg("--outdir")
-        .arg(&out_dir)
+        .args(&args)
         .output()
         .map_err(|e| format!("failed to spawn node CLI: {e}"))?;
 
     let log = format!(
-        "$ node {} render {} --outdir {}\n\n{}{}",
+        "$ node {} {}\n\n{}{}",
         cli,
-        manifest_path.to_string_lossy(),
-        out_dir,
+        args.join(" "),
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
     );
