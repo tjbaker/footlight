@@ -1,0 +1,147 @@
+// Copyright 2026 Trevor Baker, all rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+/**
+ * webPlatform — the dev/browser backend. Every capability is a `fetch` to the
+ * Node dev server (see app/dev-server/server.mjs) running on localhost:8787,
+ * which shells out to ffmpeg/ffprobe and the footlight CLI. This is the path
+ * that is fully runnable and verifiable in a plain browser without any native
+ * toolchain.
+ */
+
+import type {
+  FootlightPlatform,
+  ProbeResult,
+  LoudnessResult,
+  TrackRequest,
+  TrackSample,
+  HistoryEntry,
+  SessionData,
+} from "./types.js";
+
+const BASE = "http://localhost:8787";
+
+export const webPlatform: FootlightPlatform = {
+  async extractFrame(source: string, tSeconds: number): Promise<string> {
+    const url = `${BASE}/frame?source=${encodeURIComponent(source)}&t=${encodeURIComponent(
+      String(tSeconds),
+    )}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`frame failed (${res.status}): ${await res.text()}`);
+    }
+    const blob = await res.blob();
+    // Return an object URL the caller is responsible for revoking.
+    return URL.createObjectURL(blob);
+  },
+
+  async probe(source: string): Promise<ProbeResult> {
+    const res = await fetch(`${BASE}/probe?source=${encodeURIComponent(source)}`);
+    if (!res.ok) {
+      throw new Error(`probe failed (${res.status}): ${await res.text()}`);
+    }
+    return (await res.json()) as ProbeResult;
+  },
+
+  async scenes(source: string): Promise<number[]> {
+    const res = await fetch(`${BASE}/scenes?source=${encodeURIComponent(source)}`);
+    if (!res.ok) {
+      throw new Error(`scenes failed (${res.status}): ${await res.text()}`);
+    }
+    return (await res.json()) as number[];
+  },
+
+  async loudness(source: string): Promise<LoudnessResult> {
+    const res = await fetch(`${BASE}/loudness?source=${encodeURIComponent(source)}`);
+    if (!res.ok) {
+      throw new Error(`loudness failed (${res.status}): ${await res.text()}`);
+    }
+    return (await res.json()) as LoudnessResult;
+  },
+
+  async track(req: TrackRequest): Promise<TrackSample[]> {
+    const res = await fetch(`${BASE}/track`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(req),
+    });
+    if (!res.ok) {
+      throw new Error(`track failed (${res.status}): ${await res.text()}`);
+    }
+    return (await res.json()) as TrackSample[];
+  },
+
+  async render(
+    manifestJson: string,
+    opts?: { outdir?: string },
+  ): Promise<{ ok: boolean; log: string }> {
+    const url = opts?.outdir
+      ? `${BASE}/render?outdir=${encodeURIComponent(opts.outdir)}`
+      : `${BASE}/render`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: manifestJson,
+    });
+    const data = (await res.json()) as { ok: boolean; log: string };
+    return data;
+  },
+
+  async openExternal(url: string): Promise<void> {
+    window.open(url, "_blank", "noopener,noreferrer");
+  },
+
+  // A browser page cannot obtain a real filesystem path from a file input, so
+  // there is no native picker here — the UI keeps the typed-path field instead.
+  supportsFilePicker: false,
+  async pickSourceFile(): Promise<string | null> {
+    return null;
+  },
+
+  // No native folder dialog in a browser; the UI keeps the typed Outdir field.
+  async pickDirectory(): Promise<string | null> {
+    return null;
+  },
+
+  async videoSrc(source: string): Promise<string> {
+    // The dev server streams the file with HTTP Range support so <video> seeks.
+    return `${BASE}/video?source=${encodeURIComponent(source)}`;
+  },
+
+  async loadHistory(): Promise<HistoryEntry[]> {
+    const res = await fetch(`${BASE}/history`);
+    if (!res.ok) {
+      throw new Error(`loadHistory failed (${res.status}): ${await res.text()}`);
+    }
+    return (await res.json()) as HistoryEntry[];
+  },
+
+  async saveHistory(entries: HistoryEntry[]): Promise<void> {
+    const res = await fetch(`${BASE}/history`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ entries }),
+    });
+    if (!res.ok) {
+      throw new Error(`saveHistory failed (${res.status}): ${await res.text()}`);
+    }
+  },
+
+  async loadSession(): Promise<SessionData | null> {
+    const res = await fetch(`${BASE}/session`);
+    if (!res.ok) {
+      throw new Error(`loadSession failed (${res.status}): ${await res.text()}`);
+    }
+    return (await res.json()) as SessionData | null;
+  },
+
+  async saveSession(data: SessionData): Promise<void> {
+    const res = await fetch(`${BASE}/session`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ data }),
+    });
+    if (!res.ok) {
+      throw new Error(`saveSession failed (${res.status}): ${await res.text()}`);
+    }
+  },
+};

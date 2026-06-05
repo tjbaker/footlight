@@ -1,0 +1,5 @@
+source_file,in_point,out_point,crop_offset,out_name
+downloads/quiethouse-session.mp4,00:01:12,00:01:31,center,
+downloads/quiethouse-session.mp4,00:03:48,00:04:05,right,stomp-solo.mp4
+downloads/live-set.mp4,4:30,4:52,left,
+downloads/live-set.mp4,512,529,640,resonator-closeup.mp4

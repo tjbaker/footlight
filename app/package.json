@@ -1,0 +1,33 @@
+{
+  "name": "footlight-app",
+  "version": "0.1.0",
+  "description": "Footlight desktop app — a HandBrake-style GUI for cutting 16:9 video into 1080x1920 (9:16) vertical clips. Wraps ffmpeg.",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "Trevor Baker",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tjbaker/footlight"
+  },
+  "bugs": {
+    "url": "https://github.com/tjbaker/footlight/issues"
+  },
+  "homepage": "https://github.com/tjbaker/footlight",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "dev:server": "node dev-server/server.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-opener": "^2.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0"
+  }
+}

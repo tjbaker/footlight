@@ -1,0 +1,44 @@
+Footlight
+Copyright 2026 Trevor Baker, all rights reserved.
+
+This product is licensed under the Apache License, Version 2.0 (the
+"License"); you may not use this software except in compliance with the
+License. A copy of the License is included in the LICENSE file and is also
+available at http://www.apache.org/licenses/LICENSE-2.0.
+
+Footlight's own source code remains under Apache-2.0.
+
+--------------------------------------------------------------------------------
+Third-party software
+--------------------------------------------------------------------------------
+
+ffmpeg / ffprobe (https://ffmpeg.org/)
+
+    Footlight invokes `ffmpeg` and `ffprobe` as external subprocesses to do all
+    cutting, cropping, scaling, and encoding. Footlight does not statically link
+    or include their source code.
+
+    ffmpeg and ffprobe are licensed under the GNU Lesser General Public License
+    (LGPL) version 2.1 or later, and — depending on which components are enabled
+    at build time — portions may be licensed under the GNU General Public
+    License (GPL). Their licensing terms are NOT the same as Footlight's.
+
+    Any distribution that BUNDLES ffmpeg/ffprobe binaries with Footlight MUST:
+      - bundle an LGPL-compatible ffmpeg build (avoid GPL-only components, e.g.
+        do not enable `--enable-gpl` / `--enable-nonfree` configurations unless
+        you intend to and can comply with GPL terms for the whole bundle), and
+      - include ffmpeg's own LICENSE, COPYING, and notice files alongside the
+        bundled binaries, and
+      - comply with the LGPL's requirements for the bundled build.
+
+    Installations that rely on a separately installed, system-provided ffmpeg
+    (e.g. `brew install ffmpeg`) do not bundle it, and the above bundling
+    obligations do not apply to that case. Footlight's own Apache-2.0 licensing
+    is unaffected either way.
+
+yt-dlp (https://github.com/yt-dlp/yt-dlp)
+
+    Footlight can optionally invoke `yt-dlp` to download source videos. yt-dlp is
+    released into the public domain under the Unlicense. It is an optional,
+    user-installed dependency and is not required to render clips from local
+    files.

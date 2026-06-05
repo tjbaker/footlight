@@ -1,1 +1,214 @@
-# footlight
+# Footlight
+
+Turn 16:9 performance and music videos into clean **1080×1920 (9:16) H.264 MP4**
+clips for Reels / TikTok / YouTube Shorts. A thin wrapper around `ffmpeg`.
+
+## Philosophy — control-first, not auto-magic
+
+Footlight automates the *mechanical* part of vertical clipping — **cut → crop →
+scale → encode** — **after** a human has made the creative decisions: which
+moment to clip and where to frame it. It does **not** try to pick moments for
+you.
+
+This is deliberate. Transcript-based auto-clippers (Opus Clip, Klap, and the
+like) decide what to clip by reading speech, so they are built for talking-head
+content and fall apart on instrumental and live-performance footage where there
+is no transcript to key off. Footlight serves that underserved case: **music and
+live performance**, where the editor already knows the moment and the subject
+moves across the frame. You make the calls; Footlight does the rendering.
+
+## Status
+
+This is an early build. Footlight is a **TypeScript render engine + CLI** with a
+**desktop GUI** (Tauri) for visual frame-accurate cutting and crop authoring —
+including punch-in/zoom framing and an **optional AI assistant** (provider-
+agnostic, Gemini-capable vision for subject tracking) as an opt-in accelerant,
+never a gate. See [SPEC.md](SPEC.md) for the full design and roadmap.
+
+You **run it from source** — there is no prebuilt/signed download. The browser
+GUI needs only Node; the native window additionally needs the Rust toolchain.
+See **[Running Footlight](#running-footlight)** below.
+
+## Bugs & feedback
+
+Found a bug or have a request? Please [open an issue](https://github.com/tjbaker/footlight/issues/new).
+Repository: <https://github.com/tjbaker/footlight>. The desktop app's **Help → Report a Bug**
+menu links to the same place.
+
+## Requirements
+
+- **`ffmpeg`** and **`ffprobe`** — e.g. `brew install ffmpeg`. Footlight invokes
+  these to do all cut/crop/scale/encode work.
+- **Node 20+**
+- **`yt-dlp`** (optional) — for downloading source footage, e.g.
+  `brew install yt-dlp`.
+- **Rust toolchain** (optional) — only for the *native* desktop window
+  (`make tauri-dev`). Install via <https://rustup.rs>. The browser GUI and the
+  CLI do not need it.
+
+Footlight does **not** bundle ffmpeg/ffprobe/Node — it invokes whatever is on
+your `PATH`. Run **`make doctor`** to verify your environment in one shot.
+
+## Running Footlight
+
+Everything is driven by `make` (run `make help` for the full list):
+
+```bash
+make setup     # install all dependencies (root engine + GUI)
+make doctor    # verify node 20+, ffmpeg, ffprobe are on PATH
+make gui       # run the GUI in your browser  (no Rust needed)
+```
+
+`make gui` starts the dev backend (ffmpeg/ffprobe/CLI on :8787) and the Vite
+frontend together; open the printed localhost URL. Ctrl-C stops both.
+
+Prefer a native window? With the Rust toolchain installed:
+
+```bash
+make tauri-dev     # native desktop window (hot-reloads)
+make tauri-build   # build a local .app  (UNSIGNED — local use only)
+```
+
+> **No signed distribution.** `make tauri-build` produces an **unsigned** `.app`
+> under `app/src-tauri/target/release/bundle/`. Build it on the Mac that will run
+> it; to run it on another Mac, launch with **right-click → Open** (or clear the
+> quarantine flag: `xattr -dr com.apple.quarantine /path/to/Footlight.app`). That
+> machine still needs ffmpeg/ffprobe/Node on `PATH` — `make doctor` checks.
+
+The CLI is also available directly after `make build` — see **CLI usage** below.
+
+## The desktop app
+
+`make gui` (browser) or `make tauri-dev` (native) opens a frame-accurate cutter:
+
+- **Load** a source — Browse…, drag a video onto the window, or paste a path.
+- **Loudness timeline** is the scrubber/trimmer: **drag across it to set In/Out**,
+  click to seek, hover to preview frames. It draws volume over time with suggested
+  quiet→loud **swells**, plus scene-cut ticks and ⏮ / ⏭ cut-jumps (scenes are
+  auto-detected on load).
+- **Frame** with the orange 9:16 box — drag to reposition, drag a **corner to
+  punch in / zoom**, double-click to reset. A live **9:16 output preview** (with
+  optional social safe-area guides) shows the actual vertical result as you frame.
+- **Moving crop:** drop **keyframes** for a time-keyed schedule that hard-switches
+  the crop at cuts.
+- **Auto-track** (optional, BYOK): AI subject tracking builds a smooth eased crop
+  path across one shot — a reviewable suggestion. Add a Gemini key in **Settings**.
+- **Add clip → queue** (editable: click a card to re-edit, drag to reorder,
+  duplicate), choose a **Destination**, and **Render**. Past renders are saved to
+  **History** for one-click re-framing; your working session is autosaved and
+  restored on next launch.
+- **Keyboard-driven** — Space, ← / →, I / O, [ / ], S, and more; press **?** for
+  the shortcuts overlay.
+
+In-app **Help → User Guide** documents all of this.
+
+## CLI usage
+
+```bash
+# Render every clip described in a manifest (CSV or JSON).
+footlight render manifest.csv|.json [--outdir clips] [--crf 19] [--preset medium] \
+                                    [--audio-bitrate copy] [--dry-run]
+
+# Inspect a source: dimensions + a cropdetect suggestion (black bars only).
+footlight probe <source>
+
+# List detected scene-cut timestamps (to seed crop-schedule switch points).
+footlight scenes <source>
+```
+
+### `render` flags
+
+| flag | default | meaning |
+|------|---------|---------|
+| `--outdir` | `clips` | output directory for rendered clips |
+| `--crf` | `19` | H.264 quality; lower = better / larger |
+| `--preset` | `medium` | x264 speed/efficiency preset |
+| `--audio-bitrate` | `copy` | `copy` passes the source audio through losslessly (no re-encode, no resample); pass an AAC bitrate like `256k` only to force a re-encode |
+| `--dry-run` | off | print the `ffmpeg` commands without running them |
+
+`probe` reports the source's dimensions and a `cropdetect` content-region
+suggestion. `scenes` reports detected cut timestamps you can use as switch points
+in a time-keyed `crop_offset` schedule.
+
+## CSV schema
+
+The manifest is the source of truth: **one row per clip.**
+
+| column | required | meaning |
+|--------|----------|---------|
+| `source_file` | yes | path to the source video |
+| `in_point` | yes | start timestamp — `HH:MM:SS`, `MM:SS`, or seconds |
+| `out_point` | yes | end timestamp — same formats |
+| `crop_offset` | defaults `center` | horizontal framing: `left` / `center` / `right`, an integer x-pixel offset (from the left edge, clamped into frame), **or** a time-keyed schedule like `0=center; 14.5=440` |
+| `content_crop` | optional | `W:H:X:Y` region cropped *first* to strip letterbox/pillarbox bars; crop offsets then become relative to it |
+| `out_name` | optional | output filename; auto-generated from source + timestamps if blank |
+
+The fields **`hook`**, **`title`**, and **`text_position`** are *reserved* for a
+planned, optional caption-burn-in feature and are **not yet implemented** — they
+are ignored by the current engine.
+
+**JSON manifests.** Pass a `.json` array of the same clip objects instead of a CSV
+to use two fields CSV can't express: **`cropWindow`** (an explicit 9:16
+punch-in/zoom window) and **`cropPath`** (an eased subject-tracking crop path).
+The GUI writes these for you; render precedence is `cropPath` → `cropWindow` →
+`crop_offset`.
+
+### Why `crop_offset` is per-clip
+
+A one-man-band moves across the frame between instruments, so a fixed center crop
+cuts off the action. Each clip sets its own horizontal framing. `left` /
+`center` / `right` cover most cases; a numeric x-pixel offset gives fine control
+between them.
+
+For **edited / multi-shot sources** (a music video that cuts between angles),
+give `crop_offset` a **time-keyed schedule** like `0=center; 14.5=440`. The crop
+x **hard-switches** at each clip-relative time. Align those switch times to the
+source's own cuts (use `footlight scenes`) and the change is invisible. For clips
+with heavy continuous movement *within a single shot*, Footlight's optional
+**auto-track** (AI, opt-in, BYOK) builds a smooth eased crop path that follows the
+subject — a reviewable suggestion you edit before rendering (see
+[SPEC.md](SPEC.md) §6.9).
+
+## Audio
+
+Audio is **copied losslessly by default** (`-c:a copy`): the source track is
+passed through untouched — same codec, bitrate, and sample rate — so the encode
+never adds a compression generation or resamples. **The source is the quality
+ceiling** (YouTube tops out around 128k AAC / 140k Opus); re-encoding to a higher
+bitrate would only pad it. Pass `--audio-bitrate 256k` only when you genuinely
+need a re-encode (e.g. a frame-exact audio cut on a downbeat).
+
+## Framing gotchas
+
+> **`cropdetect` sees black bars only.** Colored or blurred-banner pillarboxing
+> is invisible to it — a source can look full-frame to `footlight probe` while the
+> real performance sits in a narrower center region with decorative side banners.
+> A `left` / `right` crop relative to the full frame will then land on dead bars.
+
+The framing call is **human**. Verify on the actual frames:
+
+- For pillarboxed sources, use `center` (or a numeric `crop_offset` bounded to the
+  content region), and/or set `content_crop` to the real content region so offsets
+  become relative to it.
+- Don't trust title/resolution/view-count metadata to judge usable footage — it
+  cannot see the pixels.
+
+To pre-screen a downloaded file's content bounds (black bars only):
+
+```bash
+ffmpeg -ss 60 -i FILE -vf cropdetect=limit=24:round=2 -frames:v 300 -f null -
+```
+
+…then read the suggested `crop=` value. `footlight probe` surfaces the same
+suggestion.
+
+## License
+
+Footlight is licensed under the **Apache License 2.0** — see [LICENSE](LICENSE).
+
+Footlight invokes `ffmpeg` / `ffprobe` as **separately installed** external
+tools — it does **not** bundle them — so their **LGPL / GPL** terms apply to your
+own install, not to Footlight, and Footlight's source stays Apache-2.0. (If you
+ever do bundle ffmpeg binaries into a distributed build, you must then ship
+ffmpeg's own license/notices and, for a GPL build, a source offer — see
+[NOTICE](NOTICE).)

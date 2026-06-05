@@ -1,0 +1,673 @@
+// Copyright 2026 Trevor Baker, all rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+//! Footlight native (Tauri) shell.
+//!
+//! Mirrors the Node dev backend (app/dev-server/server.mjs): each
+//! `#[tauri::command]` shells out to ffmpeg / ffprobe / the footlight CLI via
+//! `std::process::Command`, so the frontend's `tauriPlatform` adapter has the
+//! exact same capabilities as `webPlatform`. The native Help menu mirrors the
+//! in-app Help dropdown (About / Report a Bug / View on GitHub).
+//!
+//! The ffmpeg/ffprobe arg arrays and output parsers below are a HAND MIRROR of
+//! the canonical pure builders in src/core.ts (frameExtractArgs, ffprobeStreamArgs
+//! / parseProbe, cropdetectArgs / parseCropdetect, scenesArgs / parseScenes) — the
+//! CLI and the Node dev server import those directly; Rust can't, so keep this in
+//! sync when they change.
+//!
+//! NOTE: this requires the Rust toolchain (rustup + `cargo tauri`) to build and
+//! was NOT compiled in the environment where it was authored — see README.md.
+
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use std::process::Command;
+
+use serde::Serialize;
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_opener::OpenerExt;
+
+const REPO_URL: &str = "https://github.com/tjbaker/footlight";
+const ISSUES_NEW_URL: &str = "https://github.com/tjbaker/footlight/issues/new";
+
+#[derive(Serialize)]
+struct ProbeResult {
+    width: u32,
+    height: u32,
+    duration: f64,
+    cropdetect: Option<String>,
+}
+
+#[derive(Serialize)]
+struct RenderResult {
+    ok: bool,
+    log: String,
+}
+
+/// Extract a single accurate frame at `t` seconds; write a temp JPEG and return
+/// its absolute path (the frontend wraps it with the Tauri asset protocol).
+/// Accuracy comes from ffmpeg INPUT-seek (`-ss` before `-i`) per displayed frame.
+// NOTE: these commands shell out to ffmpeg/ffprobe/node and can run for many
+// seconds (cropdetect, scene decode, a full render, or an Auto-track pass). They
+// MUST be `async`: in Tauri a synchronous command runs on the main thread and
+// freezes the entire UI (the spinning-beachball hang) until it returns. Marking
+// them `async` makes Tauri run them off the main thread so the window stays live.
+#[tauri::command]
+async fn extract_frame(source: String, t: f64) -> Result<String, String> {
+    let mut path = std::env::temp_dir();
+    path.push(format!("footlight_frame_{}.jpg", std::process::id()));
+    let out = path.to_string_lossy().to_string();
+
+    let status = Command::new("ffmpeg")
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-ss",
+            &t.to_string(),
+            "-i",
+            &source,
+            "-frames:v",
+            "1",
+            "-q:v",
+            "3",
+            &out,
+        ])
+        .status()
+        .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
+
+    if !status.success() {
+        return Err("ffmpeg frame extraction failed".into());
+    }
+    Ok(out)
+}
+
+/// Probe width, height, duration via ffprobe + a cropdetect (black-bar) hint.
+#[tauri::command]
+async fn probe(source: String) -> Result<ProbeResult, String> {
+    let probe_out = Command::new("ffprobe")
+        .args([
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height:format=duration",
+            "-of",
+            "json",
+            &source,
+        ])
+        .output()
+        .map_err(|e| format!("failed to spawn ffprobe: {e}"))?;
+
+    if !probe_out.status.success() {
+        return Err(format!(
+            "ffprobe failed: {}",
+            String::from_utf8_lossy(&probe_out.stderr)
+        ));
+    }
+
+    let json: serde_json::Value = serde_json::from_slice(&probe_out.stdout)
+        .map_err(|e| format!("ffprobe returned unparseable output: {e}"))?;
+
+    let stream = json
+        .get("streams")
+        .and_then(|s| s.get(0))
+        .cloned()
+        .unwrap_or_default();
+    let width = stream.get("width").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+    let height = stream.get("height").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+    let duration = json
+        .get("format")
+        .and_then(|f| f.get("duration"))
+        .and_then(|d| d.as_str())
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(0.0);
+
+    // cropdetect — black bars only (mirrors the dev server / CLI).
+    let cd = Command::new("ffmpeg")
+        .args([
+            "-hide_banner",
+            "-ss",
+            "60",
+            "-i",
+            &source,
+            "-vf",
+            "cropdetect=limit=24:round=2",
+            "-frames:v",
+            "300",
+            "-f",
+            "null",
+            "-",
+        ])
+        .output()
+        .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
+    let stderr = String::from_utf8_lossy(&cd.stderr);
+    let cropdetect = last_crop_suggestion(&stderr);
+
+    Ok(ProbeResult {
+        width,
+        height,
+        duration,
+        cropdetect,
+    })
+}
+
+/// Detect scene-cut timestamps (seconds), mirroring the CLI's scenes command.
+#[tauri::command]
+async fn scenes(source: String) -> Result<Vec<f64>, String> {
+    let out = Command::new("ffmpeg")
+        .args([
+            "-hide_banner",
+            "-i",
+            &source,
+            "-vf",
+            "scale=-2:144,select='gt(scene,0.4)',showinfo",
+            "-f",
+            "null",
+            "-",
+        ])
+        .output()
+        .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let mut times = Vec::new();
+    for token in stderr.split("pts_time:").skip(1) {
+        let num: String = token
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == '.')
+            .collect();
+        if let Ok(t) = num.parse::<f64>() {
+            times.push((t * 1000.0).round() / 1000.0);
+        }
+    }
+    Ok(times)
+}
+
+#[derive(Serialize)]
+struct LoudnessResult {
+    display: Vec<f64>,
+    detect: Vec<f64>,
+}
+
+/// Compute the timeline's two loudness envelopes (0..1) in ONE ffmpeg pass.
+/// Mirrors core.ts `loudnessCombinedArgs` + `parseEbur128Momentary`/`bucketLufs`
+/// (display) + `bucketLoudness` (detect); Rust can't import the TS. The ebur128
+/// analysis filter passes audio through, so the same run logs per-frame momentary
+/// LUFS to stderr (→ `display`, the perceptual bars) AND emits mono 8 kHz f32le
+/// PCM on stdout (→ `detect`, the raw-energy RMS the swell detector needs). Keep
+/// LOUDNESS_BUCKETS (160) and the LUFS floor/ceiling in sync with core.ts.
+#[tauri::command]
+async fn loudness(source: String) -> Result<LoudnessResult, String> {
+    // Keep these in sync with core.ts LOUDNESS_BUCKETS / LUFS_FLOOR / LUFS_CEIL.
+    const LOUDNESS_BUCKETS: usize = 160;
+    const LUFS_FLOOR: f64 = -40.0;
+    const LUFS_CEIL: f64 = -5.0;
+
+    // Same args as core.ts loudnessCombinedArgs.
+    let out = Command::new("ffmpeg")
+        .args([
+            "-hide_banner",
+            "-nostats",
+            // verbose REQUIRED: ebur128 prints per-frame `M:` only above `info`.
+            "-loglevel",
+            "verbose",
+            "-i",
+            &source,
+            "-af",
+            "ebur128=metadata=1",
+            "-ac",
+            "1",
+            "-ar",
+            "8000",
+            "-f",
+            "f32le",
+            "-",
+        ])
+        .output()
+        .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
+
+    // --- display: per-frame momentary `M:` LUFS from stderr (mirrors bucketLufs).
+    let log = String::from_utf8_lossy(&out.stderr);
+    let mut momentary: Vec<f64> = Vec::new();
+    for line in log.lines() {
+        if let Some(idx) = line.find("M:") {
+            let tok = line[idx + 2..].trim_start().split_whitespace().next().unwrap_or("");
+            // Non-finite readings (-inf/nan over silence / startup) -> floor.
+            momentary.push(tok.parse::<f64>().unwrap_or(f64::NEG_INFINITY));
+        }
+    }
+
+    if !out.status.success() && momentary.is_empty() && out.stdout.is_empty() {
+        return Err(format!("loudness failed: {log}"));
+    }
+
+    // Map one LUFS reading to 0..1 over [floor, ceil]; non-finite -> 0.
+    let norm = |lufs: f64| -> f64 {
+        if !lufs.is_finite() {
+            return 0.0;
+        }
+        ((lufs - LUFS_FLOOR) / (LUFS_CEIL - LUFS_FLOOR)).clamp(0.0, 1.0)
+    };
+
+    let mn = momentary.len();
+    let mut display = vec![0.0f64; LOUDNESS_BUCKETS];
+    if mn > 0 {
+        for (b, slot) in display.iter_mut().enumerate() {
+            let start = (b * mn) / LOUDNESS_BUCKETS;
+            let end = ((b + 1) * mn) / LOUDNESS_BUCKETS;
+            let mut sum = 0.0f64;
+            let mut count = 0usize;
+            for v in &momentary[start..end] {
+                if v.is_finite() {
+                    sum += norm(*v);
+                    count += 1;
+                }
+            }
+            *slot = if count > 0 { sum / count as f64 } else { 0.0 };
+        }
+    }
+
+    // --- detect: RMS of the mono f32le PCM on stdout (mirrors bucketLoudness:
+    // per-window RMS, then normalize the whole array to 0..1 by its max).
+    let bytes = &out.stdout;
+    let sn = bytes.len() / 4;
+    let samples: Vec<f32> = (0..sn)
+        .map(|i| {
+            let b = &bytes[i * 4..i * 4 + 4];
+            f32::from_le_bytes([b[0], b[1], b[2], b[3]])
+        })
+        .collect();
+    let mut detect = vec![0.0f64; LOUDNESS_BUCKETS];
+    if sn > 0 {
+        for (b, slot) in detect.iter_mut().enumerate() {
+            let start = (b * sn) / LOUDNESS_BUCKETS;
+            let end = ((b + 1) * sn) / LOUDNESS_BUCKETS;
+            let count = end - start;
+            let mut sum_sq = 0.0f64;
+            for s in &samples[start..end] {
+                let v = *s as f64;
+                sum_sq += v * v;
+            }
+            *slot = if count > 0 { (sum_sq / count as f64).sqrt() } else { 0.0 };
+        }
+        let max = detect.iter().cloned().fold(0.0f64, f64::max);
+        if max > 0.0 {
+            for v in detect.iter_mut() {
+                *v /= max;
+            }
+        }
+    }
+
+    Ok(LoudnessResult { display, detect })
+}
+
+/// Locate a subject across sample times (AI subject tracking, SPEC §6.9). Writes
+/// the request to a temp `.json`, shells the footlight CLI's `track` command,
+/// and parses its stdout (a `TrackSample[]` JSON) back to the frontend. The CLI
+/// prints ONLY the samples on stdout; `mock:true` in the request runs offline.
+#[tauri::command]
+async fn track(app: AppHandle, req: serde_json::Value) -> Result<serde_json::Value, String> {
+    let mut req_path = std::env::temp_dir();
+    req_path.push(format!("footlight_track_{}.json", std::process::id()));
+    let body = serde_json::to_string(&req).map_err(|e| format!("serialize track request: {e}"))?;
+    std::fs::write(&req_path, body).map_err(|e| format!("write temp track request: {e}"))?;
+
+    let cli = locate_cli(&app);
+    let output = Command::new("node")
+        .arg(&cli)
+        .arg("track")
+        .arg(&req_path)
+        .output()
+        .map_err(|e| format!("failed to spawn node CLI: {e}"))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "track failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("track returned unparseable output: {e}"))
+}
+
+/// Render a JSON manifest: write it to a temp `.json` file and invoke the
+/// footlight CLI. The CLI auto-detects the JSON path by the `.json` extension,
+/// which lets clips carry an eased `cropPath` the CSV path can't express. The
+/// CLI is resolved relative to the bundled resources; in dev it sits at the
+/// repo's `bin/footlight.js`.
+#[tauri::command]
+async fn render(
+    app: AppHandle,
+    manifest_json: String,
+    outdir: Option<String>,
+) -> Result<RenderResult, String> {
+    let mut manifest_path = std::env::temp_dir();
+    manifest_path.push(format!("footlight_manifest_{}.json", std::process::id()));
+    std::fs::write(&manifest_path, manifest_json)
+        .map_err(|e| format!("write temp manifest: {e}"))?;
+
+    let cli = locate_cli(&app);
+    let out_dir = resolve_outdir(&cli, outdir);
+
+    let output = Command::new("node")
+        .arg(&cli)
+        .arg("render")
+        .arg(&manifest_path)
+        .arg("--outdir")
+        .arg(&out_dir)
+        .output()
+        .map_err(|e| format!("failed to spawn node CLI: {e}"))?;
+
+    let log = format!(
+        "$ node {} render {} --outdir {}\n\n{}{}",
+        cli,
+        manifest_path.to_string_lossy(),
+        out_dir,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    Ok(RenderResult {
+        ok: output.status.success(),
+        log,
+    })
+}
+
+/// Path to the persisted render-history file inside the app config dir, creating
+/// the config dir if it does not yet exist.
+fn history_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("resolve app config dir: {e}"))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("create app config dir: {e}"))?;
+    Ok(dir.join("history.json"))
+}
+
+/// Load the persisted render history. A missing file yields an empty list; the
+/// frontend owns capping/ordering. Entries are opaque JSON (the TS HistoryEntry
+/// shape) so Rust does not mirror the type.
+#[tauri::command]
+async fn load_history(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    let path = history_path(&app)?;
+    let body = match std::fs::read_to_string(&path) {
+        Ok(b) => b,
+        Err(_) => return Ok(vec![]),
+    };
+    serde_json::from_str(&body).map_err(|e| format!("parse history: {e}"))
+}
+
+/// Persist the full render-history array to the app config dir.
+#[tauri::command]
+async fn save_history(app: AppHandle, entries: Vec<serde_json::Value>) -> Result<(), String> {
+    let path = history_path(&app)?;
+    let body = serde_json::to_string(&entries).map_err(|e| format!("serialize history: {e}"))?;
+    std::fs::write(&path, body).map_err(|e| format!("write history: {e}"))?;
+    Ok(())
+}
+
+/// Path to the persisted working-session file inside the app config dir, creating
+/// the config dir if it does not yet exist.
+fn session_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("resolve app config dir: {e}"))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("create app config dir: {e}"))?;
+    Ok(dir.join("session.json"))
+}
+
+/// Load the persisted working session. A missing file yields `None`; the session
+/// is opaque JSON (the TS SessionData shape) so Rust does not mirror the type.
+#[tauri::command]
+async fn load_session(app: AppHandle) -> Result<Option<serde_json::Value>, String> {
+    let path = session_path(&app)?;
+    let body = match std::fs::read_to_string(&path) {
+        Ok(b) => b,
+        Err(_) => return Ok(None),
+    };
+    let value = serde_json::from_str(&body).map_err(|e| format!("parse session: {e}"))?;
+    Ok(Some(value))
+}
+
+/// Persist the working session to the app config dir.
+#[tauri::command]
+async fn save_session(app: AppHandle, data: serde_json::Value) -> Result<(), String> {
+    let path = session_path(&app)?;
+    let body = serde_json::to_string(&data).map_err(|e| format!("serialize session: {e}"))?;
+    std::fs::write(&path, body).map_err(|e| format!("write session: {e}"))?;
+    Ok(())
+}
+
+/// Build the separate Activity window. Its own close button HIDES it (rather than
+/// destroying it) and emits `activity-hidden` so the main window keeps the toggle
+/// state in sync — and reopening is instant.
+fn build_activity_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
+    let win = WebviewWindowBuilder::new(app, "activity", WebviewUrl::App("activity.html".into()))
+        .title("Footlight — Activity")
+        .inner_size(700.0, 420.0)
+        .min_inner_size(320.0, 180.0)
+        .build()
+        .map_err(|e| e.to_string())?;
+    let w = win.clone();
+    let app2 = app.clone();
+    win.on_window_event(move |event| {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            let _ = w.hide();
+            let _ = app2.emit("activity-hidden", ());
+        }
+    });
+    Ok(win)
+}
+
+/// Toggle the Activity window: hide it if shown, show (or create) it if not.
+/// Returns whether it is now visible so the main window can sync its toggle.
+/// Synchronous so window creation runs on the main thread.
+#[tauri::command]
+fn toggle_activity_window(app: AppHandle) -> Result<bool, String> {
+    if let Some(win) = app.get_webview_window("activity") {
+        if win.is_visible().unwrap_or(false) {
+            let _ = win.hide();
+            return Ok(false);
+        }
+        let _ = win.show();
+        let _ = win.set_focus();
+        return Ok(true);
+    }
+    let win = build_activity_window(&app)?;
+    let _ = win.set_focus();
+    Ok(true)
+}
+
+/// Reveal the Activity window (create if needed) — used to surface failures.
+#[tauri::command]
+fn show_activity_window(app: AppHandle) -> Result<(), String> {
+    let win = match app.get_webview_window("activity") {
+        Some(w) => w,
+        None => build_activity_window(&app)?,
+    };
+    let _ = win.show();
+    let _ = win.set_focus();
+    Ok(())
+}
+
+/// Resolve a render outdir. An absolute path is used verbatim; a relative one
+/// (the default `clips`) is resolved against the REPO ROOT — the directory two
+/// levels up from the located CLI (`<root>/bin/footlight.js`) — so GUI renders
+/// land in the project-root `clips/` next to the CLI's own output, NOT in the
+/// Tauri process cwd (which under `cargo tauri dev` is `app/src-tauri/`, where
+/// clips would silently pile up out of sight). Mirrors the dev server's
+/// REPO_ROOT handling in app/dev-server/server.mjs — keep the two in sync.
+///
+/// NOTE: in a packaged `.app` the CLI sits at `<resources>/engine/bin/...`, so a
+/// relative outdir would resolve under the read-only bundle; packaged builds
+/// should pass an absolute outdir.
+fn resolve_outdir(cli: &str, outdir: Option<String>) -> String {
+    let raw = outdir.unwrap_or_else(|| "clips".into());
+    if std::path::Path::new(&raw).is_absolute() {
+        return raw;
+    }
+    if let Some(root) = std::path::Path::new(cli)
+        .parent() // <root>/bin
+        .and_then(|bin| bin.parent())
+    {
+        return root.join(&raw).to_string_lossy().to_string();
+    }
+    raw
+}
+
+/// Find the footlight CLI. Resolution order:
+///   1. `FOOTLIGHT_CLI` env override.
+///   2. The bundled resource at `<resourceDir>/engine/bin/footlight.js` (works
+///      in a double-clicked `.app`, where cwd is `/`). The companion engine
+///      `dist/` is bundled alongside it at `engine/dist`, so `footlight.js`'s
+///      relative `../dist/cli.js` import still resolves.
+///   3. Walk up from the current dir looking for `bin/footlight.js` (dev mode,
+///      `tauri dev`, where the repo tree is intact).
+fn locate_cli(app: &AppHandle) -> String {
+    if let Ok(p) = std::env::var("FOOTLIGHT_CLI") {
+        return p;
+    }
+    if let Ok(res_dir) = app.path().resource_dir() {
+        let bundled = res_dir.join("engine").join("bin").join("footlight.js");
+        if bundled.exists() {
+            return bundled.to_string_lossy().to_string();
+        }
+    }
+    let mut dir = std::env::current_dir().unwrap_or_default();
+    for _ in 0..6 {
+        let candidate = dir.join("bin").join("footlight.js");
+        if candidate.exists() {
+            return candidate.to_string_lossy().to_string();
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    "footlight.js".into()
+}
+
+/// Pull the LAST `crop=W:H:X:Y` suggestion out of cropdetect stderr.
+fn last_crop_suggestion(stderr: &str) -> Option<String> {
+    let mut last = None;
+    for token in stderr.split("crop=").skip(1) {
+        let candidate: String = token
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == ':')
+            .collect();
+        if candidate.matches(':').count() == 3 {
+            last = Some(candidate);
+        }
+    }
+    last
+}
+
+fn main() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![
+            extract_frame,
+            probe,
+            scenes,
+            loudness,
+            track,
+            render,
+            load_history,
+            save_history,
+            load_session,
+            save_session,
+            toggle_activity_window,
+            show_activity_window
+        ])
+        .setup(|app| {
+            // Setting ANY custom menu replaces the entire default menu bar, so we
+            // must rebuild the standard macOS menus by hand — otherwise Quit
+            // (Cmd-Q), copy/paste, and window controls all disappear. We use the
+            // SubmenuBuilder convenience methods (predefined OS items) for those
+            // and append our custom Help submenu mirroring the in-app dropdown.
+
+            // App menu (macOS shows it titled with the app name). Holds Quit/Cmd-Q
+            // and the standard Settings… (Cmd-,) item, which opens the in-app modal.
+            let settings = MenuItemBuilder::with_id("app_settings", "Settings…")
+                .accelerator("CmdOrCtrl+,")
+                .build(app)?;
+            // The single About item, in the standard macOS location (the app menu).
+            // It opens the in-app About modal rather than the generic system panel.
+            let about = MenuItemBuilder::with_id("help_about", "About Footlight").build(app)?;
+            let app_menu = SubmenuBuilder::new(app, "Footlight")
+                .item(&about)
+                .separator()
+                .item(&settings)
+                .separator()
+                .services()
+                .separator()
+                .hide()
+                .hide_others()
+                .show_all()
+                .separator()
+                .quit()
+                .build()?;
+
+            let file_menu = SubmenuBuilder::new(app, "File").close_window().build()?;
+
+            // Edit menu — needed for cut/copy/paste in the source-path field.
+            let edit_menu = SubmenuBuilder::new(app, "Edit")
+                .undo()
+                .redo()
+                .separator()
+                .cut()
+                .copy()
+                .paste()
+                .select_all()
+                .build()?;
+
+            let window_menu = SubmenuBuilder::new(app, "Window")
+                .minimize()
+                .close_window()
+                .build()?;
+
+            // Custom Help menu (About lives in the app menu, macOS-style — not here).
+            let guide = MenuItemBuilder::with_id("help_guide", "User Guide").build(app)?;
+            let bug = MenuItemBuilder::with_id("help_bug", "Report a Bug").build(app)?;
+            let gh = MenuItemBuilder::with_id("help_github", "View on GitHub").build(app)?;
+            let help = SubmenuBuilder::new(app, "Help")
+                .item(&guide)
+                .item(&bug)
+                .item(&gh)
+                .build()?;
+
+            let menu = MenuBuilder::new(app)
+                .item(&app_menu)
+                .item(&file_menu)
+                .item(&edit_menu)
+                .item(&window_menu)
+                .item(&help)
+                .build()?;
+            app.set_menu(menu)?;
+
+            app.on_menu_event(move |app, event| match event.id().as_ref() {
+                "app_settings" => {
+                    let _ = app.emit("show-settings", ());
+                }
+                "help_guide" => {
+                    let _ = app.emit("show-guide", ());
+                }
+                "help_about" => {
+                    // Ask the frontend to show its About modal (single source of truth).
+                    let _ = app.emit("show-about", ());
+                }
+                "help_bug" => {
+                    let _ = app.opener().open_url(ISSUES_NEW_URL, None::<&str>);
+                }
+                "help_github" => {
+                    let _ = app.opener().open_url(REPO_URL, None::<&str>);
+                }
+                _ => {}
+            });
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running Footlight");
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability set for the Footlight main + activity windows.",
+  "windows": ["main", "activity"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "core:window:default",
+    "dialog:default"
+  ]
+}
