@@ -1,8 +1,11 @@
 # Footlight — Project Specification
 
-> Status: living spec — the render engine, CLI, and GUI are implemented; some
-> items remain roadmap (see §11). License: **Apache-2.0**. Open source,
-> GUI-first, wraps `ffmpeg`.
+> Status: **frozen design rationale** (as of v0.3.0). The render engine, CLI, and
+> GUI are implemented and shipped. This document is now the stable *why* behind
+> the build — the framing philosophy, crop model, and feature design that ~37
+> code comments cite as `SPEC §x`. It is **not** a roadmap: upcoming work and
+> status live in **GitHub issues + releases**, not here. License: **Apache-2.0**.
+> Open source, GUI-first, wraps `ffmpeg`.
 
 This document specifies an open-source desktop application for turning 16:9
 source videos into 1080×1920 (9:16) short-form clips for Reels / TikTok / YouTube
@@ -230,8 +233,9 @@ a deliberate differentiator from cloud auto-clippers that upload source video.
 
 ### 6.7 AI assistant (optional)
 - **Opt-in, BYOK.** User pastes an API key in **Settings**, never in the project
-  files. *(Today it is kept in app local storage; moving it to the **OS keychain**
-  for the packaged app is a tracked follow-up.)*
+  files. The packaged app stores it in the **OS keychain** (Tauri `keyring`
+  crate), with a one-time migration off the legacy local-storage blob; the web
+  dev build falls back to a clearly-marked local-storage shim.
 - **Provider-agnostic from day one.** The AI layer is an abstraction over
   providers (Anthropic Claude, Google Gemini, …), selectable **per capability** —
   e.g. Gemini for vision/tracking (per-frame images + bounding boxes, see §6.9)
@@ -425,27 +429,21 @@ express. (A `--burn-captions` flag is reserved — captions are not yet built, �
 
 ---
 
-## 11. Roadmap (staged — each milestone independently useful)
+## 11. Status (frozen snapshot — what's next lives in issues)
 
-**M1 — Visual single-clip cutter (MVP). ✓ Done.** Import/open a source;
-frame-accurate scrubber; set in/out; draw one 9:16 box (named or numeric); live
-preview; write a manifest; render via system `ffmpeg`; lossless audio copy.
+> This section is a **historical snapshot as of v0.3.0**, not a live plan. For
+> what's in flight and what's next, see **[GitHub issues](https://github.com/tjbaker/footlight/issues)**
+> and **[releases](https://github.com/tjbaker/footlight/releases)** — they own
+> the roadmap now, so this won't drift.
 
-**M2 — Letterbox + batch. ✓ Done.** `content_crop` (deletterbox) with `cropdetect`
-assist; multi-clip queue + batch render; CLI parity.
-
-**M3 — Keyframed crop schedule. ✓ Done.** Crop keyframes on a timeline;
-hard-switch preview; **scene-cut detection** to snap keyframes to cuts (the
-assisted letterboxed-edit workflow).
-
-**M4 — AI assistant (BYOK). ◑ Partial.** Done: the **tracked crop path** (§6.9 —
-BYOK key in Settings, a deterministic `MockTracker` backing offline tests, viewable
-base prompt in `prompts/base.md`). Pending: the natural-language tool-use assistant
-(§6.7) and vision crop suggestions for static frames.
-
-**M5 — Polish & distribution. ☐ Pending.** Signed/notarized cross-platform
-installers; auto-update; optional captions burn-in (§6.5); docs site. (Today the
-app is run/built from source.)
+**Shipped (M1–M4).** The visual single-clip cutter (frame-accurate scrub, named
+/ numeric 9:16 box, manifest, system-`ffmpeg` render, lossless audio); letterbox
+`content_crop` + multi-clip batch + CLI parity; the keyframed crop schedule with
+scene-cut snapping; and the BYOK **AI assistant** (§6.7) — a provider-agnostic
+orchestrator with a Gemini reference adapter, the **propose → ghost → commit**
+dock, vision crop suggestions, the eased **tracked crop path** (§6.9), an
+OS-keychain key, and the `prompts/base.md` framing brain composed into every turn
+with an append-only editor overlay. `MockTracker` backs offline tests.
 
 **Also shipped (beyond the original M-line).** Explicit **punch-in / zoom**
 (`cropWindow`); a **loudness timeline** scrubber/trimmer with quiet→loud **swell**
@@ -458,8 +456,11 @@ shortcuts overlay; bundled local UI **fonts** (OFL); a localizable in-app **User
 Guide** and **Settings** dialog; and a dependency-free web dev backend mirroring
 the native one.
 
-**Later / optional.** Provider-agnostic AI beyond the Gemini reference; managed-key
-tier for non-technical users. Manual linear interpolation is explicitly out (§6.9).
+**The active frontier (M5 — polish & distribution).** Signed/notarized
+cross-platform installers, auto-update, optional captions burn-in (§6.5), and a
+docs site — tracked in issues. Design intent that remains explicitly out of scope:
+manual linear interpolation (§6.9). Optional future direction: provider-agnostic
+AI beyond the Gemini reference and a managed-key tier for non-technical users.
 
 ---
 
