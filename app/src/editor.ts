@@ -38,6 +38,7 @@ import { resolveModels } from "@model";
 import type {
   AssistantReply,
   ProposedAction,
+  GhostPreview,
   CommitOp,
   Grounding,
 } from "@assistant-types";
@@ -629,12 +630,28 @@ export function mountEditor(root: HTMLElement): void {
   const tlRegion = el("div", "fl-tl-region");
   tlRegion.style.display = "none";
   const tlKfLayer = layer();
+  // Assistant ghost-proposal previews (dashed): a proposed In/Out region and
+  // proposed keyframe / track diamonds, shown while proposals are pending and
+  // cleared on Accept / Step / Discard (SPEC §6.7 propose -> ghost -> commit).
+  const tlGhostRegion = el("div", "fl-tl-region ghost");
+  tlGhostRegion.style.display = "none";
+  const tlGhostKfLayer = layer();
   const tlPlayhead = el("div", "fl-tl-playhead");
   tlPlayhead.style.display = "none";
   const tlBubble = el("span", "fl-tl-bubble");
   tlBubble.textContent = "0:00.000";
   tlPlayhead.append(tlBubble);
-  tlTrack.append(tlRuler, tlWave, tlCutsLayer, tlMarksLayer, tlRegion, tlKfLayer, tlPlayhead);
+  tlTrack.append(
+    tlRuler,
+    tlWave,
+    tlCutsLayer,
+    tlMarksLayer,
+    tlRegion,
+    tlGhostRegion,
+    tlKfLayer,
+    tlGhostKfLayer,
+    tlPlayhead,
+  );
   tlCol.append(suggestLane, tlTrack);
 
   const tlInfo = el("div", "fl-tl-cluster");
@@ -650,6 +667,13 @@ export function mountEditor(root: HTMLElement): void {
 
   // ----- timeline rendering -----
   const pct = (t: number): string => `${clamp((t / (state.duration || 1)) * 100, 0, 100)}%`;
+
+  /**
+   * Pending assistant ghost previews (dashed, preview-only) drawn on the stage
+   * and timeline while proposals await Accept / Step / Discard. Set via
+   * `setGhosts`; nothing here mutates editor state — that's the commit's job.
+   */
+  let ghostPreviews: GhostPreview[] = [];
 
   function renderRuler(): void {
     tlRuler.innerHTML = "";
@@ -750,6 +774,48 @@ export function mountEditor(root: HTMLElement): void {
     } else {
       tlRegion.style.display = "none";
     }
+  }
+
+  /**
+   * Draw the timeline ghosts for every pending proposal: a dashed proposed
+   * In/Out region (`ghost.region`, absolute source seconds — mirrors
+   * `renderRegion`) and dashed diamonds for proposed crop keyframes / track
+   * paths (`ghost.keyframe` / `ghost.path`, clip-relative to In — mirrors
+   * `renderKf`). The stage crop-box ghost is drawn by `drawOverlay`.
+   */
+  function renderGhosts(): void {
+    tlGhostKfLayer.innerHTML = "";
+    let regionShown = false;
+    for (const g of ghostPreviews) {
+      if (g.region && state.duration > 0 && g.region.outSec > g.region.inSec) {
+        tlGhostRegion.style.display = "block";
+        tlGhostRegion.style.left = pct(g.region.inSec);
+        tlGhostRegion.style.width = `${clamp(
+          ((g.region.outSec - g.region.inSec) / state.duration) * 100,
+          0,
+          100,
+        )}%`;
+        regionShown = true;
+      }
+      // Keyframe / path diamonds are clip-relative; only place them once an In
+      // point exists (their absolute position is In + t, like committed kfs).
+      if (state.inPoint != null && state.duration > 0) {
+        const ks = g.path ?? (g.keyframe ? [g.keyframe] : []);
+        for (const k of ks) {
+          const d = el("div", "fl-tl-kf ghost");
+          d.style.left = pct(state.inPoint + k.t);
+          tlGhostKfLayer.append(d);
+        }
+      }
+    }
+    if (!regionShown) tlGhostRegion.style.display = "none";
+  }
+
+  /** Replace the pending ghost set and repaint the stage + timeline previews. */
+  function setGhosts(gs: GhostPreview[]): void {
+    ghostPreviews = gs;
+    renderGhosts();
+    drawOverlay();
   }
 
   function movePlayhead(): void {
@@ -1579,7 +1645,43 @@ export function mountEditor(root: HTMLElement): void {
         }
       }
     }
+
+    // Assistant ghost-proposal crop boxes (dashed, preview-only). A proposed 9:16
+    // crop (`ghost.crop`) and/or a proposed content crop (`ghost.contentCrop`,
+    // "W:H:X:Y") render as dashed accent-2 outlines WITHOUT mutating state —
+    // committing happens on Accept. Boxes are in working-region px (offset by the
+    // active content box's origin so they land in source-frame coords, matching
+    // how the engine and `trackedBoxX` evaluate them).
+    if (ghostPreviews.length) {
+      const dx = state.contentMode && state.contentBox ? state.contentBox.x : 0;
+      const dy = state.contentMode && state.contentBox ? state.contentBox.y : 0;
+      const accent2 =
+        getComputedStyle(document.documentElement).getPropertyValue("--accent-2").trim() ||
+        "#ffb27a";
+      ctx.save();
+      ctx.lineWidth = 2;
+      ctx.setLineDash([7, 5]);
+      ctx.strokeStyle = accent2;
+      for (const g of ghostPreviews) {
+        if (g.crop) {
+          ctx.strokeRect((g.crop.x + dx) * s, (g.crop.y + dy) * s, g.crop.w * s, g.crop.h * s);
+        }
+        if (g.contentCrop) {
+          const cc = parseContentCropPx(g.contentCrop);
+          if (cc) ctx.strokeRect(cc.x * s, cc.y * s, cc.w * s, cc.h * s);
+        }
+      }
+      ctx.restore();
+    }
     drawPreview();
+  }
+
+  /** Parse a `W:H:X:Y` content-crop string into a source-px box (null if malformed). */
+  function parseContentCropPx(str: string): Box | null {
+    const parts = str.split(":").map((n) => Number(n));
+    if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
+    const [w, h, x, y] = parts as [number, number, number, number];
+    return { x, y, w, h };
   }
 
   /**
@@ -2229,6 +2331,7 @@ export function mountEditor(root: HTMLElement): void {
     dock.el.style.display = "none";
     inspector.style.display = "";
     assistantBtn.classList.remove("on");
+    setGhosts([]); // don't leave dashed previews floating with the rail hidden
   }
 
   function toggleAssistant(): void {
@@ -2328,6 +2431,7 @@ export function mountEditor(root: HTMLElement): void {
     if (!message) return;
     dock.textarea.value = "";
     dock.send.disabled = true;
+    setGhosts([]); // a new turn supersedes any still-previewing proposals
     appendBubble("user", message);
     assistantHistory.push({ role: "user", text: message });
 
@@ -2368,8 +2472,17 @@ export function mountEditor(root: HTMLElement): void {
 
     pendingActions = reply.actions.slice();
     stepIndex = 0;
+    setGhosts(ghostsFrom(pendingActions, 0));
     if (pendingActions.length) dock.log.append(proposalCard(pendingActions));
     dock.log.scrollTop = dock.log.scrollHeight;
+  }
+
+  /** The ghost previews for the not-yet-committed actions (index `from` onward). */
+  function ghostsFrom(actions: ProposedAction[], from: number): GhostPreview[] {
+    return actions
+      .slice(from)
+      .map((a) => a.ghost)
+      .filter((g): g is GhostPreview => g != null);
   }
 
   /** "grounded in …" chip row citing the real signals (never audio). */
@@ -2450,6 +2563,7 @@ export function mountEditor(root: HTMLElement): void {
       }
       stepIndex = actions.length;
       pendingActions = [];
+      setGhosts([]); // committed — drop the previews
       finish(
         staged
           ? `Applied ${applied} — render staged. Use the Render button when you're ready.`
@@ -2465,6 +2579,8 @@ export function mountEditor(root: HTMLElement): void {
       rows[stepIndex]!.classList.add(res.applied ? "done" : "skip");
       stepIndex++;
       markActiveStep();
+      // Drop the ghost for the just-committed action; keep the rest previewing.
+      setGhosts(ghostsFrom(actions, stepIndex));
       if (stepIndex >= actions.length) {
         pendingActions = [];
         finish("Stepped through every proposal.");
@@ -2475,6 +2591,7 @@ export function mountEditor(root: HTMLElement): void {
       rows.forEach((r) => r.classList.add("skip"));
       pendingActions = [];
       stepIndex = actions.length;
+      setGhosts([]); // nothing committed, but the previews go away
       finish("Discarded — your state is untouched.", "");
     });
 
