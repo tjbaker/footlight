@@ -34,8 +34,16 @@ import {
   type CropKeyframe,
 } from "@manifest";
 import { planSampleTimes, samplesToCropPath } from "@track";
+import { resolveModels } from "@model";
+import type {
+  AssistantReply,
+  ProposedAction,
+  CommitOp,
+  Grounding,
+} from "@assistant-types";
 import { platform, platformName } from "./platform/index.js";
 import type { HistoryEntry, SessionData } from "./platform/types.js";
+import { createAssistant, type ConversationMessage } from "./assistant/index.js";
 import { openSettings } from "./settings.js";
 import { openShortcuts } from "./shortcuts.js";
 import {
@@ -155,11 +163,16 @@ export function mountEditor(root: HTMLElement): void {
   }
   previewBtn.classList.toggle("on", previewOn);
   previewBtn.title = previewOn ? "Hide the 9:16 output preview" : "Show the 9:16 output preview";
+  // Spark toggles the AI assistant dock — a third rail mode that slides over the
+  // Frame / Track-subject inspector (SPEC §6.7). Active state mirrors `.on`.
+  const assistantBtn = button("", "fl-iconbtn assistant", () => toggleAssistant());
+  assistantBtn.innerHTML = ICON_SPARK;
+  assistantBtn.title = "AI assistant (A) — propose framing in plain language";
   const themeBtn = button("", "fl-iconbtn", () => toggleTheme());
   const settingsBtn = button("", "fl-iconbtn", () => openSettings());
   settingsBtn.innerHTML = ICON_GEAR;
   settingsBtn.title = "Settings";
-  actions.append(renderBtn, previewBtn, historyBtn, activityToggle, themeBtn, settingsBtn);
+  actions.append(renderBtn, previewBtn, assistantBtn, historyBtn, activityToggle, themeBtn, settingsBtn);
   topbar.append(brand, crumb, actions);
 
   function refreshThemeIcon(): void {
@@ -505,7 +518,15 @@ export function mountEditor(root: HTMLElement): void {
   hintInput.addEventListener("change", persistAutoTrack);
   intervalInput.addEventListener("change", persistAutoTrack);
 
-  inspector.append(seg, framePane, trackPane);
+  // Second entry point into the assistant: a button pinned at the inspector base
+  // (the spark in the top bar is the first). Opening the dock hides the inspector.
+  const askSect = el("div", "fl-sect");
+  const askBtn = button("", "fl-btn", () => openAssistant());
+  askBtn.innerHTML = `${ICON_SPARK}Ask the assistant…`;
+  askBtn.title = "Open the AI assistant to propose framing in plain language";
+  askSect.append(askBtn);
+
+  inspector.append(seg, framePane, trackPane, askSect);
 
   function selectTab(which: "frame" | "track"): void {
     const frameOn = which === "frame";
@@ -516,7 +537,10 @@ export function mountEditor(root: HTMLElement): void {
   }
   selectTab("frame");
 
-  main.append(viewer, inspector);
+  // ----- AI assistant dock (third rail mode; slides over the inspector) -----
+  const dock = buildAssistantDock();
+
+  main.append(viewer, inspector, dock.el);
 
   // ===== loudness timeline =====
   // A full-width track under the viewer: a normalized RMS waveform (bars warm
@@ -923,6 +947,17 @@ export function mountEditor(root: HTMLElement): void {
     if (e.metaKey || e.ctrlKey) return;
     if (e.key === "?") {
       openShortcuts();
+      return;
+    }
+    // Spark hotkey: toggle the assistant rail (works even before a source loads
+    // so the "load a source first" guidance is reachable). Esc closes it.
+    if (e.key === "a" || e.key === "A") {
+      e.preventDefault();
+      toggleAssistant();
+      return;
+    }
+    if (assistantOpen && e.key === "Escape") {
+      closeAssistant();
       return;
     }
     if (!state.dims) return;
@@ -2036,6 +2071,461 @@ export function mountEditor(root: HTMLElement): void {
     refreshIO();
   }
 
+  // ============================================================
+  // AI assistant dock (SPEC §6.7) — the conversational "framing brain".
+  // A third rail mode that slides over the inspector: a message log + a composer.
+  // The assistant PROPOSES; nothing mutates editor state until the human Accepts.
+  // Render only ever STAGES — it never auto-fires (the manual Render button owns
+  // the encode). The canvas "ghost" preview is a later PR; this dock handles the
+  // conversation, the proposal cards, and committing accepted proposals through
+  // the editor's existing state mutations.
+  // ============================================================
+
+  /** Whether the assistant rail is showing (inspector hidden when true). */
+  let assistantOpen = false;
+  /** Multi-turn history threaded into each turn. */
+  const assistantHistory: ConversationMessage[] = [];
+  /** Pending proposals from the most recent reply (cleared on Discard / new turn). */
+  let pendingActions: ProposedAction[] = [];
+  /** Step cursor: index of the next single proposal to apply via "Step". */
+  let stepIndex = 0;
+
+  /**
+   * Build the assistant rail DOM: header (spark + title + close), a scrolling
+   * message log, and a footer composer (suggestion chips + textarea + send). The
+   * returned object exposes the root plus the imperative pieces the open/turn
+   * handlers drive.
+   */
+  function buildAssistantDock(): {
+    el: HTMLElement;
+    log: HTMLElement;
+    textarea: HTMLTextAreaElement;
+    send: HTMLButtonElement;
+  } {
+    const root = el("div", "fl-assist");
+    root.style.display = "none";
+
+    const head = el("div", "fl-assist-h");
+    const spark = el("span", "fl-assist-spark");
+    spark.innerHTML = ICON_SPARK;
+    const headText = el("div");
+    const title = el("div", "fl-assist-title");
+    title.textContent = "Assistant";
+    const sub = el("div", "fl-assist-sub");
+    sub.textContent = "Proposes framing — you accept. Grounded in stills, not audio.";
+    headText.append(title, sub);
+    const closeBtn = button("", "fl-iconbtn sm", () => closeAssistant());
+    closeBtn.innerHTML = ICON_X;
+    closeBtn.title = "Close the assistant (Esc / A)";
+    closeBtn.style.marginLeft = "auto";
+    head.append(spark, headText, closeBtn);
+
+    const log = el("div", "fl-assist-body");
+
+    const foot = el("div", "fl-assist-foot");
+    const chips = el("div", "fl-chips");
+    const SUGGESTIONS = [
+      "Find a tight chorus around the loud part",
+      "Track the guitarist across this shot",
+      "Frame the singer at the current moment",
+      "Set In/Out to the cleanest 15 seconds",
+    ];
+    for (const s of SUGGESTIONS) {
+      const chip = button(s, "fl-chip", () => {
+        textarea.value = s;
+        textarea.focus();
+        syncSend();
+      });
+      chips.append(chip);
+    }
+    const composer = el("div", "fl-composer");
+    const textarea = document.createElement("textarea");
+    textarea.rows = 1;
+    textarea.placeholder = "Ask the assistant to find a moment or frame a subject…";
+    const send = button("", "fl-send", () => void sendTurn()) as HTMLButtonElement;
+    send.innerHTML = ICON_SEND;
+    send.disabled = true;
+    send.title = "Send (Enter)";
+    composer.append(textarea, send);
+
+    const syncSend = () => {
+      send.disabled = textarea.value.trim().length === 0;
+    };
+    textarea.addEventListener("input", syncSend);
+    textarea.addEventListener("keydown", (e) => {
+      // Enter sends; Shift+Enter inserts a newline.
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        if (!send.disabled) void sendTurn();
+      }
+    });
+
+    foot.append(chips, composer);
+    root.append(head, log, foot);
+    return { el: root, log, textarea, send };
+  }
+
+  /** Show the assistant rail (hides the inspector so the viewer stays full-width). */
+  function openAssistant(): void {
+    assistantOpen = true;
+    inspector.style.display = "none";
+    dock.el.style.display = "";
+    assistantBtn.classList.add("on");
+    if (dock.log.childElementCount === 0) greetAssistant();
+    dock.textarea.focus();
+  }
+
+  /** Hide the assistant rail; restore the inspector. */
+  function closeAssistant(): void {
+    assistantOpen = false;
+    dock.el.style.display = "none";
+    inspector.style.display = "";
+    assistantBtn.classList.remove("on");
+  }
+
+  function toggleAssistant(): void {
+    if (assistantOpen) closeAssistant();
+    else openAssistant();
+  }
+
+  /** Seed the log with a one-time greeting (the first time the dock opens). */
+  function greetAssistant(): void {
+    appendBubble(
+      "ai",
+      "Tell me the moment or subject you want and I'll propose the cut and framing. " +
+        "I read sampled stills + your project state (scene cuts, loudness swells) — never audio — " +
+        "and every proposal previews before it changes anything.",
+    );
+  }
+
+  /** Append a chat bubble (`.fl-msg` + `.fl-bubble`) to the log and scroll to it. */
+  function appendBubble(who: "user" | "ai", text: string, warn?: string): HTMLElement {
+    const msg = el("div", `fl-msg ${who}`);
+    const label = el("div", "who");
+    label.textContent = who === "user" ? "you" : "assistant";
+    const bubble = el("div", "fl-bubble");
+    bubble.textContent = text;
+    if (warn) {
+      const w = el("span", "warn");
+      w.textContent = warn;
+      bubble.append(w);
+    }
+    msg.append(label, bubble);
+    dock.log.append(msg);
+    dock.log.scrollTop = dock.log.scrollHeight;
+    return msg;
+  }
+
+  /** A transient "thinking…" bubble; returns a disposer that removes it. */
+  function appendThinking(): () => void {
+    const msg = el("div", "fl-msg ai");
+    const bubble = el("div", "fl-bubble");
+    const think = el("div", "fl-think");
+    think.innerHTML = "<i></i><i></i><i></i>";
+    bubble.append(think);
+    msg.append(bubble);
+    dock.log.append(msg);
+    dock.log.scrollTop = dock.log.scrollHeight;
+    return () => msg.remove();
+  }
+
+  /**
+   * Assemble the per-turn `AssistantContext` from live editor state: the working
+   * region (post content-crop), In/Out + duration, detected scene cuts, suggested
+   * swells, the resolved models, and the BYOK key (read fresh from the keychain).
+   * `source` lets the vision runner extract frames. Returns null with a friendly
+   * message when there is no source or no key.
+   */
+  async function buildAssistantContext(): Promise<
+    | { ok: true; ctx: Parameters<ReturnType<typeof createAssistant>["turn"]>[0]["context"] }
+    | { ok: false; reason: string }
+  > {
+    if (!state.source || !state.dims) {
+      return { ok: false, reason: "Load a source first, then I can read its frames and propose framing." };
+    }
+    // Read the key fresh so a key entered in Settings this session is honored.
+    try {
+      apiKey = (await platform.getSecret(GEMINI_API_KEY_SECRET)) ?? apiKey;
+    } catch {
+      /* keychain unavailable — fall back to the init-hydrated value. */
+    }
+    if (!apiKey.trim()) {
+      return {
+        ok: false,
+        reason:
+          "I need a Gemini API key to read frames. Add one in Settings → AI & models (it's stored in your OS keychain, never in project files), then ask me again.",
+      };
+    }
+    const region = currentRegion();
+    const models = resolveModels({
+      assistantModel: { provider: "gemini", model: "gemini-2.5-flash" },
+    });
+    const ctx = {
+      region: { width: region.width, height: region.height },
+      source: state.source,
+      models,
+      apiKey: apiKey.trim(),
+      ...(state.inPoint != null ? { inSec: state.inPoint } : {}),
+      ...(state.outPoint != null ? { outSec: state.outPoint } : {}),
+      ...(state.duration > 0 ? { duration: state.duration } : {}),
+      ...(state.sceneCuts.length ? { sceneCuts: state.sceneCuts.slice() } : {}),
+      ...(state.swells.length
+        ? { swells: state.swells.map((s) => ({ t: s.t, label: s.label })) }
+        : {}),
+    };
+    return { ok: true, ctx };
+  }
+
+  /** Run one assistant turn end-to-end: assemble context → call the model → render. */
+  async function sendTurn(): Promise<void> {
+    const message = dock.textarea.value.trim();
+    if (!message) return;
+    dock.textarea.value = "";
+    dock.send.disabled = true;
+    appendBubble("user", message);
+    assistantHistory.push({ role: "user", text: message });
+
+    const built = await buildAssistantContext();
+    if (!built.ok) {
+      appendBubble("ai", built.reason);
+      assistantHistory.push({ role: "assistant", text: built.reason });
+      return;
+    }
+
+    const dispose = appendThinking();
+    try {
+      const assistant = createAssistant({
+        selection: { assistantModel: { provider: "gemini", model: "gemini-2.5-flash" } },
+        platform,
+      });
+      const reply: AssistantReply = await assistant.turn({
+        message,
+        context: built.ctx,
+        history: assistantHistory.slice(0, -1), // exclude the just-pushed user line
+      });
+      dispose();
+      renderReply(reply);
+      assistantHistory.push({ role: "assistant", text: reply.text });
+    } catch (err) {
+      dispose();
+      const m = `Sorry — that turn failed: ${errMsg(err)}`;
+      appendBubble("ai", m);
+      assistantHistory.push({ role: "assistant", text: m });
+    }
+  }
+
+  /** Render one reply: prose bubble + grounding chips + proposal cards + action bar. */
+  function renderReply(reply: AssistantReply): void {
+    const msg = appendBubble("ai", reply.text, reply.warn);
+    const bubble = msg.querySelector(".fl-bubble");
+    if (bubble && reply.grounding.length) bubble.append(groundingRow(reply.grounding));
+
+    pendingActions = reply.actions.slice();
+    stepIndex = 0;
+    if (pendingActions.length) dock.log.append(proposalCard(pendingActions));
+    dock.log.scrollTop = dock.log.scrollHeight;
+  }
+
+  /** "grounded in …" chip row citing the real signals (never audio). */
+  function groundingRow(grounding: Grounding[]): HTMLElement {
+    const row = el("div", "fl-ground");
+    const lab = el("span", "gl");
+    lab.textContent = "grounded in";
+    row.append(lab);
+    for (const g of grounding) {
+      const chip = el("span", "gchip");
+      chip.textContent = g.detail ?? `${g.kind} @ ${fmtClock(g.t, true)}`;
+      row.append(chip);
+    }
+    return row;
+  }
+
+  /**
+   * The proposed-action card: a mono list of `→ fn detail` rows plus an
+   * Accept all · Step · Discard bar. Accept applies every commit through the
+   * editor's existing mutations; Step applies one at a time; Discard clears the
+   * proposals (state untouched). Rows mark `.active` / `.done` / `.skip`.
+   */
+  function proposalCard(actions: ProposedAction[]): HTMLElement {
+    const card = el("div", "fl-prop");
+    const h = el("div", "fl-prop-h");
+    h.append(document.createTextNode("Proposed"));
+    const n = el("span", "n");
+    n.textContent = `${actions.length} action${actions.length === 1 ? "" : "s"}`;
+    h.append(n);
+
+    const list = el("div", "fl-prop-list");
+    const rows: HTMLElement[] = actions.map((a) => {
+      const row = el("div", "fl-act");
+      const arrow = el("span", "arrow");
+      arrow.textContent = "→";
+      const fn = el("span", "fn");
+      fn.textContent = a.display.fn;
+      const detail = el("span", "detail");
+      detail.textContent = a.display.detail;
+      const tick = el("span", "tick");
+      tick.innerHTML = ICON_CHECK;
+      row.append(arrow, fn, detail, tick);
+      list.append(row);
+      return row;
+    });
+
+    const bar = el("div", "fl-prop-bar");
+    const acceptBtn = button("Accept all", "fl-btn primary sm");
+    const stepLab = el("span", "step");
+    const stepBtn = button("Step", "fl-btn sm");
+    const discardBtn = button("Discard", "fl-btn sm ghost");
+
+    const markActiveStep = () => {
+      rows.forEach((r, i) => r.classList.toggle("active", i === stepIndex && stepIndex < actions.length));
+      stepLab.textContent = `${Math.min(stepIndex, actions.length)}/${actions.length}`;
+    };
+
+    const finish = (note: string, kind: "" | "ok" = "ok") => {
+      bar.remove();
+      const done = el("div", "fl-applied-note");
+      if (kind === "ok") done.innerHTML = ICON_CHECK;
+      const span = el("span");
+      span.textContent = note;
+      done.append(span);
+      card.append(done);
+    };
+
+    acceptBtn.addEventListener("click", () => {
+      let staged = false;
+      let applied = 0;
+      for (let i = stepIndex; i < actions.length; i++) {
+        const a = actions[i]!;
+        const res = applyCommit(a.commit);
+        rows[i]!.classList.remove("active");
+        rows[i]!.classList.add(res.applied ? "done" : "skip");
+        if (res.applied) applied++;
+        if (res.staged) staged = true;
+      }
+      stepIndex = actions.length;
+      pendingActions = [];
+      finish(
+        staged
+          ? `Applied ${applied} — render staged. Use the Render button when you're ready.`
+          : `Applied ${applied} proposal${applied === 1 ? "" : "s"}.`,
+      );
+    });
+
+    stepBtn.addEventListener("click", () => {
+      if (stepIndex >= actions.length) return;
+      const a = actions[stepIndex]!;
+      const res = applyCommit(a.commit);
+      rows[stepIndex]!.classList.remove("active");
+      rows[stepIndex]!.classList.add(res.applied ? "done" : "skip");
+      stepIndex++;
+      markActiveStep();
+      if (stepIndex >= actions.length) {
+        pendingActions = [];
+        finish("Stepped through every proposal.");
+      }
+    });
+
+    discardBtn.addEventListener("click", () => {
+      rows.forEach((r) => r.classList.add("skip"));
+      pendingActions = [];
+      stepIndex = actions.length;
+      finish("Discarded — your state is untouched.", "");
+    });
+
+    bar.append(acceptBtn, stepLab, stepBtn, discardBtn);
+    markActiveStep();
+    card.append(h, list, bar);
+    return card;
+  }
+
+  /**
+   * Apply ONE accepted commit through the editor's existing state mutations.
+   * Returns whether it actually changed state (`applied`) and whether it merely
+   * STAGED a render (`staged` — never auto-renders). Anything that can't be
+   * cleanly applied is reported back so the row reads as skipped.
+   */
+  function applyCommit(commit: CommitOp): { applied: boolean; staged: boolean } {
+    switch (commit.kind) {
+      case "setInOut": {
+        state.inPoint = round3(clamp(commit.inSec, 0, state.duration || commit.inSec));
+        state.outPoint = round3(clamp(commit.outSec, state.inPoint, state.duration || commit.outSec));
+        refreshIO();
+        void setT(state.inPoint, true);
+        return { applied: true, staged: false };
+      }
+      case "trim": {
+        if (state.inPoint == null) return { applied: false, staged: false };
+        state.outPoint = round3(clamp(commit.outSec, state.inPoint, state.duration || commit.outSec));
+        refreshIO();
+        return { applied: true, staged: false };
+      }
+      case "setContentCrop": {
+        // content-crop UI is currently inert in the editor; round-trip the spec
+        // string through the manifest restorer so the box + mode are consistent.
+        const r = specToEditorState(
+          { source_file: state.source, in_point: "0", out_point: "0", content_crop: commit.contentCrop },
+          state.dims!,
+        );
+        state.contentBox = r.contentBox;
+        state.contentMode = r.contentMode;
+        refreshContentReadout();
+        refreshCropReadout();
+        drawOverlay();
+        return { applied: true, staged: false };
+      }
+      case "detectScenes": {
+        void doScenes();
+        return { applied: true, staged: false };
+      }
+      case "addCropKeyframe": {
+        if (state.inPoint == null) return { applied: false, staged: false };
+        // The commit's x is in working-region px; an integer x-pixel offset is a
+        // valid `crop_offset` form (clamped into frame by the engine), so store it
+        // straight as the keyframe offset.
+        state.keyframes.push({ t: round3(commit.t), offset: String(Math.round(commit.x)) });
+        refreshKeyframes();
+        return { applied: true, staged: false };
+      }
+      case "suggestCropForFrame": {
+        // A single-frame framing suggestion → set the crop box from the proposed
+        // offset (overwrites the manual box). The cropPath, if any, still wins at
+        // render, so clear it so this fixed offset is what the user sees.
+        state.cropPath = null;
+        const r = specToEditorState(
+          { source_file: state.source, in_point: "0", out_point: "0", crop_offset: commit.cropOffset },
+          state.dims!,
+        );
+        state.cropBox = r.cropBox;
+        refreshCropReadout();
+        drawOverlay();
+        refreshIO();
+        return { applied: true, staged: false };
+      }
+      case "trackSubject": {
+        // Same engine as the Track-subject tab: adopt the eased crop path.
+        state.cropPath = commit.cropPath.map((k) => ({ t: k.t, x: k.x }));
+        trackStatus.textContent = `track: ON · ${state.cropPath.length} keyframe(s) (from the assistant). Clear track to revert.`;
+        drawOverlay();
+        refreshIO();
+        return { applied: true, staged: false };
+      }
+      case "render": {
+        // STAGE only — never auto-fire. Surface a hint; the manual Render button
+        // owns the encode.
+        setOutput(
+          "Assistant staged the queue for render. Press Render when you're ready — I never encode automatically.",
+        );
+        return { applied: true, staged: true };
+      }
+      default: {
+        // Exhaustiveness guard — a new CommitOp kind lands here until wired.
+        const _never: never = commit;
+        void _never;
+        return { applied: false, staged: false };
+      }
+    }
+  }
+
   function addClip(): void {
     clipErr.textContent = "";
     if (!state.source || !state.dims) return flashErr("Load a source first.");
@@ -2848,3 +3338,10 @@ const ICON_NEXT_CUT =
 const PLAY_GLYPH = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7z"/></svg>';
 const PAUSE_GLYPH =
   '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
+// Spark (assistant), send (composer), check (proposal tick).
+const ICON_SPARK =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>';
+const ICON_SEND =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M12 5l7 7-7 7"/></svg>';
+const ICON_CHECK =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-9"/></svg>';
