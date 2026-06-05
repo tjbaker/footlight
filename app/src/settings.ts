@@ -2,19 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * Settings modal. Holds global, app-wide configuration — currently the BYOK
- * Gemini API key used by Auto-track. The key is persisted in the shared
- * auto-track settings (localStorage); we load-modify-save so we never clobber
- * the per-run fields (subject hint, interval, mock) the editor owns.
+ * Gemini API key used by Auto-track. The key is persisted in the OS keychain via
+ * the platform `secretStore` (a DEV-ONLY localStorage shim on the web build),
+ * NOT in the `footlight.autotrack` localStorage blob — so it never lands in a
+ * config/session file. We hydrate the field asynchronously and write on edit.
  */
 
 import { messages } from "./i18n/index.js";
-import { loadAutoTrackSettings, saveAutoTrackSettings } from "./autotrack.js";
+import { GEMINI_API_KEY_SECRET } from "./autotrack.js";
+import { platform } from "./platform/index.js";
 
-/** Persist just the API key, preserving every other stored auto-track field. */
-function saveApiKey(key: string): void {
-  const current = loadAutoTrackSettings();
-  current.apiKey = key;
-  saveAutoTrackSettings(current);
+/**
+ * Persist (or clear) the API key in the keychain. An empty value deletes the
+ * secret rather than storing a blank, so "no key" reads back as absent.
+ */
+async function saveApiKey(key: string): Promise<void> {
+  try {
+    if (key) await platform.setSecret(GEMINI_API_KEY_SECRET, key);
+    else await platform.deleteSecret(GEMINI_API_KEY_SECRET);
+  } catch {
+    /* keychain unavailable (locked, denied, etc.) — non-fatal for the modal. */
+  }
 }
 
 /** Show the Settings modal. */
@@ -41,8 +49,14 @@ export function openSettings(): void {
   keyInput.type = "password";
   keyInput.placeholder = s.apiKeyPlaceholder;
   keyInput.classList.add("grow");
-  keyInput.value = loadAutoTrackSettings().apiKey;
-  keyInput.addEventListener("input", () => saveApiKey(keyInput.value.trim()));
+  // Hydrate the current key from the keychain (async); leave blank if absent.
+  void platform
+    .getSecret(GEMINI_API_KEY_SECRET)
+    .then((v) => {
+      keyInput.value = v ?? "";
+    })
+    .catch(() => undefined);
+  keyInput.addEventListener("input", () => void saveApiKey(keyInput.value.trim()));
   row.append(label, keyInput);
 
   const hint = document.createElement("div");
@@ -58,7 +72,7 @@ export function openSettings(): void {
   document.body.append(backdrop);
 
   const dismiss = () => {
-    saveApiKey(keyInput.value.trim());
+    void saveApiKey(keyInput.value.trim());
     backdrop.remove();
     document.removeEventListener("keydown", onKey);
   };
