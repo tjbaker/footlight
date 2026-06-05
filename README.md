@@ -138,7 +138,8 @@ In-app **Help → User Guide** documents all of this.
 ```bash
 # Render every clip described in a manifest (CSV or JSON).
 footlight render manifest.csv|.json [--outdir clips] [--crf 19] [--preset medium] \
-                                    [--audio-bitrate copy] [--dry-run]
+                                    [--audio-bitrate copy] [--dry-run] \
+                                    [--burn-captions [--caption-font <path|name>]]
 
 # Inspect a source: dimensions + a cropdetect suggestion (black bars only).
 footlight probe <source>
@@ -156,6 +157,8 @@ footlight scenes <source>
 | `--preset` | `medium` | x264 speed/efficiency preset |
 | `--audio-bitrate` | `copy` | `copy` passes the source audio through losslessly (no re-encode, no resample); pass an AAC bitrate like `256k` only to force a re-encode |
 | `--dry-run` | off | print the `ffmpeg` commands without running them |
+| `--burn-captions` | off | burn each clip's `hook` / `title` into the video (clips export clean by default — see [Captions](#captions-optional)) |
+| `--caption-font` | system sans | caption font: a `.ttf` / `.otf` file path **or** a fontconfig family name (only with `--burn-captions`) |
 
 `probe` reports the source's dimensions and a `cropdetect` content-region
 suggestion. `scenes` reports detected cut timestamps you can use as switch points
@@ -173,10 +176,13 @@ The manifest is the source of truth: **one row per clip.**
 | `crop_offset` | defaults `center` | horizontal framing: `left` / `center` / `right`, an integer x-pixel offset (from the left edge, clamped into frame), **or** a time-keyed schedule like `0=center; 14.5=440` |
 | `content_crop` | optional | `W:H:X:Y` region cropped *first* to strip letterbox/pillarbox bars; crop offsets then become relative to it |
 | `out_name` | optional | output filename; auto-generated from source + timestamps if blank |
+| `hook` | optional | caption: the big headline line (see [Captions](#captions-optional)) |
+| `title` | optional | caption: the secondary line below the hook |
+| `text_position` | defaults `bottom` | caption placement: `top` / `center` / `bottom` |
 
-The fields **`hook`**, **`title`**, and **`text_position`** are *reserved* for a
-planned, optional caption-burn-in feature and are **not yet implemented** — they
-are ignored by the current engine.
+The `hook` / `title` / `text_position` fields carry your caption shot-list with the
+manifest. Clips export **clean by default** — these are only burned in when you pass
+`--burn-captions`. See **[Captions](#captions-optional)**.
 
 **JSON manifests.** Pass a `.json` array of the same clip objects instead of a CSV
 to use two fields CSV can't express: **`cropWindow`** (an explicit 9:16
@@ -199,6 +205,51 @@ with heavy continuous movement *within a single shot*, Footlight's optional
 **auto-track** (AI, opt-in, BYOK) builds a smooth eased crop path that follows the
 subject — a reviewable suggestion you edit before rendering (see
 [SPEC.md](SPEC.md) §6.9).
+
+## Captions (optional)
+
+Clips export **clean — no burned-in text — by default.** Captions are **opt-in**.
+
+The intent is to keep your headline text *native*: typed into Reels / TikTok /
+Shorts where each platform renders it, so it stays editable and dodges the ranking
+penalty those platforms apply to non-native, baked-in text. Burn captions only when
+you specifically need them in the pixels (a download, a cross-post, a platform
+without a text tool).
+
+You still describe captions per clip in the manifest, so the shot-list travels with
+the cut even when nothing is burned:
+
+| field | meaning |
+|-------|---------|
+| `hook` | the big headline line |
+| `title` | the secondary line, set below the hook |
+| `text_position` | `top` / `center` / `bottom` (default `bottom`) |
+
+To actually burn them into the video, add `--burn-captions` at render time:
+
+```bash
+# Clean clips (default) — manifest carries hook/title as a shot-list, nothing burned.
+footlight render manifest.csv
+
+# Burn the captions in, using the system default sans-serif.
+footlight render manifest.csv --burn-captions
+
+# Burn with your own font — a .ttf/.otf file path…
+footlight render manifest.csv --burn-captions --caption-font ./fonts/Inter-Bold.ttf
+
+# …or a fontconfig family name already installed on the system.
+footlight render manifest.csv --burn-captions --caption-font "Helvetica Neue"
+```
+
+**Bring your own font.** Footlight bundles **no** caption font — the right caption
+type is a creative choice, not a one-size-fits-all default. `--caption-font` takes
+either a `.ttf` / `.otf` **file path** or a **fontconfig family name**. With
+`--burn-captions` and no `--caption-font`, the system default sans is used, which
+requires an `ffmpeg` built **with fontconfig**.
+
+**Style.** The current defaults render `hook` above `title` as one centered block:
+white fill with a black outline, the hook at roughly `h/18` and the title at `h/26`
+of the 1080×1920 output, inset by ~12% top/bottom safe margins.
 
 ## Audio
 
