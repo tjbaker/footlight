@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.3.0](https://github.com/tjbaker/footlight/compare/footlight-v0.2.0...footlight-v0.3.0) (2026-06-05)
+
+
+### Features
+
+* **app:** AI assistant dock UI ([#34](https://github.com/tjbaker/footlight/issues/34)) ([ab7e3b2](https://github.com/tjbaker/footlight/commit/ab7e3b294ea28864d4141c81eb132cd41c89ef17))
+* **app:** canvas ghost previews for pending assistant proposals ([#37](https://github.com/tjbaker/footlight/issues/37)) ([91f800d](https://github.com/tjbaker/footlight/commit/91f800d3331141c544490c9dd7db0fad0ebb067d))
+* **app:** OS-keychain secretStore platform seam + apiKey migration helper ([#26](https://github.com/tjbaker/footlight/issues/26)) ([683b36b](https://github.com/tjbaker/footlight/commit/683b36b5e382f4d13fd839300a0dfd12aacde4a1))
+* **app:** Settings — 5-panel modal (General/Rendering/AI/Shortcuts/About) ([#35](https://github.com/tjbaker/footlight/issues/35)) ([ea2e6c5](https://github.com/tjbaker/footlight/commit/ea2e6c5bd173cdade8e47425162cbe94cf058ded))
+* **app:** store the BYOK key in the OS keychain (wire secretStore) ([#31](https://github.com/tjbaker/footlight/issues/31)) ([bbbc3e2](https://github.com/tjbaker/footlight/commit/bbbc3e2553fbe2fae6b102e0473d1c6b23fe6587)), closes [#2](https://github.com/tjbaker/footlight/issues/2)
+* **app:** thread render flags to the CLI; apply System theme at boot ([#36](https://github.com/tjbaker/footlight/issues/36)) ([d7f5ad4](https://github.com/tjbaker/footlight/commit/d7f5ad4780d9e19223b5b48fb7a6eaf89bb926a3))
+* **assistant:** GeminiAssistant model adapter (function-calling) ([#25](https://github.com/tjbaker/footlight/issues/25)) ([003fbc5](https://github.com/tjbaker/footlight/commit/003fbc53c9278f90a72e41a57da9bf16d8f18a8a))
+* **assistant:** platform seam + real VisionRunner ([#32](https://github.com/tjbaker/footlight/issues/32)) ([f6873db](https://github.com/tjbaker/footlight/commit/f6873dbfefca1434e76a72ccd8822b373bec07ef))
+* **assistant:** single-turn orchestrator + offline mock assistant ([#11](https://github.com/tjbaker/footlight/issues/11)) ([2af4838](https://github.com/tjbaker/footlight/commit/2af4838a35685bed9a1ee531d4acfd258bf6dcc9))
+* **assistant:** tool registry, contract types, and model resolver ([#10](https://github.com/tjbaker/footlight/issues/10)) ([e87bf0d](https://github.com/tjbaker/footlight/commit/e87bf0d94f785ebada3268bc1bb1b05719a7f965))
+* **make:** add `make setup-system` + OS-aware install hints in doctor ([#29](https://github.com/tjbaker/footlight/issues/29)) ([4e140aa](https://github.com/tjbaker/footlight/commit/4e140aae9bba71718496079705fd4ac990da5a20))
+* **ui:** audit style.css tokens and add the .fl-card rule (redesign A3) ([#21](https://github.com/tjbaker/footlight/issues/21)) ([c914ca9](https://github.com/tjbaker/footlight/commit/c914ca9d0dfbbb02f05d8b40e64c492d4c79bf87))
+* **ui:** port assistant + ghost styles into style.css ([#30](https://github.com/tjbaker/footlight/issues/30)) ([192da39](https://github.com/tjbaker/footlight/commit/192da391202ea01876ac761fcff9630fabb21836))
+* **ui:** rename "Track AI" tab to "Track subject" and use "queue" copy ([#9](https://github.com/tjbaker/footlight/issues/9)) ([1eabea8](https://github.com/tjbaker/footlight/commit/1eabea84fd9d24f72d70b034e2ab5abc1678a0a2))
+* wire base.md into the system prompt + append-only framing-preferences overlay ([#39](https://github.com/tjbaker/footlight/issues/39)) ([2a81d56](https://github.com/tjbaker/footlight/commit/2a81d568b318b5520bfb2a3682dcc7887eafce25))
+
+
+### Bug Fixes
+
+* **app:** AI key Test button + honest "reads stills" copy ([#38](https://github.com/tjbaker/footlight/issues/38)) ([b029b7a](https://github.com/tjbaker/footlight/commit/b029b7a65f43589eb9530d6079d7b48121e9cd57))
+
+
+### Refactors
+
+* rename studio.ts to manifest.ts (drop the "studio" codename) ([#33](https://github.com/tjbaker/footlight/issues/33)) ([589ee40](https://github.com/tjbaker/footlight/commit/589ee40f4926894bd420244b3b4b5f8f847f67ca))
+
+
+### Documentation
+
+* add an annotated editor screenshot to the README ([#27](https://github.com/tjbaker/footlight/issues/27)) ([173c0a1](https://github.com/tjbaker/footlight/commit/173c0a1004863704ca8aa6f1237f73e62d370578))
+
+
+### Build System
+
+* require Node 26 (raise engines floor + CI + types + docs) ([#28](https://github.com/tjbaker/footlight/issues/28)) ([152924e](https://github.com/tjbaker/footlight/commit/152924e3eb130d83ed51fb9315394fa3cf25eb14))
+
 ## [0.2.0](https://github.com/tjbaker/footlight/compare/footlight-v0.1.0...footlight-v0.2.0) (2026-06-05)
 
 
