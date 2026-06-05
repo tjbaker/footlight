@@ -395,6 +395,49 @@ async function saveApiKey(key: string): Promise<void> {
   }
 }
 
+/**
+ * Validate a Gemini BYOK key by making the SAME fetch-only `generateContent`
+ * call the assistant uses (header auth, no key in the URL), with a 1-token reply
+ * so it's the cheapest request that still exercises auth + the chosen model.
+ * Returns `ok` plus a short detail for the failure case. Runs entirely in the
+ * renderer — the generativelanguage endpoint is CORS-enabled for API-key use,
+ * which is also why `GeminiAssistant` can call it directly.
+ */
+async function testGeminiKey(
+  key: string,
+  model: string,
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; detail: string }> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    model,
+  )}:generateContent`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: "ping" }] }],
+        generationConfig: { maxOutputTokens: 1 },
+      }),
+      signal,
+    });
+    if (res.ok) return { ok: true, detail: "" };
+    // Surface the API's own message (e.g. "API key not valid") when present.
+    let detail = `HTTP ${res.status}`;
+    try {
+      const j = (await res.json()) as { error?: { message?: string; status?: string } };
+      if (j.error?.message) detail = j.error.message;
+      else if (j.error?.status) detail = j.error.status;
+    } catch {
+      /* non-JSON body — keep the HTTP status. */
+    }
+    return { ok: false, detail };
+  } catch (err) {
+    // Network / CORS / abort — report the message so it isn't a silent no-op.
+    return { ok: false, detail: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 // =====================================================================
 // Panels
 // =====================================================================
@@ -687,6 +730,7 @@ function buildAiPanel(): HTMLElement {
       save();
       renderModels();
       paintCost();
+      syncTestEnabled(); // Test is only meaningful for an implemented provider
     });
     provRow.append(chip);
   }
@@ -707,19 +751,51 @@ function buildAiPanel(): HTMLElement {
     .getSecret(GEMINI_API_KEY_SECRET)
     .then((v) => {
       keyInput.value = v ?? "";
+      syncTestEnabled(); // a key hydrated from the keychain enables Test
     })
     .catch(() => undefined);
-  keyInput.addEventListener("input", () => void saveApiKey(keyInput.value.trim()));
-  keyField.append(keyInput);
   const showBtn = button(s.apiKeyShow, "fl-btn sm", () => {
     const showing = keyInput.type === "text";
     keyInput.type = showing ? "password" : "text";
     showBtn.textContent = showing ? s.apiKeyShow : s.apiKeyHide;
   });
+  // Live key test: a 1-token generateContent against the selected model. Only
+  // meaningful for an implemented provider with a key present.
+  const testStatus = el("span", "fl-set-test");
+  testStatus.setAttribute("aria-live", "polite");
   const testBtn = button(s.apiKeyTest, "fl-btn sm");
-  testBtn.disabled = true; // live key-test needs backend plumbing (out of slice)
   testBtn.title = s.apiKeyTest;
-  keyRow.append(keyField, showBtn, testBtn);
+  const syncTestEnabled = (): void => {
+    testBtn.disabled =
+      !IMPLEMENTED_PROVIDERS.has(prefs.provider) || keyInput.value.trim().length === 0;
+  };
+  testBtn.addEventListener("click", () => {
+    const key = keyInput.value.trim();
+    if (!key) return;
+    testBtn.disabled = true;
+    testStatus.className = "fl-set-test";
+    testStatus.textContent = s.apiKeyTesting;
+    const model = IMPLEMENTED_PROVIDERS.has(prefs.provider) ? prefs.model : DEFAULT_AI.model;
+    void testGeminiKey(key, model).then((r) => {
+      if (r.ok) {
+        testStatus.className = "fl-set-test ok";
+        testStatus.textContent = s.apiKeyValid;
+      } else {
+        testStatus.className = "fl-set-test err";
+        testStatus.textContent = `${s.apiKeyInvalid} — ${r.detail}`;
+      }
+      syncTestEnabled();
+    });
+  });
+  keyInput.addEventListener("input", () => {
+    void saveApiKey(keyInput.value.trim());
+    testStatus.textContent = ""; // a new key invalidates the prior result
+    testStatus.className = "fl-set-test";
+    syncTestEnabled();
+  });
+  keyField.append(keyInput);
+  syncTestEnabled();
+  keyRow.append(keyField, showBtn, testBtn, testStatus);
   const keyHint = el("div", "fl-keyhint");
   keyHint.innerHTML = ICON_KEY;
   const keyHintText = document.createElement("span");

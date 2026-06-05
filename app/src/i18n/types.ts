@@ -108,6 +108,9 @@ export interface SettingsMessages {
     apiKeyShow: string;
     apiKeyHide: string;
     apiKeyTest: string;
+    apiKeyTesting: string;
+    apiKeyValid: string;
+    apiKeyInvalid: string;
     apiKeyHint: string;
     model: string;
     recommended: string;

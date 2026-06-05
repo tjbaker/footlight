@@ -500,6 +500,9 @@ pre.log { max-height: 240px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .fl-costnote .ct { font-size: 12.5px; line-height: 1.5; color: var(--text); }
 .fl-costnote .ct b { color: var(--accent-2); font-family: "JetBrains Mono", monospace; font-weight: 600; }
 .fl-set-key { display: flex; align-items: center; gap: 9px; }
+.fl-set-test { font-size: 11.5px; color: var(--muted); }
+.fl-set-test.ok { color: var(--ok); }
+.fl-set-test.err { color: var(--err); }
 .fl-keyhint { font-size: 11.5px; color: var(--faint); margin-top: 8px; display: flex; align-items: center; gap: 6px; }
 .fl-keyhint svg { width: 13px; height: 13px; flex: none; }
 
