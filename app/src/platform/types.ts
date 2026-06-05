@@ -133,4 +133,20 @@ export interface FootlightPlatform {
   loadSession(): Promise<SessionData | null>;
   /** Persist the working session. */
   saveSession(data: SessionData): Promise<void>;
+  /**
+   * Secret storage for sensitive values (the BYOK API key, SPEC follow-up). The
+   * native backend backs this with the OS keychain (macOS Keychain / Windows
+   * Credential Manager / libsecret) keyed on the app's bundle identifier; the
+   * web dev backend can't reach an OS keychain, so it falls back to a documented
+   * DEV-ONLY localStorage shim. Always go through this seam — never persist a key
+   * inline in a session/manifest/config file.
+   *
+   * `key` is a stable account name (e.g. `"apiKey"`); `getSecret` returns null
+   * when the entry is absent. These are async on BOTH backends.
+   */
+  getSecret(key: string): Promise<string | null>;
+  /** Store (or overwrite) the secret value for `key`. */
+  setSecret(key: string, value: string): Promise<void>;
+  /** Delete the secret for `key`; a no-op if it does not exist. */
+  deleteSecret(key: string): Promise<void>;
 }
