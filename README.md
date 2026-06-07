@@ -146,7 +146,9 @@ In-app **Help → User Guide** documents all of this.
 # Render every clip described in a manifest (CSV or JSON).
 footlight render manifest.csv|.json [--outdir clips] [--crf 19] [--preset medium] \
                                     [--audio-bitrate copy] [--dry-run] \
-                                    [--burn-captions [--caption-font <path|name>]]
+                                    [--burn-captions [--caption-font <path|name>] \
+                                      [--caption-color #RRGGBB] [--caption-outline-color #RRGGBB] \
+                                      [--caption-bold] [--caption-italic] [--caption-underline]]
 
 # Inspect a source: dimensions + a cropdetect suggestion (black bars only).
 footlight probe <source>
@@ -166,6 +168,11 @@ footlight scenes <source>
 | `--dry-run` | off | print the `ffmpeg` commands without running them |
 | `--burn-captions` | off | burn each clip's `hook` / `title` into the video (clips export clean by default — see [Captions](#captions-optional)) |
 | `--caption-font` | system sans | caption font: a `.ttf` / `.otf` file path **or** a fontconfig family name (only with `--burn-captions`) |
+| `--caption-color` | `#FFFFFF` | caption fill color, `#RRGGBB` (only with `--burn-captions`) |
+| `--caption-outline-color` | `#000000` | caption outline color, `#RRGGBB` (only with `--burn-captions`) |
+| `--caption-bold` | off | render captions **bold** (only with `--burn-captions`) |
+| `--caption-italic` | off | render captions *italic* (only with `--burn-captions`) |
+| `--caption-underline` | off | underline captions (only with `--burn-captions`) |
 
 `probe` reports the source's dimensions and a `cropdetect` content-region
 suggestion. `scenes` reports detected cut timestamps you can use as switch points
@@ -246,6 +253,10 @@ footlight render manifest.csv --burn-captions --caption-font ./fonts/Inter-Bold.
 
 # …or a fontconfig family name already installed on the system.
 footlight render manifest.csv --burn-captions --caption-font "Helvetica Neue"
+
+# Style the burned text — fill/outline color (#RRGGBB) and bold/italic/underline.
+footlight render manifest.csv --burn-captions \
+  --caption-color "#FFE600" --caption-outline-color "#101010" --caption-bold
 ```
 
 **Bring your own font.** Captions are bring-your-own-font and **local-first** —
@@ -268,9 +279,19 @@ with three ways to choose, all local — nothing is fetched:
   access — drop a font in the folder and it appears.
 - **Custom path…** — the escape hatch for a single one-off font file.
 
-**Style.** The current defaults render `hook` above `title` as one centered block:
-white fill with a black outline, the hook at roughly `h/18` and the title at `h/26`
-of the 1080×1920 output, inset by ~12% top/bottom safe margins.
+**Style.** Captions render `hook` above `title` as one centered block, with the hook
+at roughly `h/18` and the title at `h/26` of the 1080×1920 output, inset by ~12%
+top/bottom safe margins. The burned text (via the `libass` renderer) can be styled:
+
+- **Fill color** and **outline color** as `#RRGGBB` — `--caption-color` /
+  `--caption-outline-color`.
+- **Bold**, **italic**, **underline** — `--caption-bold` / `--caption-italic` /
+  `--caption-underline`.
+
+In the app these live under **Settings → Rendering → Captions** as a small text
+toolbar: two color inputs plus B / I / U toggles. Defaults are unchanged — white
+fill, black outline, no bold/italic/underline — so existing manifests render exactly
+as before. More styling (position, rotation, shadow) is on the roadmap.
 
 ## Audio
 
