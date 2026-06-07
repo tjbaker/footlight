@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 [package]
 name = "footlight"
-version = "0.1.0"
+version = "0.4.0"
 description = "Footlight — cut 16:9 video into 1080x1920 (9:16) vertical clips."
 authors = ["Trevor Baker"]
 license = "Apache-2.0"
