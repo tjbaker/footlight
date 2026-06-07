@@ -235,6 +235,32 @@ export const en: Messages = {
         ],
       },
       {
+        id: "captions",
+        title: "Captions (optional)",
+        blocks: [
+          {
+            kind: "p",
+            text: "Each clip can carry a hook (the big line) and a title (the second line) — your caption shot-list, which travels with the manifest. Clips export clean by default; captions are burned into the video only when burn-in is on (Settings → Rendering → Captions, or --burn-captions on the CLI).",
+          },
+          {
+            kind: "p",
+            text: "Style is per clip, set in the editor's Captions group next to the text and the live preview: font, fill and outline colour, bold / italic / underline, a drop shadow, an opaque box, rotation, and placement on a 9-zone grid.",
+          },
+          {
+            kind: "list",
+            items: [
+              "Font — choose from your installed system fonts, a custom fonts folder you set in Settings, or a one-off file path. Footlight bundles no fonts and downloads none.",
+              "Position — nine zones: top / center / bottom, optionally suffixed -left / -center / -right.",
+              "The preview is a guide; the burned result is the authority — and it cannot see colored or blurred pillarbox, so verify the pixels.",
+            ],
+          },
+          {
+            kind: "tip",
+            text: "Keep headline text native where you can — typed into Reels / TikTok / Shorts — so it stays editable and avoids the non-native-text ranking penalty. Burn captions only when you need them in the pixels (a download, a cross-post, a platform with no text tool).",
+          },
+        ],
+      },
+      {
         id: "queue",
         title: "The clip queue",
         blocks: [
@@ -247,7 +273,8 @@ export const en: Messages = {
             items: [
               "Click a card to re-open that clip for editing; drag cards to reorder.",
               "Duplicate a card for a second framing of the same moment; ✕ removes it.",
-              "Copy JSON copies the queue as a manifest you can save or feed to the CLI.",
+              "Export JSON saves the queue as a manifest you can keep or feed to the CLI (footlight render).",
+              "Clear resets the workspace — source, queue, and framing — to start fresh; export first if you want to keep the queue.",
             ],
           },
         ],
@@ -298,8 +325,9 @@ export const en: Messages = {
           {
             kind: "list",
             items: [
-              "Space play / pause · ← / → step one frame · Shift+← / → nudge ±0.1s.",
-              "I / O set In / Out · S add the clip to the queue · [ / ] jump to the previous / next cut.",
+              "Space play / pause · J / K / L shuttle reverse / pause / forward (tap J or L again to speed up) · ← / → step one frame · Shift+← / → nudge ±0.1s.",
+              "I / O set In / Out · Shift+I / O (or Q / W) jump to the In / Out point · S add the clip to the queue.",
+              "↑ / ↓ (or [ / ]) jump to the previous / next scene cut · Home / End jump to the start / end.",
               "Alt+arrows nudge the crop box · double-click the box resets framing.",
             ],
           },

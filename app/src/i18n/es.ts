@@ -235,6 +235,32 @@ export const es: Messages = {
         ],
       },
       {
+        id: "captions",
+        title: "Subtítulos (opcional)",
+        blocks: [
+          {
+            kind: "p",
+            text: "Cada clip puede llevar un gancho (la línea grande) y un título (la segunda línea) — tu lista de subtítulos, que viaja con el manifiesto. Los clips se exportan limpios de forma predeterminada; los subtítulos se incrustan en el video solo cuando la incrustación está activada (Ajustes → Renderizado → Subtítulos, o --burn-captions en la CLI).",
+          },
+          {
+            kind: "p",
+            text: "El estilo es por clip, se ajusta en el grupo de Subtítulos del editor junto al texto y la vista previa en vivo: fuente, color de relleno y de contorno, negrita / cursiva / subrayado, una sombra, una caja opaca, rotación y ubicación en una cuadrícula de 9 zonas.",
+          },
+          {
+            kind: "list",
+            items: [
+              "Fuente — elige entre tus fuentes del sistema instaladas, una carpeta de fuentes personalizada que definas en Ajustes, o una ruta de archivo puntual. Footlight no incluye ninguna fuente ni descarga ninguna.",
+              "Posición — nueve zonas: top / center / bottom, opcionalmente con el sufijo -left / -center / -right.",
+              "La vista previa es una guía; el resultado incrustado es la autoridad — y no puede ver el pillarbox de color o difuminado, así que verifica los píxeles.",
+            ],
+          },
+          {
+            kind: "tip",
+            text: "Mantén el texto del titular nativo cuando puedas — escrito directamente en Reels / TikTok / Shorts — para que siga siendo editable y evites la penalización de posicionamiento por texto no nativo. Incrusta subtítulos solo cuando los necesites en los píxeles (una descarga, una publicación cruzada, una plataforma sin herramienta de texto).",
+          },
+        ],
+      },
+      {
         id: "queue",
         title: "La cola de clips",
         blocks: [
@@ -247,7 +273,8 @@ export const es: Messages = {
             items: [
               "Haz clic en una tarjeta para reabrir ese clip y editarlo; arrastra las tarjetas para reordenarlas.",
               "Duplica una tarjeta para un segundo encuadre del mismo momento; ✕ la elimina.",
-              "Copiar JSON copia la cola como un manifiesto que puedes guardar o pasar a la CLI.",
+              "Exportar JSON guarda la cola como un manifiesto que puedes conservar o pasar a la CLI (footlight render).",
+              "Borrar restablece el espacio de trabajo — origen, cola y encuadre — para empezar de cero; exporta primero si quieres conservar la cola.",
             ],
           },
         ],
@@ -298,8 +325,9 @@ export const es: Messages = {
           {
             kind: "list",
             items: [
-              "Space reproducir / pausar · ← / → avanzar un fotograma · Shift+← / → ajustar ±0,1s.",
-              "I / O marcar In / Out · S añadir el clip a la cola · [ / ] saltar al corte anterior / siguiente.",
+              "Space reproducir / pausar · J / K / L lanzadera atrás / pausa / adelante (pulsa J o L de nuevo para acelerar) · ← / → avanzar un fotograma · Shift+← / → ajustar ±0,1s.",
+              "I / O marcar In / Out · Shift+I / O (o Q / W) saltar al punto In / Out · S añadir el clip a la cola.",
+              "↑ / ↓ (o [ / ]) saltar al corte de escena anterior / siguiente · Home / End saltar al inicio / final.",
               "Alt+flechas ajustan el recuadro de recorte · doble clic en el recuadro restablece el encuadre.",
             ],
           },
