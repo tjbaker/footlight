@@ -110,6 +110,11 @@ export interface SettingsMessages {
     captionBoldGlyph: string;
     captionItalicGlyph: string;
     captionUnderlineGlyph: string;
+    captionEffects: string;
+    captionShadow: string;
+    captionBox: string;
+    captionBoxColor: string;
+    captionRotation: string;
     fontsDir: string;
     fontsDirBrowse: string;
     fontsDirPlaceholder: string;
