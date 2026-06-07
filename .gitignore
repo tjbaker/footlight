@@ -33,3 +33,5 @@ Thumbs.db
 
 # Claude Code local (machine-specific) settings
 .claude/settings.local.json
+# Claude Code agent worktrees (transient; never commit — they are embedded git repos)
+.claude/worktrees/
