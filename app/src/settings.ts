@@ -307,59 +307,8 @@ const ICON_INFO =
 const ICON_LINK =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1.5-1.5"/></svg>';
 
-// ---- shortcuts data (mirrors shortcuts.ts groups; read-only here) ----
-
-interface ScRow {
-  keys: string[];
-  desc: string;
-}
-interface ScGroup {
-  title: string;
-  rows: ScRow[];
-}
-const SHORTCUT_GROUPS: ScGroup[] = [
-  {
-    title: "Playback",
-    rows: [
-      { keys: ["Space"], desc: "Play / pause" },
-      { keys: ["←", "→"], desc: "Step 1 frame back / forward" },
-      { keys: ["Shift", "←"], desc: "Nudge time −0.1s" },
-      { keys: ["Shift", "→"], desc: "Nudge time +0.1s" },
-    ],
-  },
-  {
-    title: "Marking",
-    rows: [
-      { keys: ["I"], desc: "Set In at the playhead" },
-      { keys: ["O"], desc: "Set Out at the playhead" },
-      { keys: ["S"], desc: "Add the current clip to the queue" },
-    ],
-  },
-  {
-    title: "Navigation",
-    rows: [
-      { keys: ["["], desc: "Jump to previous scene cut" },
-      { keys: ["]"], desc: "Jump to next scene cut" },
-    ],
-  },
-  {
-    title: "Framing",
-    rows: [
-      { keys: ["Alt", "←"], desc: "Nudge the crop left" },
-      { keys: ["Alt", "→"], desc: "Nudge the crop right" },
-      { keys: ["Alt", "↑"], desc: "Nudge the crop up (punch-in)" },
-      { keys: ["Alt", "↓"], desc: "Nudge the crop down (punch-in)" },
-      { keys: ["Double-click"], desc: "Reset framing to full-height 9:16" },
-    ],
-  },
-  {
-    title: "Help",
-    rows: [
-      { keys: ["?"], desc: "Show this shortcuts overlay" },
-      { keys: ["Esc"], desc: "Close any dialog" },
-    ],
-  },
-];
+// Shortcut bindings are single-sourced in the i18n catalog (messages.shortcuts),
+// shared with the Help overlay (shortcuts.ts) — see buildShortcutsPanel.
 
 // ---- AI model catalog (illustrative pricing; wire to real pricing later) ----
 
@@ -1054,10 +1003,10 @@ function buildShortcutsPanel(): HTMLElement {
   const s = messages.settings.shortcuts;
   const root = el("div");
   root.append(panelHeader(s.title, s.subtitle));
-  for (const group of SHORTCUT_GROUPS) {
+  for (const group of messages.shortcuts.groups) {
     const b = block(group.title);
     const list = el("div", "fl-sc-list");
-    for (const r of group.rows) {
+    for (const r of group.items) {
       const row = el("div", "fl-sc-row");
       const desc = el("span", "fl-sc-desc");
       desc.textContent = r.desc;

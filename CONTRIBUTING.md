@@ -83,6 +83,21 @@ chore(deps): bump vitest
 - On merge to `main`, release-please opens/updates a release PR that bumps the
   version and updates `CHANGELOG.md`; merging that PR tags the release.
 
+### Merging — squash only
+
+PRs are **squash-merged** (merge commits and rebase merging are disabled on the
+repo). This keeps `main` at one commit per PR, which is what release-please reads:
+one PR → one conventional commit → one clean changelog entry. Merge commits and
+stacked branches duplicated entries, so the squash policy is deliberate.
+
+- The squash commit message defaults to the **PR title**, so the **PR title must
+  be a valid Conventional Commit** (`type(scope): summary`) — that line is what
+  ships in the changelog.
+- The release PR (release-please's own) is squash-merged too.
+- Trade-off: the squash commit on `main` is **GitHub-verified** (signed by
+  GitHub's web-flow key), not your personal key. Sign your branch commits as
+  usual; the per-commit signatures live on the PR record.
+
 ## A couple of promises
 
 - **No telemetry.** Footlight does not phone home; if usage stats are ever added
