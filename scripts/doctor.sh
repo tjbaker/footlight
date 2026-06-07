@@ -2,7 +2,7 @@
 # Footlight preflight: verify the external tools Footlight shells out to.
 #
 #   Required : node 26+, ffmpeg, ffprobe
-#   Optional : yt-dlp (source downloads), cargo (native desktop build)
+#   Optional : cargo (native desktop build)
 #
 # Footlight does NOT bundle these — it invokes whatever is on your PATH. For each
 # missing tool it prints the install command for your platform (Homebrew / apt /
@@ -44,16 +44,6 @@ hint() {
     node)
       if [ "$PM" = brew ]; then echo "brew install node  (or nvm/fnm for v26+)"
       else echo "https://nodejs.org (v26+), or a version manager (nvm/fnm)"; fi ;;
-    yt-dlp)
-      case "$PM" in
-        brew)   echo "brew install yt-dlp" ;;
-        apt)    echo "sudo apt install yt-dlp  (or: pipx install yt-dlp)" ;;
-        dnf)    echo "sudo dnf install yt-dlp" ;;
-        pacman) echo "sudo pacman -S yt-dlp" ;;
-        zypper) echo "sudo zypper install yt-dlp" ;;
-        winget) echo "winget install yt-dlp.yt-dlp" ;;
-        *)      echo "pipx install yt-dlp — https://github.com/yt-dlp/yt-dlp" ;;
-      esac ;;
     cargo) echo "https://rustup.rs" ;;
   esac
 }
@@ -108,13 +98,12 @@ if found ffmpeg; then
 fi
 
 echo "Optional:"
-opt yt-dlp "source downloads"
 opt cargo  "native desktop build"
 
 hr
 if [ "$fail" -ne 0 ]; then
   echo "Result: required tools missing above. Install them, then re-run \`make doctor\`."
-  [ "$PM" = brew ] && echo "        On macOS: \`make setup-system\` installs ffmpeg + yt-dlp via Homebrew."
+  [ "$PM" = brew ] && echo "        On macOS: \`make setup-system\` installs ffmpeg via Homebrew."
   exit 1
 fi
 echo "Result: all required tools present."

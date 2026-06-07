@@ -26,8 +26,8 @@ if ! command -v brew >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Installing system tools via Homebrew: ffmpeg (required) + yt-dlp (optional)…"
-brew install ffmpeg yt-dlp
+echo "Installing system tools via Homebrew: ffmpeg (required)…"
+brew install ffmpeg
 
 echo
 echo "Not installed here (manage these yourself):"

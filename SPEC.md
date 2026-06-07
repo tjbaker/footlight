@@ -160,9 +160,8 @@ a deliberate differentiator from cloud auto-clippers that upload source video.
 ## 6. Functional requirements
 
 ### 6.1 Source acquisition
-- Import local files, or download via **`yt-dlp`** (optional, detected on `PATH`)
-  given a URL. Default download format prioritizes the best available **video**;
-  audio is handled per §6.4.
+- Import local files (a path to a video already on disk). Acquiring the source is
+  **out of scope** — Footlight cuts/crops footage you already have.
 - Sources land in a `downloads/` (or user-chosen) directory; rendered clips in
   `clips/` (configurable per project).
 - Pre-screen helper: run `cropdetect` on a source and surface the suggested

@@ -32,7 +32,7 @@ The repo is two npm packages: the root render engine + `footlight` CLI, and the
 `app/` desktop GUI. Most workflows run through `make` (`make help` for the list):
 
 ```bash
-make setup-system  # (macOS) install ffmpeg + yt-dlp via Homebrew
+make setup-system  # (macOS) install ffmpeg via Homebrew
 make setup         # install both packages (root engine + app/)
 make doctor        # verify Node 26+, ffmpeg, ffprobe are on your PATH
 make test          # run the engine test suite (vitest)

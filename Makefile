@@ -10,7 +10,7 @@
 # ---------------------------------------------------------------------------
 
 .PHONY: doctor
-doctor: ## Check required tools (node 26+, ffmpeg, ffprobe) + optional (yt-dlp, cargo)
+doctor: ## Check required tools (node 26+, ffmpeg, ffprobe) + optional (cargo)
 	@bash scripts/doctor.sh
 
 .PHONY: setup
@@ -18,7 +18,7 @@ setup: install app-install ## Install all dependencies (root engine + GUI)
 	@echo "Setup complete. Run 'make doctor' to verify ffmpeg/node, then 'make gui'."
 
 .PHONY: setup-system
-setup-system: ## Install system tools (macOS/brew: ffmpeg, yt-dlp). Other OSes: see `make doctor`.
+setup-system: ## Install system tools (macOS/brew: ffmpeg). Other OSes: see `make doctor`.
 	@bash scripts/setup-system.sh
 
 # ---------------------------------------------------------------------------
