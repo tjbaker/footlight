@@ -18,6 +18,7 @@ import type {
   HistoryEntry,
   SessionData,
   RenderOptions,
+  OutdirCheck,
 } from "./types.js";
 
 const BASE = "http://localhost:8787";
@@ -105,6 +106,22 @@ export const webPlatform: FootlightPlatform = {
     });
     const data = (await res.json()) as { ok: boolean; log: string };
     return data;
+  },
+
+  // The web/dev build writes into the repo-relative `clips` folder (the dev
+  // server resolves it against the project root); no home-dir resolution.
+  async defaultOutdir(): Promise<string> {
+    return "clips";
+  },
+
+  async checkOutdir(dir: string): Promise<OutdirCheck> {
+    const url = `${BASE}/check-outdir?outdir=${encodeURIComponent(dir || "")}`;
+    try {
+      const res = await fetch(url);
+      return (await res.json()) as OutdirCheck;
+    } catch {
+      return { ok: false, resolved: dir, error: "the dev backend is not reachable" };
+    }
   },
 
   async openExternal(url: string): Promise<void> {

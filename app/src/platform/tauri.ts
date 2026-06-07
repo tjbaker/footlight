@@ -21,6 +21,7 @@ import type {
   HistoryEntry,
   SessionData,
   RenderOptions,
+  OutdirCheck,
 } from "./types.js";
 
 async function invoke<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
@@ -83,6 +84,17 @@ export const tauriPlatform: FootlightPlatform = {
       captionBoxColor: opts?.captionBoxColor ?? null,
       captionAngle: opts?.captionAngle ?? null,
     });
+  },
+
+  // The native default resolves a `footlight` folder in ~/Movies (the macOS video
+  // folder) via Tauri's path API; the Rust side falls back to `clips` if it can't
+  // be found.
+  async defaultOutdir(): Promise<string> {
+    return invoke<string>("default_outdir", {});
+  },
+
+  async checkOutdir(dir: string): Promise<OutdirCheck> {
+    return invoke<OutdirCheck>("check_outdir", { outdir: dir || null });
   },
 
   async openExternal(url: string): Promise<void> {
