@@ -99,6 +99,12 @@ export interface SettingsMessages {
     captionFontPlaceholder: string;
     captionFontHint: string;
     captionStyleNote: string;
+    fontsDir: string;
+    fontsDirBrowse: string;
+    fontsDirPlaceholder: string;
+    fontsDirHint: string;
+    captionFontGroupYours: string;
+    captionFontGroupSystem: string;
   };
 
   ai: {
