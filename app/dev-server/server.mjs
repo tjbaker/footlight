@@ -279,6 +279,10 @@ async function handleRender(body, opts, res) {
   if (opts.captionBold) args.push("--caption-bold");
   if (opts.captionItalic) args.push("--caption-italic");
   if (opts.captionUnderline) args.push("--caption-underline");
+  if (opts.captionShadow) args.push("--caption-shadow");
+  if (opts.captionBox) args.push("--caption-box");
+  if (opts.captionBoxColor) args.push("--caption-box-color", opts.captionBoxColor);
+  if (opts.captionAngle != null) args.push("--caption-angle", String(opts.captionAngle));
   args.push("--outdir", outDir);
   const result = await run("node", args);
   const log = `$ node ${args.join(" ")}\n\n${result.stdout}${result.stderr}`;
@@ -491,6 +495,10 @@ const server = createServer(async (req, res) => {
         captionBold: url.searchParams.get("captionBold") === "1",
         captionItalic: url.searchParams.get("captionItalic") === "1",
         captionUnderline: url.searchParams.get("captionUnderline") === "1",
+        captionShadow: url.searchParams.get("captionShadow") === "1",
+        captionBox: url.searchParams.get("captionBox") === "1",
+        captionBoxColor: url.searchParams.get("captionBoxColor") || undefined,
+        captionAngle: url.searchParams.get("captionAngle") || undefined,
       };
       return await handleRender(body, opts, res);
     }
