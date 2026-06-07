@@ -845,7 +845,7 @@ export function mountEditor(root: HTMLElement): void {
   const loadedFolderFaces = new Set<string>();
   const loadFolderFontFace = (family: string, path: string): void => {
     if (platformName !== "tauri") return; // no cross-backend local-file URL on web
-    const key = `${family} ${path}`;
+    const key = `${family}\u0000${path}`;
     if (loadedFolderFaces.has(key)) return;
     loadedFolderFaces.add(key);
     void (async () => {
@@ -1740,22 +1740,81 @@ export function mountEditor(root: HTMLElement): void {
       }
       case "ArrowUp":
       case "ArrowDown":
+        e.preventDefault();
         if (e.altKey) {
-          e.preventDefault();
           nudgeCrop(0, (e.key === "ArrowDown" ? 1 : -1) * CROP_NUDGE_PX);
+        } else {
+          // NLE convention: ↑/↓ jump to the previous/next scene cut (alias of [ / ]).
+          jumpCut(e.key === "ArrowUp" ? -1 : 1);
         }
         break;
       case "i":
       case "I":
-        state.inPoint = state.t;
-        refreshIO();
-        setSelectedMarker("in");
+        // Shift+I jumps the playhead to the In point (verify it); I sets it.
+        if (e.shiftKey) {
+          if (state.inPoint != null) {
+            seek(state.inPoint);
+            setSelectedMarker("in");
+          }
+        } else {
+          state.inPoint = state.t;
+          refreshIO();
+          setSelectedMarker("in");
+        }
         break;
       case "o":
       case "O":
-        state.outPoint = state.t;
-        refreshIO();
-        setSelectedMarker("out");
+        if (e.shiftKey) {
+          if (state.outPoint != null) {
+            seek(state.outPoint);
+            setSelectedMarker("out");
+          }
+        } else {
+          state.outPoint = state.t;
+          refreshIO();
+          setSelectedMarker("out");
+        }
+        break;
+      // J/K/L shuttle (NLE convention): J reverse, K pause, L forward; tap again
+      // to speed up. Enters video mode on first press.
+      case "j":
+      case "J":
+        e.preventDefault();
+        void shuttle(-1);
+        break;
+      case "k":
+      case "K":
+        e.preventDefault();
+        setShuttle(0);
+        break;
+      case "l":
+      case "L":
+        e.preventDefault();
+        void shuttle(1);
+        break;
+      // Avid-style go-to aliases (mirror Shift+I / Shift+O).
+      case "q":
+      case "Q":
+        if (state.inPoint != null) {
+          seek(state.inPoint);
+          setSelectedMarker("in");
+        }
+        break;
+      case "w":
+      case "W":
+        if (state.outPoint != null) {
+          seek(state.outPoint);
+          setSelectedMarker("out");
+        }
+        break;
+      // Jump to the source start / end (NLE Home/End convention).
+      case "Home":
+        e.preventDefault();
+        seek(0);
+        break;
+      case "End":
+        e.preventDefault();
+        seek(state.duration);
         break;
       case "s":
       case "S":
@@ -2121,6 +2180,13 @@ export function mountEditor(root: HTMLElement): void {
   // ---- video preview (play with audio to pick In/Out by ear) ----
   let videoMode = false;
 
+  // J/K/L shuttle state: 0 stopped, >0 forward ×, <0 reverse ×. Forward uses the
+  // native playbackRate; reverse steps currentTime back on a timer (HTML <video>
+  // has no reverse playback).
+  const SHUTTLE_MAG = [1, 2, 4] as const;
+  let shuttleRate = 0;
+  let reverseTimer: number | null = null;
+
   /** Whichever media element is shown — the <video> in playback mode, else the frame img. */
   function currentMedia(): HTMLElement {
     return videoMode ? video : img;
@@ -2165,6 +2231,8 @@ export function mountEditor(root: HTMLElement): void {
 
   /** Leave video mode: pause and hide the player (the frame img takes over again). */
   function exitVideoMode(): void {
+    shuttleRate = 0;
+    stopReverseLoop();
     if (!video.paused) video.pause();
     videoMode = false;
     video.style.display = "none";
@@ -2187,6 +2255,68 @@ export function mountEditor(root: HTMLElement): void {
     if (target != null) seek(target);
   }
 
+  /** Play glyph reflects "moving" — forward OR reverse shuttle — not the raw paused flag. */
+  function reflectShuttleGlyph(): void {
+    syncPlayGlyphs(shuttleRate !== 0);
+  }
+
+  function stopReverseLoop(): void {
+    if (reverseTimer !== null) {
+      window.clearInterval(reverseTimer);
+      reverseTimer = null;
+    }
+  }
+
+  /** Apply a shuttle rate: forward via playbackRate, reverse via a step loop, 0 = pause. */
+  function setShuttle(rate: number): void {
+    shuttleRate = rate;
+    if (rate > 0) {
+      stopReverseLoop();
+      video.playbackRate = rate;
+      if (video.paused) void video.play().catch(() => undefined);
+    } else if (rate < 0) {
+      if (!video.paused) video.pause(); // no native reverse — step currentTime back
+      video.playbackRate = 1;
+      if (reverseTimer === null) {
+        reverseTimer = window.setInterval(() => {
+          const next = video.currentTime + shuttleRate / 30; // shuttleRate < 0
+          if (next <= 0) {
+            video.currentTime = 0;
+            setShuttle(0);
+            return;
+          }
+          video.currentTime = next;
+        }, 1000 / 30);
+      }
+    } else {
+      stopReverseLoop();
+      video.playbackRate = 1;
+      if (!video.paused) video.pause();
+    }
+    reflectShuttleGlyph();
+  }
+
+  /**
+   * Shuttle in `dir` (+1 forward / −1 reverse). Same direction steps up to the
+   * next speed (1→2→4); a new or opposite direction (re)starts at 1×. Enters
+   * video mode first, like `togglePlay`.
+   */
+  async function shuttle(dir: 1 | -1): Promise<void> {
+    if (!state.source || !state.dims) return;
+    try {
+      if (!videoMode) await enterVideoMode();
+    } catch (err) {
+      setOutput(errMsg(err), "err");
+      return;
+    }
+    let mag = 1;
+    if (Math.sign(shuttleRate) === dir) {
+      const i = SHUTTLE_MAG.indexOf(Math.abs(shuttleRate) as 1 | 2 | 4);
+      mag = SHUTTLE_MAG[Math.min(i + 1, SHUTTLE_MAG.length - 1)]!;
+    }
+    setShuttle(dir * mag);
+  }
+
   async function togglePlay(): Promise<void> {
     if (!state.source || !state.dims) return;
     try {
@@ -2195,12 +2325,14 @@ export function mountEditor(root: HTMLElement): void {
       setOutput(errMsg(err), "err");
       return;
     }
-    if (video.paused) await video.play().catch(() => undefined);
-    else video.pause();
+    // Moving (forward, reverse, or natively playing) → stop; else play forward.
+    if (shuttleRate !== 0 || !video.paused) setShuttle(0);
+    else setShuttle(1);
   }
 
-  video.addEventListener("play", () => syncPlayGlyphs(true));
-  video.addEventListener("pause", () => syncPlayGlyphs(false));
+  video.addEventListener("play", () => reflectShuttleGlyph());
+  video.addEventListener("pause", () => reflectShuttleGlyph());
+  video.addEventListener("ended", () => setShuttle(0));
   video.addEventListener("timeupdate", () => {
     if (!videoMode) return;
     state.t = video.currentTime;

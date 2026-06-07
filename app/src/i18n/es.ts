@@ -748,6 +748,9 @@ export const es: Messages = {
         title: "Reproducción",
         items: [
           { keys: ["Space"], desc: "Reproducir / pausar" },
+          { keys: ["J"], desc: "Retroceder (pulsa otra vez para acelerar)" },
+          { keys: ["K"], desc: "Pausar" },
+          { keys: ["L"], desc: "Avanzar (pulsa otra vez para acelerar)" },
           { keys: ["←", "→"], desc: "Avanzar 1 fotograma atrás / adelante" },
           { keys: ["Shift", "←"], desc: "Ajustar el tiempo −0,1s" },
           { keys: ["Shift", "→"], desc: "Ajustar el tiempo +0,1s" },
@@ -758,14 +761,18 @@ export const es: Messages = {
         items: [
           { keys: ["I"], desc: "Marcar In en el cabezal de reproducción" },
           { keys: ["O"], desc: "Marcar Out en el cabezal de reproducción" },
+          { keys: ["Shift", "I"], desc: "Ir al punto In (también Q)" },
+          { keys: ["Shift", "O"], desc: "Ir al punto Out (también W)" },
           { keys: ["S"], desc: "Añadir el clip actual a la cola" },
         ],
       },
       {
         title: "Navegación",
         items: [
-          { keys: ["["], desc: "Saltar al corte de escena anterior" },
-          { keys: ["]"], desc: "Saltar al corte de escena siguiente" },
+          { keys: ["["], desc: "Corte de escena anterior (también ↑)" },
+          { keys: ["]"], desc: "Corte de escena siguiente (también ↓)" },
+          { keys: ["Home"], desc: "Ir al inicio" },
+          { keys: ["End"], desc: "Ir al final" },
         ],
       },
       {

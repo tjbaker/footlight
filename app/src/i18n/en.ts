@@ -748,6 +748,9 @@ export const en: Messages = {
         title: "Playback",
         items: [
           { keys: ["Space"], desc: "Play / pause" },
+          { keys: ["J"], desc: "Shuttle backward (press again to speed up)" },
+          { keys: ["K"], desc: "Pause" },
+          { keys: ["L"], desc: "Shuttle forward (press again to speed up)" },
           { keys: ["←", "→"], desc: "Step 1 frame back / forward" },
           { keys: ["Shift", "←"], desc: "Nudge time −0.1s" },
           { keys: ["Shift", "→"], desc: "Nudge time +0.1s" },
@@ -758,14 +761,18 @@ export const en: Messages = {
         items: [
           { keys: ["I"], desc: "Set In at the playhead" },
           { keys: ["O"], desc: "Set Out at the playhead" },
+          { keys: ["Shift", "I"], desc: "Go to the In point (also Q)" },
+          { keys: ["Shift", "O"], desc: "Go to the Out point (also W)" },
           { keys: ["S"], desc: "Add the current clip to the queue" },
         ],
       },
       {
         title: "Navigation",
         items: [
-          { keys: ["["], desc: "Jump to previous scene cut" },
-          { keys: ["]"], desc: "Jump to next scene cut" },
+          { keys: ["["], desc: "Previous scene cut (also ↑)" },
+          { keys: ["]"], desc: "Next scene cut (also ↓)" },
+          { keys: ["Home"], desc: "Jump to the start" },
+          { keys: ["End"], desc: "Jump to the end" },
         ],
       },
       {

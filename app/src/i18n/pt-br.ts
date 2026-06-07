@@ -748,6 +748,9 @@ export const ptBR: Messages = {
         title: "Reprodução",
         items: [
           { keys: ["Space"], desc: "Reproduzir / pausar" },
+          { keys: ["J"], desc: "Retroceder (pressione de novo para acelerar)" },
+          { keys: ["K"], desc: "Pausar" },
+          { keys: ["L"], desc: "Avançar (pressione de novo para acelerar)" },
           { keys: ["←", "→"], desc: "Avançar 1 quadro para trás / frente" },
           { keys: ["Shift", "←"], desc: "Ajustar o tempo em −0,1s" },
           { keys: ["Shift", "→"], desc: "Ajustar o tempo em +0,1s" },
@@ -758,14 +761,18 @@ export const ptBR: Messages = {
         items: [
           { keys: ["I"], desc: "Definir Entrada no cabeçote" },
           { keys: ["O"], desc: "Definir Saída no cabeçote" },
+          { keys: ["Shift", "I"], desc: "Ir para o ponto de Entrada (também Q)" },
+          { keys: ["Shift", "O"], desc: "Ir para o ponto de Saída (também W)" },
           { keys: ["S"], desc: "Adicionar o clipe atual à fila" },
         ],
       },
       {
         title: "Navegação",
         items: [
-          { keys: ["["], desc: "Pular para o corte de cena anterior" },
-          { keys: ["]"], desc: "Pular para o próximo corte de cena" },
+          { keys: ["["], desc: "Corte de cena anterior (também ↑)" },
+          { keys: ["]"], desc: "Próximo corte de cena (também ↓)" },
+          { keys: ["Home"], desc: "Ir para o início" },
+          { keys: ["End"], desc: "Ir para o fim" },
         ],
       },
       {
