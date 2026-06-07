@@ -48,6 +48,14 @@ struct RenderResult {
     log: String,
 }
 
+#[derive(Serialize)]
+struct OutdirCheck {
+    ok: bool,
+    resolved: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
 /// Extract a single accurate frame at `t` seconds; write a temp JPEG and return
 /// its absolute path (the frontend wraps it with the Tauri asset protocol).
 /// Accuracy comes from ffmpeg INPUT-seek (`-ss` before `-i`) per displayed frame.
@@ -748,6 +756,63 @@ fn resolve_outdir(cli: &str, outdir: Option<String>) -> String {
     raw
 }
 
+/// The default render output folder for a fresh install: a `footlight` folder in
+/// `~/Movies` (the macOS video folder, the natural home for rendered clips),
+/// resolved via Tauri's path API. Falls back to the repo-relative `clips` if that
+/// dir can't be determined. Used only to seed an empty Outdir field; a path the
+/// user set always wins (issue #58).
+#[tauri::command]
+fn default_outdir(app: AppHandle) -> String {
+    app.path()
+        .video_dir()
+        .map(|d| d.join("footlight").to_string_lossy().into_owned())
+        .unwrap_or_else(|_| "clips".into())
+}
+
+/// A short, user-facing reason for a filesystem error (no raw errno/OS string).
+fn friendly_fs_error(err: &std::io::Error) -> String {
+    use std::io::ErrorKind;
+    match err.kind() {
+        ErrorKind::PermissionDenied => "permission denied".into(),
+        ErrorKind::NotFound => "the parent folder does not exist".into(),
+        _ => "it could not be created".into(),
+    }
+}
+
+/// Validate the render output folder before rendering: resolve it exactly like
+/// `render` does, create it if missing, and confirm it is writable (a write probe,
+/// since creating an already-existing read-only dir succeeds). Returns the resolved
+/// absolute path plus a friendly reason on failure, so the GUI can warn up front
+/// instead of surfacing a raw EACCES mid-render (issue #58).
+#[tauri::command]
+fn check_outdir(app: AppHandle, outdir: Option<String>) -> OutdirCheck {
+    let cli = locate_cli(&app);
+    let resolved = resolve_outdir(&cli, outdir);
+    if let Err(e) = std::fs::create_dir_all(&resolved) {
+        return OutdirCheck {
+            ok: false,
+            resolved,
+            error: Some(friendly_fs_error(&e)),
+        };
+    }
+    let probe = std::path::Path::new(&resolved).join(".footlight_write_test");
+    match std::fs::write(&probe, b"") {
+        Ok(()) => {
+            let _ = std::fs::remove_file(&probe);
+            OutdirCheck {
+                ok: true,
+                resolved,
+                error: None,
+            }
+        }
+        Err(e) => OutdirCheck {
+            ok: false,
+            resolved,
+            error: Some(friendly_fs_error(&e)),
+        },
+    }
+}
+
 /// Find the footlight CLI. Resolution order:
 ///   1. `FOOTLIGHT_CLI` env override.
 ///   2. The bundled resource at `<resourceDir>/engine/bin/footlight.js` (works
@@ -805,6 +870,8 @@ fn main() {
             loudness,
             track,
             render,
+            default_outdir,
+            check_outdir,
             load_history,
             save_history,
             load_session,

@@ -542,6 +542,19 @@ export function mountEditor(root: HTMLElement): void {
     saveOutdir(outdirInput.value);
     saveSessionSoon();
   });
+  // Seed the platform default on a fresh install (no persisted/typed choice yet):
+  // the native app fills a folder in ~/Movies; web shows `clips`. Never clobbers a
+  // value the user already has, and the placeholder reflects it either way so an
+  // empty field still shows where clips will land (issue #58).
+  void platform
+    .defaultOutdir()
+    .then((d) => {
+      if (d) outdirInput.placeholder = d;
+      if (!outdirInput.value.trim() && d) outdirInput.value = d;
+    })
+    .catch(() => {
+      /* default lookup failed — the field keeps the `clips` fallback. */
+    });
   const destField = el("div", "fl-field path");
   destField.innerHTML = `<span class="ic">${ICON_DOWN}</span>`;
   destField.append(outdirInput);
@@ -3393,11 +3406,32 @@ export function mountEditor(root: HTMLElement): void {
 
   async function doRender(): Promise<void> {
     if (!state.clips.length) return flashErr("Add at least one clip to the queue.");
+    const outdir = outdirInput.value.trim() || (await platform.defaultOutdir());
+    saveOutdir(outdir);
+    // Pre-flight the output folder so a stale/unwritable path gives a clear
+    // message HERE (and keeps the field focused) instead of a raw EACCES from the
+    // engine mid-render (issue #58).
+    try {
+      const check = await platform.checkOutdir(outdir);
+      if (!check.ok) {
+        setOutput(
+          `Can't write to ${check.resolved || outdir} — ${check.error || "pick another folder"}.`,
+          "err",
+        );
+        outdirInput.focus();
+        try {
+          outdirInput.select();
+        } catch {
+          /* not selectable — focus is enough */
+        }
+        return;
+      }
+    } catch {
+      /* checkOutdir itself failed (backend down) — let the render attempt report it. */
+    }
     const manifestJson = serializeManifestJSON(state.clips);
     setOutput("Rendering… (this runs ffmpeg per clip; may take a while)");
     try {
-      const outdir = outdirInput.value.trim() || "clips";
-      saveOutdir(outdir);
       const result = await platform.render(manifestJson, renderOptions(outdir));
       setOutput(
         result.log || (result.ok ? "OK (no output)" : "Render failed."),
@@ -3942,17 +3976,25 @@ function kfCount(spec: ClipSpec): number {
 // Persist the chosen output folder so it survives reloads (best effort).
 const OUTDIR_KEY = "footlight.outdir";
 
+/**
+ * The persisted output folder, or `""` when the user has never chosen one — the
+ * caller then seeds the platform default (native: a folder in ~/Movies) via
+ * `platform.defaultOutdir()`. (Returning `""` here, not `"clips"`, is what lets a
+ * fresh native install adopt a real home-dir folder instead of a relative path
+ * next to the app bundle — issue #58.)
+ */
 function loadOutdir(): string {
   try {
-    return localStorage.getItem(OUTDIR_KEY) || "clips";
+    return localStorage.getItem(OUTDIR_KEY) || "";
   } catch {
-    return "clips";
+    return "";
   }
 }
 
 function saveOutdir(value: string): void {
   try {
-    localStorage.setItem(OUTDIR_KEY, value.trim() || "clips");
+    const v = value.trim();
+    if (v) localStorage.setItem(OUTDIR_KEY, v);
   } catch {
     /* localStorage unavailable (private mode etc.) — non-fatal. */
   }

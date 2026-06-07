@@ -111,6 +111,16 @@ export interface TrackRequest {
   contentCrop?: string;
 }
 
+/** Result of validating/creating a render output directory (SPEC §6, issue #58). */
+export interface OutdirCheck {
+  /** True when the resolved dir exists (or was created) and is writable. */
+  ok: boolean;
+  /** The absolute path the backend resolved the input to (shown to the user). */
+  resolved: string;
+  /** A short, user-facing reason when `ok` is false (e.g. "permission denied"). */
+  error?: string;
+}
+
 /** An installed/available font the caption picker can offer. */
 export interface FontInfo {
   /** Family name — the ASS `Fontname` / CSS `font-family` value used for captions. */
@@ -160,6 +170,21 @@ export interface FootlightPlatform {
    * `opts` map 1:1 to the CLI render flags (from Settings → Rendering).
    */
   render(manifestJson: string, opts?: RenderOptions): Promise<{ ok: boolean; log: string }>;
+  /**
+   * The DEFAULT output folder for a fresh install (no persisted choice yet): the
+   * native app resolves a `footlight` folder in `~/Movies` (the macOS video
+   * folder); the web/dev backend uses the repo-relative `clips`. Used only to seed
+   * an empty Outdir field — an explicit user choice (typed or persisted) wins.
+   */
+  defaultOutdir(): Promise<string>;
+  /**
+   * Validate the render output folder BEFORE rendering: resolve `dir` the same way
+   * `render` does, create it if missing, and confirm it is writable. Returns the
+   * resolved absolute path plus a friendly reason on failure, so the UI can warn
+   * ("Can't write to …") instead of surfacing a raw `EACCES` from the engine
+   * mid-render. Both backends implement it (issue #58).
+   */
+  checkOutdir(dir: string): Promise<OutdirCheck>;
   /** Open a URL in the user's default browser. */
   openExternal(url: string): Promise<void>;
   /**

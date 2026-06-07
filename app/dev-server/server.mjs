@@ -16,14 +16,15 @@
  *   GET  /loudness?source=<path>       -> JSON number[]  (normalized 0..1 envelope)
  *   POST /track    (body = track request JSON)     -> JSON TrackSample[]
  *   POST /render   (body = manifest JSON, ?outdir=) -> JSON {ok, log}
+ *   GET  /check-outdir   (?outdir=<path>) -> JSON {ok, resolved, error?}
  *   GET  /fonts          (?dir=<path>) -> JSON FontInfo[] (fontconfig families,
  *                                         or a scanned user fonts folder)
  */
 
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { createReadStream } from "node:fs";
-import { writeFile, readFile, mkdtemp, stat, readdir } from "node:fs/promises";
+import { createReadStream, constants as fsConstants } from "node:fs";
+import { writeFile, readFile, mkdtemp, stat, readdir, mkdir, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve, isAbsolute, extname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -289,6 +290,45 @@ async function handleRender(body, opts, res) {
   sendJson(res, 200, { ok: result.code === 0, log });
 }
 
+/** A short, user-facing reason for a filesystem error (no raw errno/stack). */
+function friendlyFsError(err) {
+  switch (err?.code) {
+    case "EACCES":
+    case "EPERM":
+      return "permission denied";
+    case "EROFS":
+      return "the drive is read-only";
+    case "ENOTDIR":
+      return "part of the path is not a folder";
+    case "ENOENT":
+      return "the parent folder does not exist";
+    case "ENOSPC":
+      return "the disk is full";
+    default:
+      return "it could not be created";
+  }
+}
+
+/**
+ * GET /check-outdir — resolve `outdir` exactly like /render does (relative paths
+ * against the repo root), create it if missing, and confirm it's writable. Returns
+ * {ok, resolved, error?} so the GUI can warn before a render instead of surfacing
+ * a raw EACCES mid-run (issue #58).
+ */
+async function handleCheckOutdir(outdir, res) {
+  const resolved = isAbsolute(outdir || "clips")
+    ? outdir || "clips"
+    : resolve(REPO_ROOT, outdir || "clips");
+  try {
+    await mkdir(resolved, { recursive: true });
+    // create_dir on an EXISTING read-only dir succeeds, so probe writability too.
+    await access(resolved, fsConstants.W_OK);
+    sendJson(res, 200, { ok: true, resolved });
+  } catch (err) {
+    sendJson(res, 200, { ok: false, resolved, error: friendlyFsError(err) });
+  }
+}
+
 /** GET /history — the persisted render history; [] if missing or malformed. */
 async function handleLoadHistory(res) {
   let entries = [];
@@ -501,6 +541,10 @@ const server = createServer(async (req, res) => {
         captionAngle: url.searchParams.get("captionAngle") || undefined,
       };
       return await handleRender(body, opts, res);
+    }
+
+    if (req.method === "GET" && url.pathname === "/check-outdir") {
+      return await handleCheckOutdir(url.searchParams.get("outdir") || "", res);
     }
 
     if (req.method === "GET" && url.pathname === "/history") {
