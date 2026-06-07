@@ -180,6 +180,11 @@ footlight scenes <source>
 | `--caption-box-color` | `#000000` | box fill color, `#RRGGBB` (only with `--caption-box`) |
 | `--caption-angle` | `0` | rotate the caption by N degrees (only with `--burn-captions`) |
 
+The `--caption-*` flags are **render-wide defaults**. A JSON clip can carry its own
+[`caption` object](#captions-optional) whose fields override these per clip; the flag
+still applies to every clip that doesn't set that field. `--burn-captions` remains the
+render-wide on/off switch.
+
 `probe` reports the source's dimensions and a `cropdetect` content-region
 suggestion. `scenes` reports detected cut timestamps you can use as switch points
 in a time-keyed `crop_offset` schedule.
@@ -205,8 +210,9 @@ manifest. Clips export **clean by default** — these are only burned in when yo
 `--burn-captions`. See **[Captions](#captions-optional)**.
 
 **JSON manifests.** Pass a `.json` array of the same clip objects instead of a CSV
-to use two fields CSV can't express: **`cropWindow`** (an explicit 9:16
-punch-in/zoom window) and **`cropPath`** (an eased subject-tracking crop path).
+to use fields CSV can't express: **`cropWindow`** (an explicit 9:16
+punch-in/zoom window), **`cropPath`** (an eased subject-tracking crop path), and a
+per-clip **`caption`** style object (see [Captions](#captions-optional)).
 The GUI writes these for you; render precedence is `cropPath` → `cropWindow` →
 `crop_offset`.
 
@@ -269,6 +275,51 @@ footlight render manifest.csv --burn-captions \
   --caption-shadow --caption-box --caption-box-color "#101010" --caption-angle -4
 ```
 
+**Per-clip style (JSON manifests).** The `--caption-*` flags above set render-wide
+defaults. A JSON clip can carry its own `caption` object to style that one clip; each
+field overrides the matching flag (and the field falls back to the flag, then the
+engine default, when omitted). `--burn-captions` is still the render-wide on/off
+switch — a `caption` object only changes a clip's *style*, not whether text is burned.
+All fields are optional:
+
+```json
+{
+  "source_file": "show.mp4",
+  "in_point": "1:02:10",
+  "out_point": "1:02:38",
+  "hook": "ENCORE",
+  "title": "second set",
+  "text_position": "bottom-left",
+  "caption": {
+    "font": "Impact",
+    "color": "#FFCC00",
+    "outlineColor": "#000000",
+    "bold": true,
+    "italic": false,
+    "underline": true,
+    "shadow": true,
+    "box": true,
+    "boxColor": "#202020",
+    "angle": 12
+  }
+}
+```
+
+| field | meaning |
+|-------|---------|
+| `font` | a system family **name** *or* a `.ttf` / `.otf` / `.ttc` file **path**; resolved on its own (a path → its real family via `fc-scan`, loaded as a `libass` `fontsdir`; a name → a fontconfig family) and fully replaces the render-wide font |
+| `color` | fill color `#RRGGBB` (default white) |
+| `outlineColor` | outline color `#RRGGBB` (default black) |
+| `bold` / `italic` / `underline` | text style toggles |
+| `shadow` | drop shadow behind the text |
+| `box` | opaque box behind the text |
+| `boxColor` | box fill color `#RRGGBB` |
+| `angle` | rotation in degrees |
+
+Per-clip *style* is JSON-only. CSV manifests still carry caption **text** and
+**position** (`hook` / `title` / `text_position`) but not the `caption` object — those
+clips use the render-wide `--caption-*` defaults.
+
 **Bring your own font.** Captions are bring-your-own-font and **local-first** —
 Footlight bundles **no** caption font and never downloads one. The right caption
 type is a creative choice, not a one-size-fits-all default. `--caption-font` takes
@@ -278,37 +329,45 @@ correctly), while a name picks an installed family. With `--burn-captions` and n
 `--caption-font`, the system default sans is used, which requires an `ffmpeg` built
 **with fontconfig**.
 
-**Choosing a font in the app.** Settings → Rendering → Captions has a font picker
-with three ways to choose, all local — nothing is fetched:
+**Choosing a font in the app.** The per-clip caption controls live in the editor,
+next to the caption text and preview. Their font picker offers three ways to choose,
+all local — nothing is fetched:
 
 - **System fonts** — any font installed on your machine. Footlight enumerates them
   automatically and lists them under a *System fonts* group.
 - **Fonts folder** — point Footlight at a directory of your own `.ttf` / `.otf` /
-  `.ttc` files (Browse on the desktop app, or type the path on the browser build).
-  Those show up in a *Your fonts* group pinned to the top of the picker for quick
-  access — drop a font in the folder and it appears.
+  `.ttc` files (set once under **Settings → Rendering → Captions** — Browse on the
+  desktop app, or type the path on the browser build). Those show up in a *Your fonts*
+  group pinned to the top of every clip's picker for quick access — drop a font in the
+  folder and it appears.
 - **Custom path…** — the escape hatch for a single one-off font file.
 
 **Style.** Captions render `hook` above `title` as one block, placed at the clip's
 `text_position`, with the hook at roughly `h/18` and the title at `h/26` of the
 1080×1920 output, inset by ~12% safe margins. The burned text (via the `libass`
-renderer) can be styled:
+renderer) can be styled either per clip (the JSON `caption` object) or render-wide
+(the matching `--caption-*` flag, which the per-clip field overrides):
 
-- **Fill color** and **outline color** as `#RRGGBB` — `--caption-color` /
-  `--caption-outline-color`.
-- **Bold**, **italic**, **underline** — `--caption-bold` / `--caption-italic` /
-  `--caption-underline`.
-- **Drop shadow** behind the text — `--caption-shadow`.
-- **Opaque box** behind the text, with its own `#RRGGBB` color — `--caption-box`
-  (defaults to black) / `--caption-box-color`. A box replaces the outline.
-- **Rotation** by N degrees — `--caption-angle`.
+- **Fill color** and **outline color** as `#RRGGBB` — `caption.color` /
+  `caption.outlineColor` (flags `--caption-color` / `--caption-outline-color`).
+- **Bold**, **italic**, **underline** — `caption.bold` / `caption.italic` /
+  `caption.underline` (flags `--caption-bold` / `--caption-italic` /
+  `--caption-underline`).
+- **Drop shadow** behind the text — `caption.shadow` (flag `--caption-shadow`).
+- **Opaque box** behind the text, with its own `#RRGGBB` color — `caption.box` /
+  `caption.boxColor` (flags `--caption-box` / `--caption-box-color`, box defaults to
+  black). A box replaces the outline.
+- **Rotation** by N degrees — `caption.angle` (flag `--caption-angle`).
+- **Font** — `caption.font` (flag `--caption-font`).
 - **Position** — the per-clip `text_position` field (9 zones; see the schema above).
 
-In the app, the text styling lives under **Settings → Rendering → Captions**: two
-color inputs and B / I / U toggles, plus shadow/box toggles, a box-color input, and
-a rotation control. Position is per-clip, set in the editor's Captions group.
-Defaults are unchanged — white fill, black outline, no bold/italic/underline, no
-shadow, no box, no rotation, `bottom` center — so existing manifests render exactly
+In the app, all of this is **per-clip**, set in the editor's Captions group next to
+the caption text and preview: a font picker, two color inputs, B / I / U toggles,
+shadow/box toggles, a box-color input, a rotation control, and the position picker.
+Only the **custom fonts folder** and the **burn-captions** toggle stay under
+**Settings → Rendering → Captions** (the fonts folder feeds every clip's font
+picker). Defaults are unchanged — white fill, black outline, no bold/italic/underline,
+no shadow, no box, no rotation, `bottom` center — so existing manifests render exactly
 as before.
 
 ## Audio
