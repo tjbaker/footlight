@@ -350,6 +350,8 @@ async fn render(
     preset: Option<String>,
     audio_bitrate: Option<String>,
     dry_run: Option<bool>,
+    burn_captions: Option<bool>,
+    caption_font: Option<String>,
 ) -> Result<RenderResult, String> {
     let mut manifest_path = std::env::temp_dir();
     manifest_path.push(format!("footlight_manifest_{}.json", std::process::id()));
@@ -380,6 +382,13 @@ async fn render(
     }
     if dry_run.unwrap_or(false) {
         args.push("--dry-run".into());
+    }
+    if burn_captions == Some(true) {
+        args.push("--burn-captions".into());
+    }
+    if let Some(f) = caption_font {
+        args.push("--caption-font".into());
+        args.push(f);
     }
     args.push("--outdir".into());
     args.push(out_dir.clone());
