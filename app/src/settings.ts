@@ -165,6 +165,14 @@ interface RenderPrefs {
    * family name. Empty means the system default — fonts are NEVER bundled.
    */
   captionFont: string;
+  /** Caption fill (text) color, `#RRGGBB`. Default white. */
+  captionColor: string;
+  /** Caption outline color, `#RRGGBB`. Default black. */
+  captionOutlineColor: string;
+  /** Caption text styling — bold / italic / underline (word-processor style). */
+  captionBold: boolean;
+  captionItalic: boolean;
+  captionUnderline: boolean;
 }
 
 const DEFAULT_RENDER: RenderPrefs = {
@@ -175,6 +183,11 @@ const DEFAULT_RENDER: RenderPrefs = {
   dryRun: false,
   burnCaptions: false,
   captionFont: "",
+  captionColor: "#FFFFFF",
+  captionOutlineColor: "#000000",
+  captionBold: false,
+  captionItalic: false,
+  captionUnderline: false,
 };
 
 interface AiPrefs {
@@ -737,6 +750,96 @@ function buildRenderingPanel(): HTMLElement {
     }),
   );
 
+  // --- Caption style: a familiar word-processor text toolbar — fill/outline
+  // color (native <input type=color>) + a B/I/U toggle row. Always shown (not
+  // gated behind the burn toggle) with a subtle "applies when on" hint; binds
+  // to the captionColor / captionOutlineColor / captionBold/Italic/Underline
+  // RenderPrefs keys and persists via save().
+  const styleGroupHead = el("div", "fl-set-blockh");
+  styleGroupHead.style.marginTop = "14px";
+  const styleGroupLab = el("span", "fl-label");
+  styleGroupLab.textContent = s.captionStyle;
+  styleGroupHead.append(styleGroupLab);
+
+  // A labeled native color input bound to a RenderPrefs string key.
+  const colorRow = (label: string, value: string, onPick: (v: string) => void): HTMLElement => {
+    const field = el("div", "fl-field");
+    field.style.cssText = "flex:1; gap:9px; align-items:center; cursor:pointer;";
+    const input = document.createElement("input");
+    input.type = "color";
+    input.value = value;
+    input.style.cssText =
+      "width:30px; height:24px; padding:0; border:none; background:none; cursor:pointer; flex:none;";
+    const hex = el("span", "mono");
+    hex.style.cssText = "font-size:12px; color:var(--faint);";
+    hex.textContent = value.toUpperCase();
+    input.addEventListener("input", () => {
+      const v = input.value.toUpperCase();
+      hex.textContent = v;
+      onPick(v);
+    });
+    field.append(input, hex);
+    return labeledRow(label, field);
+  };
+
+  const fillRow = colorRow(s.captionColor, prefs.captionColor, (v) => {
+    prefs.captionColor = v;
+    save();
+  });
+  const outlineRow = colorRow(s.captionOutlineColor, prefs.captionOutlineColor, (v) => {
+    prefs.captionOutlineColor = v;
+    save();
+  });
+
+  // B / I / U — a small segmented row of toggle buttons (each glyph rendered in
+  // its own face). Each toggles its boolean key independently.
+  const biuSeg = el("div", "fl-seg");
+  const biuButton = (
+    label: string,
+    css: string,
+    aria: string,
+    initial: boolean,
+    onToggle: (v: boolean) => void,
+  ): HTMLButtonElement => {
+    const b = button(label, initial ? "on" : undefined);
+    b.type = "button";
+    b.style.cssText = css;
+    b.setAttribute("aria-pressed", String(initial));
+    b.addEventListener("click", () => {
+      const next = !b.classList.contains("on");
+      b.classList.toggle("on", next);
+      b.setAttribute("aria-pressed", String(next));
+      onToggle(next);
+    });
+    b.setAttribute("aria-label", aria);
+    return b;
+  };
+  biuSeg.append(
+    biuButton(s.captionBoldGlyph, "font-weight:700;", s.captionBold, prefs.captionBold, (v) => {
+      prefs.captionBold = v;
+      save();
+    }),
+    biuButton(s.captionItalicGlyph, "font-style:italic;", s.captionItalic, prefs.captionItalic, (v) => {
+      prefs.captionItalic = v;
+      save();
+    }),
+    biuButton(
+      s.captionUnderlineGlyph,
+      "text-decoration:underline;",
+      s.captionUnderline,
+      prefs.captionUnderline,
+      (v) => {
+        prefs.captionUnderline = v;
+        save();
+      },
+    ),
+  );
+  const biuRow = labeledRow(s.captionEmphasis, biuSeg);
+
+  const styleAppliesHint = el("div", "fl-set-secsub");
+  styleAppliesHint.style.marginTop = "8px";
+  styleAppliesHint.textContent = s.captionStyleAppliesHint;
+
   // --- Caption font: a custom dropdown (per-row live preview) over the free-
   // text field. The picker SETS prefs.captionFont (a family name); "Custom
   // path…" reveals the free-text field for a .ttf/.otf path. If font
@@ -879,7 +982,19 @@ function buildRenderingPanel(): HTMLElement {
 
   // Default layout = free-text only (the fallback). Async: if families come
   // back, swap in the dropdown and put the free-text field behind "Custom path…".
-  capBlock.body.append(capToggle, fontRow, fontHint, fontsDirRow, fontsDirHint, styleNote);
+  capBlock.body.append(
+    capToggle,
+    styleGroupHead,
+    fillRow,
+    outlineRow,
+    biuRow,
+    styleAppliesHint,
+    fontRow,
+    fontHint,
+    fontsDirRow,
+    fontsDirHint,
+    styleNote,
+  );
   root.append(capBlock.root);
 
   // An option in the picker. A folder font carries `path` (selection sets
