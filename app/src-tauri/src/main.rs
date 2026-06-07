@@ -478,6 +478,33 @@ async fn save_session(app: AppHandle, data: serde_json::Value) -> Result<(), Str
     Ok(())
 }
 
+/// One installed font family for the caption picker. Family-only is enough —
+/// CoreText / fontconfig resolve a `Fontname` by name at render time — so `path`
+/// is always `None` here (the web/dev backend fills it from fontconfig).
+#[derive(Serialize)]
+struct FontInfoDto {
+    family: String,
+    path: Option<String>,
+}
+
+/// Enumerate system font families via font-kit (CoreText on macOS, DirectWrite
+/// on Windows, fontconfig on Linux), deduped and sorted case-insensitively.
+/// Best-effort: any enumeration error yields an empty list so the picker falls
+/// back to the free-text font field rather than failing.
+#[tauri::command]
+async fn list_fonts() -> Result<Vec<FontInfoDto>, String> {
+    let mut families = match font_kit::source::SystemSource::new().all_families() {
+        Ok(f) => f,
+        Err(_) => return Ok(vec![]),
+    };
+    families.sort_by_key(|f| f.to_lowercase());
+    families.dedup();
+    Ok(families
+        .into_iter()
+        .map(|family| FontInfoDto { family, path: None })
+        .collect())
+}
+
 /// Build a keyring entry for `key` under this app's service. The platform
 /// secretStore seam (app/src/platform/tauri.ts) maps `getSecret`/`setSecret`/
 /// `deleteSecret` to the three commands below.
@@ -672,6 +699,7 @@ fn main() {
             get_secret,
             set_secret,
             delete_secret,
+            list_fonts,
             toggle_activity_window,
             show_activity_window
         ])

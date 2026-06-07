@@ -10,6 +10,7 @@
 
 import type {
   FootlightPlatform,
+  FontInfo,
   ProbeResult,
   LoudnessResult,
   TrackRequest,
@@ -202,9 +203,16 @@ export const webPlatform: FootlightPlatform = {
     }
   },
 
-  // Stub — real impl (fetch the dev server's /fonts via fontconfig) lands in the
-  // font-picker backends slice.
-  async listFonts() {
-    return [];
+  // Ask the dev server for the system fonts it enumerated via fontconfig
+  // (`fc-list`). Best-effort: any failure (server down, parse error) yields `[]`
+  // so the picker falls back to the free-text font field.
+  async listFonts(): Promise<FontInfo[]> {
+    try {
+      const res = await fetch(`${BASE}/fonts`);
+      if (!res.ok) return [];
+      return (await res.json()) as FontInfo[];
+    } catch {
+      return [];
+    }
   },
 };

@@ -13,6 +13,7 @@
 
 import type {
   FootlightPlatform,
+  FontInfo,
   ProbeResult,
   LoudnessResult,
   TrackRequest,
@@ -147,9 +148,10 @@ export const tauriPlatform: FootlightPlatform = {
     await invoke<void>("delete_secret", { key });
   },
 
-  // Stub — real impl (invoke the Rust `list_fonts` command) lands in the
-  // font-picker backends slice.
-  async listFonts() {
-    return [];
+  // Enumerate system font families via the Rust `list_fonts` command (font-kit).
+  // It returns `[]` rather than erroring if enumeration fails, so the picker can
+  // fall back to the free-text font field.
+  async listFonts(): Promise<FontInfo[]> {
+    return invoke<FontInfo[]>("list_fonts", {});
   },
 };
