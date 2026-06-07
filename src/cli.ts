@@ -156,7 +156,14 @@ async function cmdRender(argv: string[]): Promise<number> {
   const captionFontArg = flags.has("caption-font") ? String(flags.get("caption-font")) : "";
   const looksLikePath = /[\\/]/.test(captionFontArg) || /\.(ttf|otf|ttc)$/i.test(captionFontArg);
   const captionFontFile = looksLikePath ? captionFontArg : undefined;
-  const captionFontName = !looksLikePath && captionFontArg ? captionFontArg : undefined;
+  // For a font FILE, resolve its real family — filename != family for many fonts,
+  // and libass matches the ASS Fontname against the fonts it loads from fontsdir,
+  // so the stem alone would silently miss. Best-effort via fc-scan; the engine
+  // falls back to the file stem when it's unavailable.
+  let captionFontName = !looksLikePath && captionFontArg ? captionFontArg : undefined;
+  if (captionFontFile && !captionFontName) {
+    captionFontName = resolveFontFamily(captionFontFile);
+  }
 
   if (Number.isNaN(crf)) {
     console.error("render: --crf must be a number");
@@ -597,4 +604,22 @@ function extractTrackFrames(
 /** Best-effort error message extraction. */
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Best-effort: the family name of a font FILE via `fc-scan`, so the burned
+ * caption's ASS `Fontname` matches what libass loads from `fontsdir`. Returns
+ * undefined when fc-scan is absent/failing — the engine then falls back to the
+ * file's stem.
+ */
+function resolveFontFamily(fontPath: string): string | undefined {
+  try {
+    const out = execFileSync("fc-scan", ["--format=%{family[0]}", fontPath], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return out || undefined;
+  } catch {
+    return undefined;
+  }
 }

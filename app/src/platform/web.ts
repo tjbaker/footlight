@@ -215,4 +215,10 @@ export const webPlatform: FootlightPlatform = {
       return [];
     }
   },
+
+  // Stub — real impl (dev-server /fonts?dir=, scanning the folder via fc-scan)
+  // lands in the fonts-folder backends slice.
+  async listUserFonts(_dir: string): Promise<FontInfo[]> {
+    return [];
+  },
 };
