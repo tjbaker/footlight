@@ -29,7 +29,7 @@ jobs:
       - run: npm test
 
   app:
-    name: app (typecheck + build)
+    name: app (typecheck + test + build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -41,6 +41,8 @@ jobs:
       - run: npm ci
         working-directory: app
       - run: npx tsc --noEmit
+        working-directory: app
+      - run: npm test
         working-directory: app
       - run: npm run build
         working-directory: app
