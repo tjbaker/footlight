@@ -101,7 +101,7 @@ function renderOptions(outdir: string): RenderOptions {
 }
 import type { HistoryEntry, SessionData, RenderOptions } from "./platform/types.js";
 import { createAssistant, type ConversationMessage } from "./assistant/index.js";
-import { openSettings, initTheme, loadAssistantOverlay } from "./settings.js";
+import { openSettings, initTheme, loadAssistantOverlay, loadChatStillsBudget } from "./settings.js";
 import { BASE_PROMPT } from "./assistant/base-prompt.js";
 import { openShortcuts } from "./shortcuts.js";
 import {
@@ -3278,6 +3278,9 @@ export function mountEditor(root: HTMLElement): void {
     const region = currentRegion();
     const models = resolveModels(assistantSelection());
     const overlay = loadAssistantOverlay(); // editor's append-only framing preferences
+    // Sparse still strip (#40): sample a few frames so the model SEES the footage.
+    // System-chosen, bounded by the user's budget; failures degrade to fewer/no stills.
+    const stills = await sampleChatStills();
     const ctx = {
       region: { width: region.width, height: region.height },
       source: state.source,
@@ -3292,8 +3295,82 @@ export function mountEditor(root: HTMLElement): void {
       ...(state.swells.length
         ? { swells: state.swells.map((s) => ({ t: s.t, label: s.label })) }
         : {}),
+      ...(stills.length ? { stills } : {}),
     };
     return { ok: true, ctx };
+  }
+
+  /**
+   * Sample the per-turn still strip (#40): cut-aware frames across In→Out (or the
+   * whole source when no In/Out is set), trimmed evenly to the user's "Chat stills"
+   * budget, each extracted + base64-encoded for the model's inline image parts.
+   * Budget 0, no window, or no source → no stills; any per-frame failure is skipped
+   * so a turn never fails over a missing frame.
+   */
+  async function sampleChatStills(): Promise<
+    Array<{ t: number; mimeType: string; dataBase64: string }>
+  > {
+    const budget = loadChatStillsBudget();
+    if (budget <= 0 || !state.source || !(state.duration > 0)) return [];
+    let a = 0;
+    let b = state.duration;
+    if (state.inPoint != null && state.outPoint != null && state.outPoint > state.inPoint) {
+      a = state.inPoint;
+      b = state.outPoint;
+    }
+    if (!(b > a)) return [];
+    let times: number[];
+    try {
+      times = planSampleTimes({
+        shotStart: a,
+        shotEnd: b,
+        intervalSec: (b - a) / budget,
+        sceneCuts: state.sceneCuts,
+      });
+    } catch {
+      return [];
+    }
+    if (times.length > budget) {
+      const denom = Math.max(1, budget - 1);
+      const picked: number[] = [];
+      for (let i = 0; i < budget; i++) {
+        picked.push(times[Math.round((i * (times.length - 1)) / denom)]!);
+      }
+      times = [...new Set(picked)];
+    }
+    const out: Array<{ t: number; mimeType: string; dataBase64: string }> = [];
+    for (const t of times) {
+      try {
+        const url = await platform.extractFrame(state.source, t);
+        const enc = await urlToBase64(url);
+        if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+        if (enc) out.push({ t, mimeType: enc.mimeType, dataBase64: enc.dataBase64 });
+      } catch {
+        /* skip a frame that fails to extract/encode — never fail the turn over it */
+      }
+    }
+    return out;
+  }
+
+  /** Fetch an extracted-frame URL (blob or asset) and return its base64 + mime. */
+  async function urlToBase64(
+    url: string,
+  ): Promise<{ mimeType: string; dataBase64: string } | null> {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result));
+        fr.onerror = () => reject(fr.error);
+        fr.readAsDataURL(blob);
+      });
+      const comma = dataUrl.indexOf(",");
+      if (comma < 0) return null;
+      return { mimeType: blob.type || "image/jpeg", dataBase64: dataUrl.slice(comma + 1) };
+    } catch {
+      return null;
+    }
   }
 
   /** Run one assistant turn end-to-end: assemble context → call the model → render. */
