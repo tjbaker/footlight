@@ -4,15 +4,20 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Footlight — vertical clips from performance video, control-first</title>
-<meta name="description" content="Footlight turns 16:9 performance and music videos into clean 1080×1920 (9:16) clips for Reels, TikTok and Shorts. A control-first cutter — you make the creative calls, it handles frame-accurate cut, crop, scale and encode. Open source." />
+<meta name="theme-color" content="#090d14" />
+<meta name="description" content="Footlight turns 16:9 performance and music videos into clean 1080×1920 (9:16) clips for Reels, TikTok and Shorts. A control-first cutter — you make the creative calls, it handles the frame-accurate cut, crop and export. Free and open source." />
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
 <link rel="icon" type="image/png" href="assets/favicon.png" />
+<link rel="apple-touch-icon" href="assets/favicon.png" />
 <meta property="og:title" content="Footlight — control-first vertical video cutter" />
-<meta property="og:description" content="Turn 16:9 performance & music video into clean 9:16 clips. You make the creative calls; Footlight handles frame-accurate cut, crop, scale and encode. Open source." />
+<meta property="og:description" content="Turn 16:9 performance & music video into clean 9:16 clips. You make the creative calls; Footlight does the rest. Free and open source." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://footlight.dev" />
-<meta property="og:image" content="https://footlight.dev/assets/footlight-dark.png" />
+<meta property="og:image" content="https://footlight.dev/assets/og-card.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
 <meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="https://footlight.dev/assets/og-card.png" />
 <!-- Self-hosted brand fonts (OFL) — no third-party font CDN; honors no-telemetry. -->
 <link rel="stylesheet" href="fonts.css" />
 <link rel="stylesheet" href="styles.css" />
@@ -30,18 +35,21 @@
       </defs><ellipse cx="50" cy="40" rx="38" ry="32" fill="url(#nglow)"></ellipse><g fill="url(#nbeam)"><polygon points="27,66 37,66 44,20 20,20"></polygon><polygon points="45,66 55,66 62,20 38,20"></polygon><polygon points="63,66 73,66 80,20 56,20"></polygon></g><rect x="20" y="69" width="60" height="5.5" rx="2.75" fill="#ff8a4a"></rect><g fill="url(#nlamp)"><path d="M24.5,69 A7.5 7.5 0 0 1 39.5,69 Z"></path><path d="M42.5,69 A7.5 7.5 0 0 1 57.5,69 Z"></path><path d="M60.5,69 A7.5 7.5 0 0 1 75.5,69 Z"></path></g></svg>
       <span class="wm">Footlight</span>
     </a>
-    <nav class="nav-links">
+    <nav class="nav-links" id="navLinks">
       <a class="lk" href="#philosophy">Philosophy</a>
       <a class="lk" href="#features">Features</a>
       <a class="lk" href="#workflow">Workflow</a>
       <a class="lk" href="#cli">CLI</a>
     </nav>
     <div class="nav-cta">
-      <a class="btn btn-ghost" href="https://github.com/tjbaker/footlight" target="_blank" rel="noopener">
+      <a class="btn btn-ghost gh-btn" href="https://github.com/tjbaker/footlight" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.7.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.5 11.5 0 0 0 23.5 12C23.5 5.7 18.3.5 12 .5z"></path></svg>
         GitHub
       </a>
       <a class="btn btn-primary" href="#get-started">Get started</a>
+      <button class="nav-toggle" id="navToggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="navLinks">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="17" x2="20" y2="17"></line></svg>
+      </button>
     </div>
   </div>
 </header>
@@ -53,7 +61,7 @@
   <div class="wrap">
     <span class="eyebrow">Open source · frame-accurate</span>
     <h1>Vertical clips from performance video. <span class="em">You make the calls.</span></h1>
-    <p class="lede">Footlight turns 16:9 music and live-performance footage into clean <b>1080×1920 (9:16) H.264</b> clips for Reels, TikTok and Shorts. It automates the mechanical part — <b>cut → crop → scale → encode</b> — <b>after</b> a human decides the moment and the framing. No transcript guessing. No auto-magic.</p>
+    <p class="lede">Footlight turns 16:9 music and live-performance footage into clean <b>1080×1920 (9:16)</b> clips for Reels, TikTok and Shorts. It automates the mechanical part — <b>cut → crop → frame → export</b> — <b>after</b> a human decides the moment and the framing. No transcript guessing. No auto-magic.</p>
     <div class="hero-cta">
       <a class="btn btn-primary" href="#get-started">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 6 4 12 8 18"></polyline><polyline points="16 6 20 12 16 18"></polyline></svg>
@@ -65,16 +73,21 @@
       </a>
     </div>
     <div class="hero-meta">
-      <span>Apache-2.0</span>
-      <span>TypeScript engine + CLI</span>
-      <span>Desktop GUI (Tauri)</span>
-      <span>Lossless audio passthrough</span>
+      <span>Free &amp; open source</span>
+      <span>Mac &amp; Windows</span>
+      <span>Runs on your machine — nothing uploaded</span>
+      <span>Your audio, untouched</span>
     </div>
 
     <div class="hero-shot reveal">
       <div class="shot-frame">
         <img src="assets/footlight-dark.png" alt="The Footlight editor: a 9:16 crop box over a live performance, a 9:16 output preview, and a loudness timeline flagging quiet-to-loud swells." width="2284" height="1604" loading="eager" />
       </div>
+    </div>
+  </div>
+  <div class="wrap">
+    <div class="wave-band reveal" aria-hidden="true">
+      <div class="wavestrip" id="heroWave"></div>
     </div>
   </div>
 </section>
@@ -179,7 +192,7 @@
       <div class="step reveal">
         <span class="n">04</span>
         <h3>Render</h3>
-        <p>Add to the queue, choose a destination, render. Clean 1080×1920 H.264 lands in your folder.</p>
+        <p>Add to the queue, choose a destination, render. A clean 1080×1920 vertical clip lands in your folder.</p>
       </div>
     </div>
   </div>
@@ -231,12 +244,26 @@
           <radialGradient id="cglow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#ff9a5a" stop-opacity="0.55"></stop><stop offset="1" stop-color="#ff9a5a" stop-opacity="0"></stop></radialGradient>
         </defs><ellipse cx="50" cy="40" rx="38" ry="32" fill="url(#cglow)"></ellipse><g fill="url(#cbeam)"><polygon points="27,66 37,66 44,20 20,20"></polygon><polygon points="45,66 55,66 62,20 38,20"></polygon><polygon points="63,66 73,66 80,20 56,20"></polygon></g><rect x="20" y="69" width="60" height="5.5" rx="2.75" fill="#ff8a4a"></rect><g fill="url(#clamp)"><path d="M24.5,69 A7.5 7.5 0 0 1 39.5,69 Z"></path><path d="M42.5,69 A7.5 7.5 0 0 1 57.5,69 Z"></path><path d="M60.5,69 A7.5 7.5 0 0 1 75.5,69 Z"></path></g></svg>
       </div>
-      <h2>Run it from source.</h2>
-      <p>There's no signed download — Footlight is open and you run it yourself. The browser GUI needs only Node; the native window adds the Rust toolchain. <code style="font-family:var(--font-mono);font-size:0.85em;color:var(--ember)">make doctor</code> checks your setup in one shot.</p>
+      <h2>Free, open, yours to run.</h2>
+      <p>Footlight runs entirely on your machine — nothing is uploaded, nothing is watched. Clone it and you're three commands from your first clip.</p>
+      <div class="quickstart reveal">
+        <button class="copy-btn" type="button" data-copy="git clone https://github.com/tjbaker/footlight
+make setup
+make gui" aria-label="Copy commands">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          <span class="lbl">Copy</span>
+        </button>
+        <div class="qs-body">
+<div class="row"><span class="pr">$</span> <span class="cmd">git clone</span> <span class="fl">https://github.com/tjbaker/footlight</span></div>
+<div class="row"><span class="pr">$</span> <span class="cmd">make setup</span>  <span class="qc"># checks your toolchain, installs deps</span></div>
+<div class="row"><span class="pr">$</span> <span class="cmd">make gui</span>    <span class="qc"># opens the editor</span></div>
+        </div>
+      </div>
+      <p class="qs-note">Browser GUI needs Node; the native desktop window adds Rust. <code class="ic">make doctor</code> verifies everything in one shot.</p>
       <div class="hero-cta">
         <a class="btn btn-primary" href="https://github.com/tjbaker/footlight" target="_blank" rel="noopener">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.7.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.5 11.5 0 0 0 23.5 12C23.5 5.7 18.3.5 12 .5z"></path></svg>
-          Clone the repo
+          View on GitHub
         </a>
         <a class="btn btn-ghost" href="https://github.com/tjbaker/footlight/blob/main/README.md" target="_blank" rel="noopener">Read the docs</a>
       </div>
