@@ -589,7 +589,7 @@ export const ptBR: Messages = {
       header: "Rastrear sujeito",
       help: "Opcional. Faz panorâmicas para seguir um sujeito ao longo de um plano. Defina sua chave do Gemini em Configurações.",
       subjectPlaceholder: 'sujeito, ex.: "a pessoa tocando violão"',
-      intervalPlaceholder: "0,75",
+      intervalPlaceholder: "0.75",
       intervalLabel: "intervalo (s)",
       autoTrack: "Rastrear automaticamente",
       autoTrackTitle: "Rastrear o sujeito ao longo do plano de Entrada/Saída e montar um caminho de recorte amortecido.",
