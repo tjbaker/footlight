@@ -36,9 +36,17 @@ export interface RenderOptions {
   /**
    * Caption font: a `.ttf`/`.otf` file path or a system family name
    * (`--caption-font`). The engine treats a value with a path separator or font
-   * extension as a file (drawtext `fontfile=`), otherwise a fontconfig name.
+   * extension as a file (libass `fontsdir`), otherwise a fontconfig name.
    */
   captionFont?: string;
+  /** Caption fill colour `#RRGGBB` (`--caption-color`); default white. */
+  captionColor?: string;
+  /** Caption outline colour `#RRGGBB` (`--caption-outline-color`); default black. */
+  captionOutlineColor?: string;
+  /** Bold / italic / underline the burned caption (`--caption-bold` etc.). */
+  captionBold?: boolean;
+  captionItalic?: boolean;
+  captionUnderline?: boolean;
 }
 
 /** A saved working session (project) — restored on next launch. */

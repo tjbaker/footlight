@@ -68,6 +68,16 @@ export interface RenderOptions {
    * (`DEFAULT_CAPTION_FONT`) when neither is set.
    */
   captionFontName?: string;
+  /** Caption fill colour as `#RRGGBB` (default white). */
+  captionColor?: string;
+  /** Caption outline colour as `#RRGGBB` (default black). */
+  captionOutlineColor?: string;
+  /** Bold the burned caption text. */
+  captionBold?: boolean;
+  /** Italicize the burned caption text. */
+  captionItalic?: boolean;
+  /** Underline the burned caption text. */
+  captionUnderline?: boolean;
 }
 
 export const DEFAULT_RENDER_OPTIONS: RenderOptions = {
@@ -559,6 +569,18 @@ function assAlignment(pos: TextPosition): number {
 }
 
 /**
+ * Convert a `#RRGGBB` (or `RRGGBB`) hex colour to an opaque ASS colour
+ * `&H00BBGGRR` (ASS is little-endian BGR with an alpha byte; 00 = opaque).
+ * Returns `fallback` for anything malformed.
+ */
+function hexToAssColor(hex: string | undefined, fallback: string): string {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec((hex || "").trim());
+  if (!m) return fallback;
+  const h = m[1]!.toUpperCase();
+  return `&H00${h.slice(4, 6)}${h.slice(2, 4)}${h.slice(0, 2)}`;
+}
+
+/**
  * The ASS Style `Fontname`: the configured family name, else a best-effort name
  * derived from a font FILE's stem (the GUI font picker supplies real family
  * names; libass also gets the file's dir via `fontsdir`), else the system Sans.
@@ -617,12 +639,18 @@ export function buildCaptionAss(row: ClipRow, opts: RenderOptions): string | nul
   if (title) lines.push(`{\\fs${CAPTION_STYLE.titleSize}}${assEscape(title)}`);
   const text = lines.join("\\N");
 
-  // ASS colour is &HAABBGGRR (AA=00 opaque). White fill, black outline, no
-  // shadow; Outline scales with PlayRes via ScaledBorderAndShadow.
+  // ASS colour is &HAABBGGRR (AA=00 opaque); default white fill, black outline.
+  // Bold/Italic/Underline are -1 (on) / 0 (off). Outline scales with PlayRes via
+  // ScaledBorderAndShadow.
+  const fill = hexToAssColor(opts.captionColor, "&H00FFFFFF");
+  const outlineColor = hexToAssColor(opts.captionOutlineColor, "&H00000000");
+  const bold = opts.captionBold ? -1 : 0;
+  const italic = opts.captionItalic ? -1 : 0;
+  const underline = opts.captionUnderline ? -1 : 0;
   const style =
     `Style: Caption,${family},${CAPTION_STYLE.titleSize},` +
-    `&H00FFFFFF,&H000000FF,&H00000000,&H00000000,` +
-    `0,0,0,0,100,100,0,0,1,${CAPTION_STYLE.outline},0,${align},60,60,${CAPTION_STYLE.margin},1`;
+    `${fill},&H000000FF,${outlineColor},&H00000000,` +
+    `${bold},${italic},${underline},0,100,100,0,0,1,${CAPTION_STYLE.outline},0,${align},60,60,${CAPTION_STYLE.margin},1`;
 
   return (
     [

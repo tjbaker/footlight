@@ -79,6 +79,11 @@ function renderOptions(outdir: string): RenderOptions {
         dryRun?: unknown;
         burnCaptions?: unknown;
         captionFont?: unknown;
+        captionColor?: unknown;
+        captionOutlineColor?: unknown;
+        captionBold?: unknown;
+        captionItalic?: unknown;
+        captionUnderline?: unknown;
       };
       if (typeof p.crf === "number") opts.crf = p.crf;
       if (typeof p.preset === "string") opts.preset = p.preset;
@@ -87,6 +92,13 @@ function renderOptions(outdir: string): RenderOptions {
       if (p.burnCaptions === true) opts.burnCaptions = true;
       if (typeof p.captionFont === "string" && p.captionFont.trim())
         opts.captionFont = p.captionFont.trim();
+      if (typeof p.captionColor === "string" && p.captionColor.trim())
+        opts.captionColor = p.captionColor.trim();
+      if (typeof p.captionOutlineColor === "string" && p.captionOutlineColor.trim())
+        opts.captionOutlineColor = p.captionOutlineColor.trim();
+      if (p.captionBold === true) opts.captionBold = true;
+      if (p.captionItalic === true) opts.captionItalic = true;
+      if (p.captionUnderline === true) opts.captionUnderline = true;
     }
   } catch {
     /* fall back to the engine's own defaults */
