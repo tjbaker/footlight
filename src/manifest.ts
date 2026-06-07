@@ -230,6 +230,25 @@ export interface CropPathPoint {
  * (SPEC §6.9) that, when present, takes precedence over `crop_offset` and is
  * rendered as the smoothstep `x='…'` expression by `buildFfmpegArgs`.
  */
+/**
+ * Per-clip caption styling — set in the editor next to the caption text/preview,
+ * so each clip can look different. Carried on `ClipSpec.caption` (JSON manifest)
+ * and merged over the render-wide CLI defaults at render time. `font` is a family
+ * name or a `.ttf`/`.otf` path; colours are `#RRGGBB`; `angle` is in degrees.
+ */
+export interface CaptionStyle {
+  font?: string;
+  color?: string;
+  outlineColor?: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  shadow?: boolean;
+  box?: boolean;
+  boxColor?: string;
+  angle?: number;
+}
+
 export interface ClipSpec {
   source_file: string;
   in_point: string;
@@ -242,8 +261,10 @@ export interface ClipSpec {
   hook?: string;
   /** Secondary caption line, drawn below the hook. */
   title?: string;
-  /** Caption block placement: `top` | `center` | `bottom`. */
+  /** Caption block placement: `top|center|bottom` optionally `-left|-center|-right`. */
   text_position?: string;
+  /** Per-clip caption styling (font + colour + emphasis + effects), applied when burned. */
+  caption?: CaptionStyle;
   /** Optional eased crop path; takes precedence over `crop_offset` at render. */
   cropPath?: CropPathPoint[];
   /**

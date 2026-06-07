@@ -256,4 +256,31 @@ describe("serializeManifestJSON", () => {
     ];
     expect(JSON.parse(serializeManifestJSON(clips))).toEqual(clips);
   });
+
+  it("round-trips per-clip caption styling on a clip spec", () => {
+    const clips: ClipSpec[] = [
+      {
+        source_file: "downloads/live-set.mp4",
+        in_point: "0",
+        out_point: "30",
+        crop_offset: "center",
+        hook: "BIG HOOK",
+        title: "the title line",
+        text_position: "top-left",
+        caption: {
+          font: "/Users/me/fonts/Impact.ttf",
+          color: "#FFCC00",
+          outlineColor: "#000000",
+          bold: true,
+          italic: false,
+          underline: true,
+          shadow: true,
+          box: true,
+          boxColor: "#202020",
+          angle: 12,
+        },
+      },
+    ];
+    expect(JSON.parse(serializeManifestJSON(clips))).toEqual(clips);
+  });
 });

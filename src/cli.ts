@@ -34,7 +34,7 @@ import {
   type CropWindowSpec,
   DEFAULT_RENDER_OPTIONS,
 } from "./engine.js";
-import type { ClipSpec } from "./manifest.js";
+import type { ClipSpec, CaptionStyle } from "./manifest.js";
 import type { Dims } from "./manifest.js";
 import type { TrackSample, TrackFrame, VisionTracker } from "./providers/types.js";
 import { GeminiTracker } from "./providers/gemini.js";
@@ -133,6 +133,8 @@ interface RenderItem {
   row: ClipRow;
   cropPath?: CropPathKeyframe[];
   cropWindow?: CropWindowSpec;
+  /** Per-clip caption styling (JSON manifest); merged over the render-wide flags. */
+  caption?: CaptionStyle;
 }
 
 /** `footlight render` — read a CSV or JSON manifest, build + run ffmpeg per row. */
@@ -168,17 +170,11 @@ async function cmdRender(argv: string[]): Promise<number> {
   // file path (.ttf/.otf, or anything with a path separator) → an embedded
   // font dir for libass, otherwise a fontconfig family name.
   const burnCaptions = flags.get("burn-captions") === true;
+  // Render-wide caption font (the default; a clip's own `caption.font` overrides
+  // it per row below). A FILE value resolves its real family via fc-scan so
+  // libass matches what it loads from fontsdir; a bare name is a fontconfig family.
   const captionFontArg = flags.has("caption-font") ? String(flags.get("caption-font")) : "";
-  const looksLikePath = /[\\/]/.test(captionFontArg) || /\.(ttf|otf|ttc)$/i.test(captionFontArg);
-  const captionFontFile = looksLikePath ? captionFontArg : undefined;
-  // For a font FILE, resolve its real family — filename != family for many fonts,
-  // and libass matches the ASS Fontname against the fonts it loads from fontsdir,
-  // so the stem alone would silently miss. Best-effort via fc-scan; the engine
-  // falls back to the file stem when it's unavailable.
-  let captionFontName = !looksLikePath && captionFontArg ? captionFontArg : undefined;
-  if (captionFontFile && !captionFontName) {
-    captionFontName = resolveFontFamily(captionFontFile);
-  }
+  const { captionFontFile, captionFontName } = resolveFontSpec(captionFontArg);
   // Caption style (libass): fill/outline colour (#RRGGBB) + bold/italic/underline.
   const captionColor = flags.has("caption-color") ? String(flags.get("caption-color")) : undefined;
   const captionOutlineColor = flags.has("caption-outline-color")
@@ -246,8 +242,29 @@ async function cmdRender(argv: string[]): Promise<number> {
 
   let failures = 0;
   for (let i = 0; i < items.length; i++) {
-    const { row, cropPath } = items[i]!;
+    const { row, cropPath, caption } = items[i]!;
     const label = `[${i + 1}/${items.length}]`;
+
+    // Per-clip caption style merged over the render-wide CLI defaults: a clip's
+    // own `caption.*` wins, falling back to the flag value (then engine default).
+    // A per-clip `font` is resolved on its own (file→family) and fully replaces
+    // the render-wide font rather than partially blending file/name.
+    let clipFontFile = captionFontFile;
+    let clipFontName = captionFontName;
+    if (caption?.font) {
+      const resolved = resolveFontSpec(caption.font);
+      clipFontFile = resolved.captionFontFile;
+      clipFontName = resolved.captionFontName;
+    }
+    const clipColor = caption?.color ?? captionColor;
+    const clipOutlineColor = caption?.outlineColor ?? captionOutlineColor;
+    const clipBold = caption?.bold ?? captionBold;
+    const clipItalic = caption?.italic ?? captionItalic;
+    const clipUnderline = caption?.underline ?? captionUnderline;
+    const clipShadow = caption?.shadow ?? captionShadow;
+    const clipBox = caption?.box ?? captionBox;
+    const clipBoxColor = caption?.boxColor ?? captionBoxColor;
+    const clipAngle = caption?.angle ?? captionAngle;
 
     // Per-clip caption ASS document (SPEC §6.5). When captions are on and the
     // row has a hook/title, `buildCaptionAss` returns an ASS document; write it
@@ -260,17 +277,17 @@ async function cmdRender(argv: string[]): Promise<number> {
         preset,
         audioBitrate,
         burnCaptions,
-        ...(captionFontFile ? { captionFontFile } : {}),
-        ...(captionFontName ? { captionFontName } : {}),
-        ...(captionColor ? { captionColor } : {}),
-        ...(captionOutlineColor ? { captionOutlineColor } : {}),
-        captionBold,
-        captionItalic,
-        captionUnderline,
-        captionShadow,
-        captionBox,
-        ...(captionBoxColor ? { captionBoxColor } : {}),
-        ...(captionAngle !== undefined && Number.isFinite(captionAngle) ? { captionAngle } : {}),
+        ...(clipFontFile ? { captionFontFile: clipFontFile } : {}),
+        ...(clipFontName ? { captionFontName: clipFontName } : {}),
+        ...(clipColor ? { captionColor: clipColor } : {}),
+        ...(clipOutlineColor ? { captionOutlineColor: clipOutlineColor } : {}),
+        captionBold: clipBold,
+        captionItalic: clipItalic,
+        captionUnderline: clipUnderline,
+        captionShadow: clipShadow,
+        captionBox: clipBox,
+        ...(clipBoxColor ? { captionBoxColor: clipBoxColor } : {}),
+        ...(clipAngle !== undefined && Number.isFinite(clipAngle) ? { captionAngle: clipAngle } : {}),
       });
       if (ass !== null) {
         const path = join(tmpdir(), `footlight_cap_${i}_${process.pid}.ass`);
@@ -306,8 +323,8 @@ async function cmdRender(argv: string[]): Promise<number> {
           cropWindow: items[i]!.cropWindow,
           burnCaptions,
           ...(captionAssPath ? { captionAssPath } : {}),
-          ...(captionFontFile ? { captionFontFile } : {}),
-          ...(captionFontName ? { captionFontName } : {}),
+          ...(clipFontFile ? { captionFontFile: clipFontFile } : {}),
+          ...(clipFontName ? { captionFontName: clipFontName } : {}),
         });
       } catch (err) {
         console.error(`${label} SKIP — ${errMsg(err)}`);
@@ -383,6 +400,14 @@ function parseJsonManifest(text: string): RenderItem[] {
     if (spec.title !== undefined) row.title = spec.title;
     if (spec.text_position !== undefined) row.text_position = spec.text_position;
 
+    let caption: CaptionStyle | undefined;
+    if (spec.caption !== undefined) {
+      if (!spec.caption || typeof spec.caption !== "object") {
+        throw new Error(`clip [${i}] caption must be an object`);
+      }
+      caption = spec.caption;
+    }
+
     let cropPath: CropPathKeyframe[] | undefined;
     if (spec.cropPath !== undefined) {
       if (!Array.isArray(spec.cropPath)) {
@@ -411,7 +436,7 @@ function parseJsonManifest(text: string): RenderItem[] {
       cropWindow = { x, y, w, h };
     }
 
-    return { row, cropPath, cropWindow };
+    return { row, cropPath, cropWindow, caption };
   });
 }
 
@@ -642,6 +667,24 @@ function extractTrackFrames(
 /** Best-effort error message extraction. */
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Resolve a caption-font value (CLI `--caption-font` or a per-clip
+ * `CaptionStyle.font`) into the engine's file/name pair. A value with a path
+ * separator or font extension is a FILE → its real family is read via fc-scan so
+ * libass's ASS `Fontname` matches what it loads from `fontsdir`; anything else is
+ * a fontconfig family NAME. An empty value yields neither (the engine default).
+ */
+function resolveFontSpec(fontArg: string | undefined): {
+  captionFontFile?: string;
+  captionFontName?: string;
+} {
+  if (!fontArg) return {};
+  const looksLikePath = /[\\/]/.test(fontArg) || /\.(ttf|otf|ttc)$/i.test(fontArg);
+  if (!looksLikePath) return { captionFontName: fontArg };
+  const captionFontName = resolveFontFamily(fontArg);
+  return { captionFontFile: fontArg, ...(captionFontName ? { captionFontName } : {}) };
 }
 
 /**
