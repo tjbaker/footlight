@@ -283,14 +283,52 @@ input[type="text"], input[type="number"], input[type="password"] {
 .fl-stage-tag.rec::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #ff5a3c; margin-right: 6px; vertical-align: 1px; box-shadow: 0 0 7px #ff5a3c; }
 .fl-stage-center { position: relative; z-index: 2; text-align: center; color: rgba(255, 255, 255, 0.45); font-family: "JetBrains Mono", monospace; font-size: 12px; letter-spacing: 0.03em; padding: 0 28px; max-width: 560px; }
 .fl-stage-center .big { font-size: 13px; color: rgba(255, 255, 255, 0.6); margin-bottom: 5px; }
-.fl-hero-h { font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: clamp(26px, 4vw, 38px); letter-spacing: -0.02em; line-height: 1.05; color: #fff; }
-.fl-hero-sub { margin-top: 12px; font-family: "Hanken Grotesk", system-ui, sans-serif; font-size: 14.5px; line-height: 1.5; letter-spacing: 0; color: rgba(255, 255, 255, 0.66); }
-.fl-hero-cta { margin-top: 16px; font-size: 11.5px; color: rgba(255, 255, 255, 0.4); }
+.fl-hero-h { font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: clamp(26px, 4vw, 38px); letter-spacing: -0.02em; line-height: 1.06; color: #fff; white-space: nowrap; }
+.fl-hero-sub { margin-top: 12px; font-family: "Hanken Grotesk", system-ui, sans-serif; font-size: 14.5px; line-height: 1.5; letter-spacing: 0; color: rgba(255, 255, 255, 0.66); max-width: 46ch; }
+
+/* ----- first-launch onboarding (issue #46) ----- */
+.fl-onboard { display: flex; flex-direction: column; align-items: center; }
+.fl-lamp-wrap { position: relative; margin-bottom: 22px; }
+.fl-lamp-wrap .fl-lamp { width: 56px; height: 56px; display: block; position: relative; z-index: 2; color: var(--accent); }
+.fl-lamp-halo { position: absolute; left: 50%; top: 54%; width: 150px; height: 150px; transform: translate(-50%, -50%); z-index: 1; border-radius: 50%; background: radial-gradient(circle, rgba(255, 140, 80, 0.5), rgba(255, 140, 80, 0) 68%); opacity: 0.7; }
+@media (prefers-reduced-motion: no-preference) {
+  .fl-lamp-halo { animation: flbreathe 4.5s ease-in-out infinite; }
+}
+@keyframes flbreathe {
+  0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(0.9); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+}
+
+.fl-drop { margin-top: 26px; width: 188px; height: 334px; border: 2px dashed rgba(255, 255, 255, 0.22); border-radius: 14px; background: rgba(255, 255, 255, 0.015); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; padding: 22px; transition: border-color 0.18s, background 0.18s, box-shadow 0.18s; }
+.fl-drop-ratio { font-size: 10.5px; letter-spacing: 0.1em; color: rgba(255, 255, 255, 0.4); text-transform: uppercase; }
+.fl-drop-glyph svg { width: 32px; height: 32px; color: rgba(255, 255, 255, 0.5); transition: color 0.18s; }
+.fl-drop-cta { font-family: "Hanken Grotesk", system-ui, sans-serif; font-size: 13px; color: rgba(255, 255, 255, 0.72); line-height: 1.4; }
+.fl-drop-cta-drag { display: none; font-weight: 700; font-size: 14px; color: var(--accent-2); }
+.fl-drop-browse { font-family: "Hanken Grotesk", system-ui, sans-serif; font-weight: 700; font-size: 13px; color: #2a1606; background: linear-gradient(180deg, var(--accent), var(--accent-deep)); border: 1px solid var(--accent-deep); border-radius: 9px; padding: 9px 18px; cursor: pointer; box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 6px 16px -8px var(--accent-line); }
+.fl-drop-paste { font-size: 11px; color: rgba(255, 255, 255, 0.4); background: none; border: none; padding: 0; cursor: pointer; }
+.fl-drop-paste:hover { color: rgba(255, 255, 255, 0.6); }
+
+.fl-flow { margin-top: 26px; display: flex; align-items: center; }
+.fl-flow-step { display: flex; align-items: center; gap: 9px; padding: 0 16px; }
+.fl-flow-step:not(:last-child) { border-right: 1px solid rgba(255, 255, 255, 0.08); }
+.fl-flow-n { font-size: 11px; color: var(--accent); }
+.fl-flow-lbl { font-family: "Hanken Grotesk", system-ui, sans-serif; font-size: 13px; color: rgba(255, 255, 255, 0.5); }
+.fl-guide { margin-top: 24px; font-family: "Hanken Grotesk", system-ui, sans-serif; font-size: 12.5px; color: rgba(255, 255, 255, 0.5); }
+.fl-guide-link { color: var(--accent-2); text-decoration: none; }
+.fl-guide-link:hover { text-decoration: underline; }
+
 .fl-stage #frame, .fl-stage #preview-video { display: block; max-width: 100%; max-height: 100%; z-index: 2; }
 .fl-stage #overlay { position: absolute; z-index: 3; cursor: grab; }
 .fl-stage #overlay.dragging { cursor: grabbing; }
-.fl-stage.dropping { outline: 2px dashed var(--accent); outline-offset: -6px; }
-.fl-stage.dropping::after { content: "Drop a video to load"; position: absolute; inset: 0; z-index: 7; display: flex; align-items: center; justify-content: center; font-family: "Hanken Grotesk", sans-serif; font-size: 16px; font-weight: 600; color: #fff; letter-spacing: 0.01em; background: rgba(255, 122, 69, 0.16); backdrop-filter: blur(1px); pointer-events: none; }
+
+/* drag-over lit state — driven by `.fl-stage.dropping` (toggled by setDropActive).
+   Light the 9:16 target + lamp halo and swap the drag copy, rather than covering
+   the stage with a modal label (issue #46, handoff §1). */
+.fl-stage.dropping .fl-drop { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-line), 0 0 44px -6px rgba(255, 122, 69, 0.55); }
+.fl-stage.dropping .fl-drop-glyph svg { color: var(--accent-2); }
+.fl-stage.dropping .fl-drop-cta-rest { display: none; }
+.fl-stage.dropping .fl-drop-cta-drag { display: block; }
+.fl-stage.dropping .fl-lamp-halo { opacity: 1; background: radial-gradient(circle, rgba(255, 160, 95, 0.8), rgba(255, 150, 90, 0) 68%); animation: none; }
 
 /* ----- live 9:16 output preview (floats over the stage) ----- */
 /* The panel is pointer-transparent so crop-box drags/resizes underneath it still

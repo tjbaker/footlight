@@ -484,7 +484,15 @@ export const ptBR: Messages = {
       heroH: "Seu palco, na vertical.",
       heroSub:
         "O Footlight transforma vídeo de performance 16:9 em clipes 9:16 perfeitos no quadro — você toma cada decisão.",
-      heroCta: "Procurar… ou cole um caminho para carregar — depois marque, enquadre, enfileire, renderize.",
+      dropTitle: "Arraste um vídeo aqui",
+      dropTitleActive: "Solte para carregar",
+      dropRatio: "9 : 16 saída",
+      pasteHint: "ou cole um caminho",
+      flowMark: "Marque",
+      flowFrame: "Enquadre",
+      flowQueue: "Enfileire",
+      flowRender: "Renderize",
+      guide: "Primeira vez? Leia o guia →",
       frameAlt: "quadro atual",
     },
     transport: {

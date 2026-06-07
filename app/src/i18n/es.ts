@@ -484,7 +484,15 @@ export const es: Messages = {
       heroH: "Tu escenario, en vertical.",
       heroSub:
         "Footlight convierte video de actuaciones 16:9 en clips 9:16 perfectos al fotograma — cada decisión la tomas tú.",
-      heroCta: "Examinar… o pega una ruta para cargar — luego marca, encuadra, encola, renderiza.",
+      dropTitle: "Arrastra un video aquí",
+      dropTitleActive: "Suelta para cargar",
+      dropRatio: "9 : 16 salida",
+      pasteHint: "o pega una ruta",
+      flowMark: "Marca",
+      flowFrame: "Encuadra",
+      flowQueue: "Encola",
+      flowRender: "Renderiza",
+      guide: "¿Primera vez? Lee la guía →",
       frameAlt: "fotograma actual",
     },
     transport: {

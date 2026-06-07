@@ -484,7 +484,15 @@ export const en: Messages = {
       heroH: "Your stage, vertical.",
       heroSub:
         "Footlight turns 16:9 performance video into frame-perfect 9:16 clips — you make every call.",
-      heroCta: "Browse… or paste a path to load — then mark, frame, queue, render.",
+      dropTitle: "Drag a video here",
+      dropTitleActive: "Drop to load",
+      dropRatio: "9 : 16 out",
+      pasteHint: "or paste a path",
+      flowMark: "Mark",
+      flowFrame: "Frame",
+      flowQueue: "Queue",
+      flowRender: "Render",
+      guide: "New here? Read the guide →",
       frameAlt: "current frame",
     },
     transport: {

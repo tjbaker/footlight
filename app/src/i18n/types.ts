@@ -190,7 +190,15 @@ export interface EditorMessages {
     guidesTitle: string;
     heroH: string;
     heroSub: string;
-    heroCta: string;
+    dropTitle: string;
+    dropTitleActive: string;
+    dropRatio: string;
+    pasteHint: string;
+    flowMark: string;
+    flowFrame: string;
+    flowQueue: string;
+    flowRender: string;
+    guide: string;
     frameAlt: string;
   };
   /** Transport: the play button and the in→out chip. */
