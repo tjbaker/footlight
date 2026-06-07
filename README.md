@@ -53,8 +53,9 @@ See **[Running Footlight](#running-footlight)** below.
 
 Footlight does **not** bundle ffmpeg/ffprobe/Node — it invokes whatever is on
 your `PATH`. Run **`make doctor`** to verify your environment in one shot. On
-**macOS**, **`make setup-system`** installs ffmpeg via Homebrew; on other
-platforms, `make doctor` prints the exact install command for anything missing.
+**macOS**, **`make setup-system`** installs a libass-enabled ffmpeg (the
+`homebrew-ffmpeg` tap, so burned captions work) via Homebrew; on other platforms,
+`make doctor` prints the exact install command for anything missing.
 
 ## Getting started
 
@@ -62,7 +63,7 @@ From zero to your first vertical clip:
 
 1. **Install the prerequisites** — `ffmpeg`, `ffprobe`, and Node 26+
    (see [Requirements](#requirements)). On **macOS**, `make setup-system`
-   installs ffmpeg via Homebrew.
+   installs a libass-enabled ffmpeg via Homebrew.
 2. **Set up and verify your environment:**
    ```bash
    make setup     # install all dependencies (root engine + GUI)

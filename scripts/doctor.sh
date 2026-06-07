@@ -103,7 +103,7 @@ opt cargo  "native desktop build"
 hr
 if [ "$fail" -ne 0 ]; then
   echo "Result: required tools missing above. Install them, then re-run \`make doctor\`."
-  [ "$PM" = brew ] && echo "        On macOS: \`make setup-system\` installs ffmpeg via Homebrew."
+  [ "$PM" = brew ] && echo "        On macOS: \`make setup-system\` installs a libass-enabled ffmpeg via Homebrew."
   exit 1
 fi
 echo "Result: all required tools present."
