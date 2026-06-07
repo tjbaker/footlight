@@ -386,6 +386,8 @@ export const en: Messages = {
       burnCaptionsHint:
         "Off by default — a clean export is the default. When on, the clip's hook/title are drawn into the exported MP4.",
       captionFont: "Caption font",
+      captionFontSystemDefault: "System default",
+      captionFontCustom: "Custom path…",
       captionFontPlaceholder: "System default (Sans) — or a .ttf/.otf path or font name",
       captionFontHint:
         "Bring-your-own — fonts are never bundled. Leave blank for the system default, or point at a .ttf/.otf file or an installed family name.",
