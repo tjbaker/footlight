@@ -108,6 +108,37 @@ describe("buildCaptionAss (pure, libass — SPEC §6.5)", () => {
   });
 });
 
+describe("buildCaptionAss styling (color + bold/italic/underline)", () => {
+  // Style fields, comma-split: [3]=PrimaryColour(fill) [5]=OutlineColour
+  // [7]=Bold [8]=Italic [9]=Underline.
+  const fields = (over: Partial<RenderOptions>) =>
+    styleLine(buildCaptionAss({ ...ROW, hook: "H" }, opts(over))!).split(",");
+
+  it("defaults to white fill, black outline, no bold/italic/underline", () => {
+    const s = fields({});
+    expect(s[3]).toBe("&H00FFFFFF");
+    expect(s[5]).toBe("&H00000000");
+    expect(s.slice(7, 10)).toEqual(["0", "0", "0"]);
+  });
+
+  it("maps #RRGGBB to ASS &H00BBGGRR (fill + outline)", () => {
+    expect(fields({ captionColor: "#00FF00" })[3]).toBe("&H0000FF00");
+    expect(fields({ captionOutlineColor: "#0000FF" })[5]).toBe("&H00FF0000");
+    expect(fields({ captionColor: "ff8800" })[3]).toBe("&H000088FF"); // no '#' ok
+  });
+
+  it("bold / italic / underline set the ASS flag to -1", () => {
+    expect(fields({ captionBold: true })[7]).toBe("-1");
+    expect(fields({ captionItalic: true })[8]).toBe("-1");
+    expect(fields({ captionUnderline: true })[9]).toBe("-1");
+  });
+
+  it("malformed colour falls back to the default", () => {
+    expect(fields({ captionColor: "red" })[3]).toBe("&H00FFFFFF");
+    expect(fields({ captionOutlineColor: "#fff" })[5]).toBe("&H00000000");
+  });
+});
+
 describe("ffmpegListHasFilter (libass preflight)", () => {
   const WITH = [
     "Filters:",

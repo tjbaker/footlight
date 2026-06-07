@@ -85,7 +85,9 @@ const USAGE = `footlight — 16:9 -> 9:16 vertical clip batcher
 Usage:
   footlight render <manifest.csv|.json> [--outdir clips] [--crf 19] [--preset medium]
                                   [--audio-bitrate copy|256k] [--dry-run]
-                                  [--burn-captions [--caption-font <path|name>]]
+                                  [--burn-captions [--caption-font <path|name>]
+                                   [--caption-color #RRGGBB] [--caption-outline-color #RRGGBB]
+                                   [--caption-bold] [--caption-italic] [--caption-underline]]
   footlight probe  <source>         dims + cropdetect suggestion (black bars only)
   footlight scenes <source>         detected scene-cut timestamps (seconds)
   footlight track  <request.json>   locate a subject; print TrackSample[] JSON to stdout
@@ -134,7 +136,15 @@ interface RenderItem {
 async function cmdRender(argv: string[]): Promise<number> {
   const { positionals, flags } = parseArgs(
     argv,
-    new Set(["outdir", "crf", "preset", "audio-bitrate", "caption-font"]),
+    new Set([
+      "outdir",
+      "crf",
+      "preset",
+      "audio-bitrate",
+      "caption-font",
+      "caption-color",
+      "caption-outline-color",
+    ]),
   );
 
   const manifestPath = positionals[0];
@@ -164,6 +174,14 @@ async function cmdRender(argv: string[]): Promise<number> {
   if (captionFontFile && !captionFontName) {
     captionFontName = resolveFontFamily(captionFontFile);
   }
+  // Caption style (libass): fill/outline colour (#RRGGBB) + bold/italic/underline.
+  const captionColor = flags.has("caption-color") ? String(flags.get("caption-color")) : undefined;
+  const captionOutlineColor = flags.has("caption-outline-color")
+    ? String(flags.get("caption-outline-color"))
+    : undefined;
+  const captionBold = flags.get("caption-bold") === true;
+  const captionItalic = flags.get("caption-italic") === true;
+  const captionUnderline = flags.get("caption-underline") === true;
 
   if (Number.isNaN(crf)) {
     console.error("render: --crf must be a number");
@@ -233,6 +251,11 @@ async function cmdRender(argv: string[]): Promise<number> {
         burnCaptions,
         ...(captionFontFile ? { captionFontFile } : {}),
         ...(captionFontName ? { captionFontName } : {}),
+        ...(captionColor ? { captionColor } : {}),
+        ...(captionOutlineColor ? { captionOutlineColor } : {}),
+        captionBold,
+        captionItalic,
+        captionUnderline,
       });
       if (ass !== null) {
         const path = join(tmpdir(), `footlight_cap_${i}_${process.pid}.ass`);
