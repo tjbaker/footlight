@@ -16,6 +16,7 @@
  *   GET  /loudness?source=<path>       -> JSON number[]  (normalized 0..1 envelope)
  *   POST /track    (body = track request JSON)     -> JSON TrackSample[]
  *   POST /render   (body = manifest JSON, ?outdir=) -> JSON {ok, log}
+ *   GET  /fonts                        -> JSON FontInfo[] (fontconfig families)
  */
 
 import { createServer } from "node:http";
@@ -316,6 +317,39 @@ async function handleSaveSession(body, res) {
   sendJson(res, 200, { ok: true });
 }
 
+/**
+ * GET /fonts — installed font families via `fc-list` (fontconfig), as a sorted,
+ * deduped FontInfo[] (`{family, path}`). Best-effort: if `fc-list` is missing or
+ * errors we return `[]` with HTTP 200 so the picker falls back to free-text —
+ * never a hard failure. The native Tauri backend uses font-kit instead.
+ */
+async function handleFonts(res) {
+  let result;
+  try {
+    result = await run("fc-list", ["--format=%{family[0]}\t%{file}\n"]);
+  } catch {
+    // fc-list not on PATH (e.g. bare macOS without fontconfig) — graceful empty.
+    return sendJson(res, 200, []);
+  }
+  if (result.code !== 0) {
+    return sendJson(res, 200, []);
+  }
+  // Dedupe by family, keeping the first file path seen for each.
+  const byFamily = new Map();
+  for (const line of result.stdout.split("\n")) {
+    if (!line.trim()) continue;
+    const [family, file] = line.split("\t");
+    const fam = (family || "").trim();
+    if (!fam || byFamily.has(fam)) continue;
+    const path = (file || "").trim();
+    byFamily.set(fam, path ? { family: fam, path } : { family: fam });
+  }
+  const fonts = [...byFamily.values()].sort((a, b) =>
+    a.family.toLowerCase().localeCompare(b.family.toLowerCase()),
+  );
+  sendJson(res, 200, fonts);
+}
+
 const server = createServer(async (req, res) => {
   cors(res);
   if (req.method === "OPTIONS") {
@@ -398,6 +432,10 @@ const server = createServer(async (req, res) => {
       for await (const chunk of req) chunks.push(chunk);
       const body = Buffer.concat(chunks).toString("utf8");
       return await handleSaveHistory(body, res);
+    }
+
+    if (req.method === "GET" && url.pathname === "/fonts") {
+      return await handleFonts(res);
     }
 
     if (req.method === "GET" && url.pathname === "/session") {
