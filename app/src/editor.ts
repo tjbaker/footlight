@@ -176,8 +176,9 @@ export function mountEditor(root: HTMLElement): void {
 
   const autoTrack: AutoTrackSettings = loadAutoTrackSettings();
   // The BYOK Gemini key lives in the OS keychain (via `secretStore`), not in the
-  // auto-track blob. Hydrated asynchronously at init (see `hydrateApiKey`) and
-  // re-read at track time so a key entered in Settings mid-session is picked up.
+  // auto-track blob. Read LAZILY on first AI use (see `ensureApiKey`) — never at
+  // launch — so the native app doesn't prompt for keychain access unless you
+  // actually use the assistant / Auto-track.
   let apiKey = "";
 
   root.innerHTML = "";
@@ -2236,13 +2237,10 @@ export function mountEditor(root: HTMLElement): void {
       trackStatus.textContent = "track: Out must be after In.";
       return;
     }
-    // Re-read from the keychain so a key entered in Settings during this session
-    // is honored; fall back to whatever init hydrated. Absent ⇒ "no key", as before.
-    try {
-      apiKey = (await platform.getSecret(GEMINI_API_KEY_SECRET)) ?? apiKey;
-    } catch {
-      /* keychain unavailable — fall back to the init-hydrated value. */
-    }
+    // First keychain touch happens here (lazily), not at launch — so a user who
+    // never uses Auto-track never sees an OS keychain prompt. Reads fresh so a
+    // key entered in Settings this session is honored. Absent ⇒ "no key".
+    await ensureApiKey();
     if (!apiKey.trim()) {
       trackStatus.textContent = "track: set a Gemini API key in Settings first.";
       return;
@@ -2501,12 +2499,10 @@ export function mountEditor(root: HTMLElement): void {
     if (!state.source || !state.dims) {
       return { ok: false, reason: "Load a source first, then I can read its frames and propose framing." };
     }
-    // Read the key fresh so a key entered in Settings this session is honored.
-    try {
-      apiKey = (await platform.getSecret(GEMINI_API_KEY_SECRET)) ?? apiKey;
-    } catch {
-      /* keychain unavailable — fall back to the init-hydrated value. */
-    }
+    // First keychain touch happens here (lazily), not at launch — so a user who
+    // never opens the assistant never sees an OS keychain prompt. Reads fresh so
+    // a key entered in Settings this session is honored.
+    await ensureApiKey();
     if (!apiKey.trim()) {
       return {
         ok: false,
@@ -3344,18 +3340,26 @@ export function mountEditor(root: HTMLElement): void {
     clipErr.textContent = msg;
   }
 
+  /** Whether the one-time legacy-key migration has been attempted this session. */
+  let apiKeyMigrated = false;
+
   /**
-   * On launch, move any legacy inline key into the keychain (one-time), then
-   * hydrate `apiKey` from `secretStore` so the Auto-track action sees a stored
-   * key. If none is present, `apiKey` stays "" and the track path reports "no
-   * key" honestly. Best-effort: a locked/denied keychain leaves `apiKey` empty
-   * (and `migrateLegacyApiKey` keeps the legacy copy for a later attempt).
+   * LAZILY load the BYOK key: on first need, migrate any legacy inline key into
+   * the keychain (one-time, gated — a no-op when there's no legacy key), then
+   * read `apiKey` fresh from `secretStore`. Called only when the assistant /
+   * Auto-track actually needs the key — NOT at launch — so the native app never
+   * shows an OS keychain prompt to users who don't use the AI features. A
+   * locked/denied keychain leaves `apiKey` empty (track reports "no key"); the
+   * migration keeps the legacy copy for a later attempt.
    */
-  async function hydrateApiKey(): Promise<void> {
-    try {
-      await migrateLegacyApiKey(platform);
-    } catch {
-      /* migration failed (keychain locked, etc.) — key preserved for next run. */
+  async function ensureApiKey(): Promise<void> {
+    if (!apiKeyMigrated) {
+      apiKeyMigrated = true;
+      try {
+        await migrateLegacyApiKey(platform);
+      } catch {
+        /* migration failed (keychain locked, etc.) — key preserved for next run. */
+      }
     }
     try {
       apiKey = (await platform.getSecret(GEMINI_API_KEY_SECRET)) ?? "";
@@ -3369,7 +3373,8 @@ export function mountEditor(root: HTMLElement): void {
   refreshKeyframes();
   refreshManifest();
   refreshRecents();
-  void hydrateApiKey();
+  // NOTE: the keychain is read lazily (see `ensureApiKey`) on first AI use, not
+  // here — launching the app must not trigger an OS keychain prompt.
   void restoreSession();
 }
 
