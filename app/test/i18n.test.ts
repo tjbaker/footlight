@@ -10,7 +10,7 @@
 
 import { describe, it, expect } from "vitest";
 import { en } from "../src/i18n/en.js";
-import { messages } from "../src/i18n/index.js";
+import { messages, locales } from "../src/i18n/index.js";
 
 /** Walk every string leaf in the catalog, yielding `[dottedPath, value]`. */
 function* leaves(node: unknown, path = ""): Generator<[string, string]> {
@@ -77,4 +77,27 @@ describe("help guide catalog", () => {
       expect(s.blocks.length).toBeGreaterThan(0);
     }
   });
+});
+
+describe("locale parity (every locale matches the en key set)", () => {
+  /** The canonical set of leaf key-paths in the reference catalog. */
+  const enPaths = [...leaves(en)].map(([p]) => p).sort();
+
+  for (const [code, catalog] of Object.entries(locales)) {
+    describe(`locale: ${code}`, () => {
+      const paths = [...leaves(catalog)].map(([p]) => p).sort();
+
+      it("has the exact same leaf key-paths as en (no missing/extra keys)", () => {
+        expect(paths).toEqual(enPaths);
+      });
+
+      it("has no empty or whitespace-only string values", () => {
+        const blanks: string[] = [];
+        for (const [path, value] of leaves(catalog)) {
+          if (value.trim() === "") blanks.push(path);
+        }
+        expect(blanks).toEqual([]);
+      });
+    });
+  }
 });
