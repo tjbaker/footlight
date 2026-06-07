@@ -618,9 +618,9 @@ function buildRenderingPanel(): HTMLElement {
     readout.textContent = `CRF ${prefs.crf} · ${qualityWord(prefs.crf)}`;
   };
   const left = el("span");
-  left.textContent = "14 · near-lossless";
+  left.textContent = s.crfEndBest;
   const right = el("span");
-  right.textContent = "28 · smaller";
+  right.textContent = s.crfEndSmall;
   ends.append(left, readout, right);
   paintReadout();
   range.addEventListener("input", () => {

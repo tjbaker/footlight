@@ -24,7 +24,7 @@ export function createHelpMenu(): HTMLElement {
   menu.className = "menu";
 
   const trigger = document.createElement("button");
-  trigger.textContent = "Help ▾";
+  trigger.textContent = `${messages.help.menuTrigger} ▾`;
   trigger.setAttribute("aria-haspopup", "true");
 
   const dropdown = document.createElement("div");
@@ -35,15 +35,15 @@ export function createHelpMenu(): HTMLElement {
     closeDropdown();
     openGuide();
   });
-  const aboutBtn = mkItem("About Footlight", () => {
+  const aboutBtn = mkItem(messages.help.about, () => {
     closeDropdown();
     openSettings("about");
   });
-  const bugBtn = mkItem("Report a Bug", () => {
+  const bugBtn = mkItem(messages.help.reportBug, () => {
     closeDropdown();
     void platform.openExternal(ISSUES_NEW_URL);
   });
-  const ghBtn = mkItem("View on GitHub", () => {
+  const ghBtn = mkItem(messages.help.viewOnGithub, () => {
     closeDropdown();
     void platform.openExternal(REPO_URL);
   });
