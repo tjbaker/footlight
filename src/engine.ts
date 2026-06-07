@@ -21,9 +21,22 @@
 
 import { spawn } from "node:child_process";
 
-import { ffprobeStreamArgs, parseProbe } from "./core.js";
+import { ffprobeStreamArgs, parseProbe, ffmpegListHasFilter } from "./core.js";
 
 export * from "./core.js";
+
+/**
+ * Whether this machine's ffmpeg advertises a given filter (e.g. `drawtext`,
+ * which only exists when ffmpeg is built with libfreetype). Runs `ffmpeg
+ * -filters` and parses it with the pure `ffmpegListHasFilter`. Rejects only if
+ * ffmpeg can't be spawned at all (let the caller decide what that means).
+ */
+export async function ffmpegHasFilter(name: string): Promise<boolean> {
+  const { stdout } = await run("ffmpeg", ["-hide_banner", "-filters"], {
+    allowFailure: true,
+  });
+  return ffmpegListHasFilter(stdout, name);
+}
 
 /** Probe (width, height) of a video's first video stream via ffprobe. */
 export async function probeDimensions(path: string): Promise<[number, number]> {

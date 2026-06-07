@@ -18,6 +18,7 @@ import { parseCsv } from "./csv.js";
 import {
   buildFfmpegArgs,
   probeDimensions,
+  ffmpegHasFilter,
   run,
   cropdetectArgs,
   parseCropdetect,
@@ -182,6 +183,23 @@ async function cmdRender(argv: string[]): Promise<number> {
   if (items.length === 0) {
     console.error("No rows in manifest.");
     return 1;
+  }
+
+  // Captions preflight (SPEC §6.5): the `drawtext` filter exists only when ffmpeg
+  // is built with libfreetype. Check once up front and fail with an actionable
+  // message rather than letting every clip die on a cryptic "No such filter".
+  if (burnCaptions) {
+    try {
+      if (!(await ffmpegHasFilter("drawtext"))) {
+        console.error(
+          'render: --burn-captions needs an ffmpeg built with libfreetype, but yours has no "drawtext" filter.\n' +
+            "  Install one (macOS: brew install homebrew-ffmpeg/ffmpeg/ffmpeg) or drop --burn-captions.",
+        );
+        return 1;
+      }
+    } catch {
+      // ffmpeg couldn't be run at all — let the per-clip probe report that.
+    }
   }
 
   mkdirSync(outdir, { recursive: true });

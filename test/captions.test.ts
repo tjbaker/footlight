@@ -10,6 +10,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildCaptionFilters,
   buildFfmpegArgs,
+  ffmpegListHasFilter,
   DEFAULT_RENDER_OPTIONS,
   TARGET_H,
   type ClipRow,
@@ -103,6 +104,37 @@ describe("buildCaptionFilters (pure, SPEC §6.5)", () => {
     );
     expect(both[0]).toContain("fontfile='/f/a.otf'");
     expect(both[0]).not.toContain("font='Impact'");
+  });
+});
+
+describe("ffmpegListHasFilter (drawtext preflight)", () => {
+  // Representative `ffmpeg -filters` lines: <flags> <name> <in>-><out> <desc>.
+  const WITH_DRAWTEXT = [
+    "Filters:",
+    "  T.. = Timeline support",
+    " ... cropdetect        V->V       Auto-detect the crop size.",
+    " ..C drawtext          V->V       Draw text on top of video frames using libfreetype.",
+    " ... scale             V->V       Scale the input video size.",
+  ].join("\n");
+  const WITHOUT_DRAWTEXT = [
+    "Filters:",
+    " ... cropdetect        V->V       Auto-detect the crop size.",
+    " ... scale             V->V       Scale the input video size.",
+    " ... ebur128           A->N       EBU R128 scanner.",
+  ].join("\n");
+
+  it("detects an advertised filter", () => {
+    expect(ffmpegListHasFilter(WITH_DRAWTEXT, "drawtext")).toBe(true);
+    expect(ffmpegListHasFilter(WITH_DRAWTEXT, "cropdetect")).toBe(true);
+  });
+
+  it("reports a missing filter (minimal build without libfreetype)", () => {
+    expect(ffmpegListHasFilter(WITHOUT_DRAWTEXT, "drawtext")).toBe(false);
+  });
+
+  it("does not match a name only mentioned in a description", () => {
+    // "libfreetype" appears in drawtext's description but isn't a filter.
+    expect(ffmpegListHasFilter(WITH_DRAWTEXT, "libfreetype")).toBe(false);
   });
 });
 

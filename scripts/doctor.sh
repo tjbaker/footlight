@@ -96,6 +96,17 @@ fi
 req ffmpeg  "  (does all cut/crop/scale/encode)"
 req ffprobe "  (ships with ffmpeg)"
 
+# ffmpeg capability: burned captions (SPEC §6.5) use the `drawtext` filter, which
+# exists only when ffmpeg is built with libfreetype. Not fatal — captions are opt-in.
+if found ffmpeg; then
+  if ffmpeg -hide_banner -filters 2>/dev/null | grep -qE '[[:space:]]drawtext[[:space:]]'; then
+    printf '  ok        %-8s  %s\n' "drawtext" "captions supported (ffmpeg has libfreetype)"
+  else
+    printf '  -         %-8s  burned captions unavailable — ffmpeg lacks drawtext (needs libfreetype)\n' "drawtext"
+    [ "$PM" = brew ] && printf '            %-8s  fix: brew install homebrew-ffmpeg/ffmpeg/ffmpeg\n' ""
+  fi
+fi
+
 echo "Optional:"
 opt yt-dlp "source downloads"
 opt cargo  "native desktop build"
