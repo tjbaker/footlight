@@ -7,6 +7,10 @@ import type { Messages } from "./types.js";
 export const en: Messages = {
   help: {
     menuLabel: "User Guide",
+    menuTrigger: "Help",
+    about: "About Footlight",
+    reportBug: "Report a Bug",
+    viewOnGithub: "View on GitHub",
     title: "Footlight — User Guide",
     subtitle: "Cut 16:9 video into vertical 9:16 clips, with full control over framing.",
     tocLabel: "Contents",
@@ -367,6 +371,8 @@ export const en: Messages = {
       qualityHigh: "high (default)",
       qualityGood: "good",
       qualitySmaller: "smaller file",
+      crfEndBest: "14 · near-lossless",
+      crfEndSmall: "28 · smaller",
       preset: "Encoder preset",
       presetHint:
         "Slower presets pack more quality into the same size — they don't change the CRF, just encode time.",
@@ -442,11 +448,13 @@ export const en: Messages = {
     about: {
       title: "About",
       subtitle: "Version, licenses, and your local ffmpeg environment.",
+      tagline: "Your stage, vertical.",
       repo: "GitHub repository",
       reportBug: "Report a bug",
       licenses: "Licenses & notices",
       environment: "Environment",
       environmentHint: "Footlight invokes ffmpeg/ffprobe from your PATH — they are not bundled.",
+      thanks: "Special thanks to ",
     },
   },
 };

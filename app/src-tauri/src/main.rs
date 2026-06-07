@@ -897,7 +897,8 @@ fn main() {
                 .accelerator("CmdOrCtrl+,")
                 .build(app)?;
             // The single About item, in the standard macOS location (the app menu).
-            // It opens the in-app About modal rather than the generic system panel.
+            // It opens the in-app Settings → About panel (the one source of truth)
+            // rather than the generic system panel.
             let about = MenuItemBuilder::with_id("help_about", "About Footlight").build(app)?;
             let app_menu = SubmenuBuilder::new(app, "Footlight")
                 .item(&about)
@@ -958,7 +959,7 @@ fn main() {
                     let _ = app.emit("show-guide", ());
                 }
                 "help_about" => {
-                    // Ask the frontend to show its About modal (single source of truth).
+                    // Ask the frontend to open Settings → About (single source of truth).
                     let _ = app.emit("show-about", ());
                 }
                 "help_bug" => {

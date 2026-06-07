@@ -618,9 +618,9 @@ function buildRenderingPanel(): HTMLElement {
     readout.textContent = `CRF ${prefs.crf} · ${qualityWord(prefs.crf)}`;
   };
   const left = el("span");
-  left.textContent = "14 · near-lossless";
+  left.textContent = s.crfEndBest;
   const right = el("span");
-  right.textContent = "28 · smaller";
+  right.textContent = s.crfEndSmall;
   ends.append(left, readout, right);
   paintReadout();
   range.addEventListener("input", () => {
@@ -1095,10 +1095,13 @@ function buildAboutPanel(): HTMLElement {
   idName.style.cssText =
     'font-family:"Bricolage Grotesque",sans-serif; font-weight:700; font-size:20px; letter-spacing:-0.02em;';
   idName.textContent = APP_NAME;
+  const idTagline = el("div", "fl-rowhint");
+  idTagline.style.marginTop = "2px";
+  idTagline.textContent = s.tagline;
   const idVer = el("div", "fl-rowhint");
   idVer.style.marginTop = "3px";
   idVer.textContent = `v${APP_VERSION} · ${LICENSE} · © 2026 Trevor Baker`;
-  idMeta.append(idName, idVer);
+  idMeta.append(idName, idTagline, idVer);
   id.append(mark, idMeta);
 
   const links = el("div", "fl-link-row");
@@ -1115,7 +1118,18 @@ function buildAboutPanel(): HTMLElement {
   });
   licBtn.insertAdjacentHTML("afterbegin", ICON_LINK);
   links.append(repoBtn, bugBtn, licBtn);
-  idBlock.body.append(id, links);
+  // Special thanks — a real credit carried over from the former About modal.
+  const thanks = el("div", "fl-set-secsub");
+  thanks.style.marginTop = "10px";
+  const thanksLink = document.createElement("a");
+  thanksLink.textContent = "Lincoln Durham";
+  thanksLink.href = "#";
+  thanksLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    void platform.openExternal("https://www.lincolndurham.com/").catch(() => undefined);
+  });
+  thanks.append(document.createTextNode(s.thanks), thanksLink);
+  idBlock.body.append(id, links, thanks);
   root.append(idBlock.root);
 
   // Environment — a static read-out (a live `make doctor` probe needs backend
@@ -1160,8 +1174,8 @@ const NAV: { id: PanelId; icon: string; label: () => string; build: () => HTMLEl
   { id: "about", icon: ICON_INFO, label: () => messages.settings.nav.about, build: buildAboutPanel },
 ];
 
-/** Show the Settings modal, landing on the General panel. */
-export function openSettings(): void {
+/** Show the Settings modal, landing on `panel` (default General). */
+export function openSettings(panel: PanelId = "general"): void {
   const s = messages.settings;
 
   const backdrop = el("div", "fl-modal-backdrop");
@@ -1190,7 +1204,7 @@ export function openSettings(): void {
   const main = el("div", "fl-set-main");
 
   const navItems = new Map<PanelId, HTMLElement>();
-  let current: PanelId = "general";
+  let current: PanelId = panel;
 
   const renderPanel = (id: PanelId): void => {
     current = id;

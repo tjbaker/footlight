@@ -23,6 +23,11 @@ export interface GuideSection {
 /** Strings + content for the Help → User Guide dialog. */
 export interface HelpMessages {
   menuLabel: string;
+  /** In-app Help dropdown: trigger + the items beside the guide. */
+  menuTrigger: string;
+  about: string;
+  reportBug: string;
+  viewOnGithub: string;
   title: string;
   subtitle: string;
   tocLabel: string;
@@ -79,6 +84,9 @@ export interface SettingsMessages {
     qualityHigh: string;
     qualityGood: string;
     qualitySmaller: string;
+    /** The CRF slider's low/high end captions. */
+    crfEndBest: string;
+    crfEndSmall: string;
     preset: string;
     presetHint: string;
     audio: string;
@@ -144,11 +152,14 @@ export interface SettingsMessages {
   about: {
     title: string;
     subtitle: string;
+    tagline: string;
     repo: string;
     reportBug: string;
     licenses: string;
     environment: string;
     environmentHint: string;
+    /** Prefix for the credit line; the linked name ("Lincoln Durham") is appended. */
+    thanks: string;
   };
 }
 
