@@ -7,7 +7,8 @@
 
 <p align="center">
 Turn 16:9 performance and music videos into clean <strong>1080×1920 (9:16) H.264 MP4</strong><br>
-clips for Reels / TikTok / YouTube Shorts. A thin wrapper around <code>ffmpeg</code>.
+clips for Reels / TikTok / YouTube Shorts. <strong>Control-first</strong>: you pick the moment and the<br>
+framing; Footlight nails the frame-accurate cut, crop, and export.
 </p>
 
 ## Philosophy — control-first, not auto-magic
@@ -28,9 +29,9 @@ moves across the frame. You make the calls; Footlight does the rendering.
 
 This is an early build. Footlight is a **TypeScript render engine + CLI** with a
 **desktop GUI** (Tauri) for visual frame-accurate cutting and crop authoring —
-including punch-in/zoom framing and **optional AI-assisted subject tracking**
-(provider-agnostic, with Gemini as the reference vision provider) as an opt-in
-accelerant, never a gate. See [SPEC.md](SPEC.md) for the design rationale; the
+including punch-in/zoom framing, optional **per-clip burned captions**, and
+**optional AI-assisted subject tracking** (provider-agnostic, with Gemini as the
+reference vision provider) as an opt-in accelerant, never a gate. See [SPEC.md](SPEC.md) for the design rationale; the
 roadmap lives in [issues](https://github.com/tjbaker/footlight/issues) and
 [releases](https://github.com/tjbaker/footlight/releases).
 
@@ -129,12 +130,21 @@ The CLI is also available directly after `make build` — see **CLI usage** belo
   (stored in your OS keychain), or set **`GEMINI_API_KEY`** in your environment /
   `.env` — the env var works for the CLI and `make gui` and takes precedence over a
   stored key (see `.env.example`). AI is entirely optional; the core never needs a key.
+- **Captions (optional)** — give a clip a burned-in **hook + title**, styled
+  **per clip** right next to the text with a live preview: font (your system fonts
+  or a custom fonts folder), fill / outline color, bold / italic / underline,
+  shadow, box, rotation, and 9-zone placement. Off by default — a clean export
+  stays the default (see [Captions](#captions-optional)).
 - **Add clip → queue** (editable: click a card to re-edit, drag to reorder,
   duplicate), choose a **Destination**, and **Render**. Past renders are saved to
   **History** for one-click re-framing; your working session is autosaved and
-  restored on next launch.
-- **Keyboard-driven** — Space, ← / →, I / O, [ / ], S, and more; press **?** for
-  the shortcuts overlay.
+  restored on next launch. **Export** the queue as a JSON manifest (it re-imports
+  via `footlight render`); **Clear** resets the workspace to start fresh.
+- **Keyboard-driven** (NLE-style) — Space to play, **J / K / L** to shuttle
+  (reverse / pause / forward, tap again to speed up), ← / → to step a frame,
+  **I / O** to mark In / Out (**Shift+I / O** or **Q / W** to jump to them),
+  **↑ / ↓** (or **[ / ]**) for scene cuts, **S** to queue, and more; press **?**
+  for the shortcuts overlay.
 
 In-app **Help → User Guide** documents all of this.
 
