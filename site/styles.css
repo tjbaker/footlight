@@ -158,9 +158,49 @@ header.nav.scrolled { border-bottom-color: var(--line); background: rgba(9, 13, 
   transition: color .15s ease;
 }
 .nav-links a.lk:hover { color: var(--ink); }
+.nav-links .lk.gh-mobile { display: none; }
 .nav-cta { display: flex; align-items: center; gap: 12px; }
+.nav-toggle {
+  display: none;
+  width: 42px; height: 42px;
+  align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.nav-toggle svg { width: 20px; height: 20px; }
 @media (max-width: 760px) {
-  .nav-links .lk { display: none; }
+  .nav-toggle { display: inline-flex; }
+  .nav-cta .gh-btn { display: none; }
+  .nav-links {
+    position: absolute;
+    top: 100%; left: 0; right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 10px var(--pad) 16px;
+    background: rgba(9, 13, 20, 0.96);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 20px 40px -20px rgba(0,0,0,0.7);
+    transform: translateY(-8px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  header.nav.open .nav-links {
+    transform: none; opacity: 1; pointer-events: auto;
+  }
+  .nav-links a.lk {
+    padding: 12px 12px;
+    border-radius: 9px;
+    font-size: 16px;
+  }
+  .nav-links a.lk:hover { background: rgba(255,138,74,0.08); }
+  /* GitHub link added into the mobile menu via JS */
+  .nav-links .lk.gh-mobile { display: block; color: var(--glow); }
 }
 
 /* ---------- hero ---------- */
@@ -237,6 +277,68 @@ header.nav.scrolled { border-bottom-color: var(--line); background: rgba(9, 13, 
 }
 @media (prefers-reduced-motion: reduce) {
   .wavestrip .bar { animation: none; transform: scaleY(var(--hi, 0.8)); }
+}
+
+/* hero waveform band */
+.wave-band {
+  margin-top: clamp(40px, 6vw, 72px);
+  padding-top: clamp(28px, 4vw, 44px);
+  border-top: 1px solid var(--line);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+.wave-band .wavestrip { height: 44px; gap: 4px; opacity: 0.6; }
+.wave-band .wavestrip .bar { opacity: 0.6; }
+
+/* ---------- quickstart ---------- */
+.quickstart {
+  position: relative;
+  margin: 30px auto 0;
+  max-width: 600px;
+  width: 100%;
+  text-align: left;
+  background: #0a0f17;
+  border: 1px solid var(--line-2);
+  border-radius: 13px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px -28px rgba(0,0,0,0.7);
+}
+.quickstart .qs-body {
+  padding: 22px 22px 24px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.95;
+  overflow-x: auto;
+}
+.quickstart .row { white-space: pre; }
+.quickstart .pr { color: var(--ember); }
+.quickstart .cmd { color: var(--ink); }
+.quickstart .fl { color: var(--glow); }
+.quickstart .qc { color: #5d6b80; }
+.copy-btn {
+  position: absolute;
+  top: 12px; right: 12px;
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  color: var(--body);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 7px 11px;
+  cursor: pointer;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+.copy-btn svg { width: 15px; height: 15px; }
+.copy-btn:hover { color: var(--ink); border-color: var(--ember); background: rgba(255,138,74,0.1); }
+.copy-btn.copied { color: #4fd391; border-color: rgba(79,211,145,0.4); background: rgba(79,211,145,0.08); }
+.qs-note {
+  margin-top: 18px !important;
+  font-size: 14px;
+  color: var(--muted) !important;
+}
+.qs-note code.ic {
+  font-family: var(--font-mono); font-size: 0.86em; color: var(--ember);
+  background: rgba(255,138,74,0.08); padding: 2px 7px; border-radius: 6px;
 }
 
 /* ---------- section scaffold ---------- */
