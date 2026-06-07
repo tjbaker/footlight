@@ -131,6 +131,10 @@ export interface SettingsMessages {
     recommended: string;
     costNote: string;
     costInterval: string;
+    /** Chat-stills budget (#40): label, the "off" option, and the hint. */
+    chatStills: string;
+    chatStillsOff: string;
+    chatStillsHint: string;
     advanced: string;
     advancedSub: string;
     assistantModel: string;
