@@ -99,6 +99,17 @@ export interface SettingsMessages {
     captionFontPlaceholder: string;
     captionFontHint: string;
     captionStyleNote: string;
+    captionStyle: string;
+    captionStyleAppliesHint: string;
+    captionColor: string;
+    captionOutlineColor: string;
+    captionEmphasis: string;
+    captionBold: string;
+    captionItalic: string;
+    captionUnderline: string;
+    captionBoldGlyph: string;
+    captionItalicGlyph: string;
+    captionUnderlineGlyph: string;
     fontsDir: string;
     fontsDirBrowse: string;
     fontsDirPlaceholder: string;
