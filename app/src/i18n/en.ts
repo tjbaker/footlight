@@ -381,6 +381,16 @@ export const en: Messages = {
       dryRunHint: "Print the exact ffmpeg invocation so you can inspect or copy it.",
       gapNote:
         "These render defaults are persisted; threading them through to the render call is a follow-up.",
+      captions: "Captions",
+      burnCaptions: "Burn captions into the video",
+      burnCaptionsHint:
+        "Off by default — a clean export is the default. When on, the clip's hook/title are drawn into the exported MP4.",
+      captionFont: "Caption font",
+      captionFontPlaceholder: "System default (Sans) — or a .ttf/.otf path or font name",
+      captionFontHint:
+        "Bring-your-own — fonts are never bundled. Leave blank for the system default, or point at a .ttf/.otf file or an installed family name.",
+      captionStyleNote:
+        "Style: white text with a black outline; the hook sits above the title; position comes from the clip.",
     },
 
     ai: {
