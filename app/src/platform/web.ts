@@ -124,6 +124,22 @@ export const webPlatform: FootlightPlatform = {
     }
   },
 
+  // Browser download: there's no native Save dialog, so stream the content into a
+  // blob URL and click a synthetic <a download>. Always "succeeds" (the browser
+  // owns where it lands), so resolve true.
+  async exportTextFile(suggestedName: string, content: string): Promise<boolean> {
+    const blob = new Blob([content], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = suggestedName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
+  },
+
   async openExternal(url: string): Promise<void> {
     window.open(url, "_blank", "noopener,noreferrer");
   },

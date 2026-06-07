@@ -471,6 +471,8 @@ export const en: Messages = {
       themeToLight: "Switch to light theme",
       themeToDark: "Switch to dark theme",
       settingsTitle: "Settings",
+      clear: "Clear",
+      clearTitle: "Clear everything and start over",
     },
     stage: {
       sourceTag: "SOURCE",
@@ -675,8 +677,8 @@ export const en: Messages = {
     queue: {
       queueLabel: "Queue",
       addClip: "+ add clip",
-      copyJson: "Copy JSON",
-      copyJsonTitle: "Copy the queue JSON to the clipboard",
+      exportJson: "Export JSON",
+      exportJsonTitle: "Save the queue as a JSON manifest (re-imports via footlight render)",
       renderN: "Render",
       cardEditTitle: "Click to re-open this clip for editing · drag to reorder",
       duplicateTitle: "Duplicate (e.g. a second framing of this moment)",
@@ -737,6 +739,12 @@ export const en: Messages = {
     common: {
       close: "Close",
       dash: "—",
+    },
+    clear: {
+      title: "Clear everything?",
+      body: "This discards the loaded source, the entire queue, and your framing, and starts fresh. Export the queue first if you want to keep it.",
+      cancel: "Cancel",
+      confirm: "Clear everything",
     },
   },
 
