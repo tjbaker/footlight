@@ -35,10 +35,3 @@ ffmpeg / ffprobe (https://ffmpeg.org/)
     (e.g. `brew install ffmpeg`) do not bundle it, and the above bundling
     obligations do not apply to that case. Footlight's own Apache-2.0 licensing
     is unaffected either way.
-
-yt-dlp (https://github.com/yt-dlp/yt-dlp)
-
-    Footlight can optionally invoke `yt-dlp` to download source videos. yt-dlp is
-    released into the public domain under the Unlicense. It is an optional,
-    user-installed dependency and is not required to render clips from local
-    files.

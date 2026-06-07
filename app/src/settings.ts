@@ -1089,7 +1089,6 @@ function buildAboutPanel(): HTMLElement {
     ["ffmpeg", "from PATH"],
     ["ffprobe", "from PATH"],
     ["node", "from PATH"],
-    ["yt-dlp", "optional"],
   ];
   for (const [k, v] of rows) {
     const row = el("div", "fl-env-row");
