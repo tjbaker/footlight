@@ -248,11 +248,25 @@ footlight render manifest.csv --burn-captions --caption-font ./fonts/Inter-Bold.
 footlight render manifest.csv --burn-captions --caption-font "Helvetica Neue"
 ```
 
-**Bring your own font.** Footlight bundles **no** caption font — the right caption
+**Bring your own font.** Captions are bring-your-own-font and **local-first** —
+Footlight bundles **no** caption font and never downloads one. The right caption
 type is a creative choice, not a one-size-fits-all default. `--caption-font` takes
-either a `.ttf` / `.otf` **file path** or a **fontconfig family name**. With
-`--burn-captions` and no `--caption-font`, the system default sans is used, which
-requires an `ffmpeg` built **with fontconfig**.
+either a `.ttf` / `.otf` **file path** or a **fontconfig family name**: a path uses
+that exact font file (Footlight resolves its real family name so `libass` renders it
+correctly), while a name picks an installed family. With `--burn-captions` and no
+`--caption-font`, the system default sans is used, which requires an `ffmpeg` built
+**with fontconfig**.
+
+**Choosing a font in the app.** Settings → Rendering → Captions has a font picker
+with three ways to choose, all local — nothing is fetched:
+
+- **System fonts** — any font installed on your machine. Footlight enumerates them
+  automatically and lists them under a *System fonts* group.
+- **Fonts folder** — point Footlight at a directory of your own `.ttf` / `.otf` /
+  `.ttc` files (Browse on the desktop app, or type the path on the browser build).
+  Those show up in a *Your fonts* group pinned to the top of the picker for quick
+  access — drop a font in the folder and it appears.
+- **Custom path…** — the escape hatch for a single one-off font file.
 
 **Style.** The current defaults render `hook` above `title` as one centered block:
 white fill with a black outline, the hook at roughly `h/18` and the title at `h/26`

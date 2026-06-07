@@ -132,6 +132,7 @@ const OUTDIR_KEY = "footlight.outdir"; // shared with the editor's destination f
 const TIMECODE_KEY = "footlight.timecode";
 const AUTOSAVE_KEY = "footlight.autosave";
 const RENDER_KEY = "footlight.render"; // { crf, preset, audio, bitrate, dryRun }
+const FONTS_DIR_KEY = "footlight.fontsDir"; // plain string: a folder of user .ttf/.otf fonts
 const AI_KEY = "footlight.ai"; // { provider, model }
 
 const PRESETS = [
@@ -814,8 +815,10 @@ function buildRenderingPanel(): HTMLElement {
 
   // Reflect a selection onto the trigger label (in its own face) + free-text
   // visibility. Single-quotes are stripped so the inline family value can't
-  // break out of its quoting.
-  const syncPickerUi = (value: string) => {
+  // break out of its quoting. `display` overrides the shown text/face for a
+  // family whose stored value is a file path (folder fonts) — show the family,
+  // never the raw path.
+  const syncPickerUi = (value: string, display?: { label: string; face: string }) => {
     const custom = value === SENTINEL_CUSTOM;
     fontRow.style.display = custom ? "" : "none";
     if (custom) {
@@ -824,6 +827,9 @@ function buildRenderingPanel(): HTMLElement {
     } else if (value === SENTINEL_DEFAULT || value === "") {
       triggerLabel.textContent = s.captionFontSystemDefault;
       triggerLabel.style.fontFamily = "";
+    } else if (display) {
+      triggerLabel.textContent = display.label;
+      triggerLabel.style.fontFamily = `'${display.face.replace(/'/g, "")}'`;
     } else {
       triggerLabel.textContent = value;
       triggerLabel.style.fontFamily = `'${value.replace(/'/g, "")}'`;
@@ -838,92 +844,211 @@ function buildRenderingPanel(): HTMLElement {
   styleNote.style.marginTop = "8px";
   styleNote.textContent = s.captionStyleNote;
 
+  // --- Fonts folder: a typed path (web) / Browse… (Tauri) bound to its own
+  // plain-string key (footlight.fontsDir). When set, the picker scans it via
+  // listUserFonts() and lists the results in a top "Your fonts" group. The
+  // free-text field above is unrelated (a single .ttf path / family name); this
+  // is a *folder* you drop fonts into.
+  const fontsDirField = el("div", "fl-field path");
+  fontsDirField.style.flex = "1";
+  fontsDirField.innerHTML = `<span class="ic">${ICON_FOLDER}</span>`;
+  const fontsDirInput = document.createElement("input");
+  fontsDirInput.type = "text";
+  fontsDirInput.className = "mono";
+  fontsDirInput.placeholder = s.fontsDirPlaceholder;
+  fontsDirInput.value = readStr(FONTS_DIR_KEY, "");
+  fontsDirField.append(fontsDirInput);
+  const fontsDirBrowse = button(s.fontsDirBrowse, "fl-btn sm", () => {
+    void platform.pickDirectory().then((dir) => {
+      if (dir) {
+        fontsDirInput.value = dir;
+        writeStr(FONTS_DIR_KEY, dir);
+        rebuildPicker();
+      }
+    });
+  });
+  if (!platform.supportsFilePicker) fontsDirBrowse.disabled = true;
+  const fontsDirRow = labeledRow(s.fontsDir, fontsDirField, fontsDirBrowse);
+  fontsDirInput.addEventListener("change", () => {
+    writeStr(FONTS_DIR_KEY, fontsDirInput.value.trim());
+    rebuildPicker();
+  });
+  const fontsDirHint = el("div", "fl-rowhint");
+  fontsDirHint.style.cssText = "font-family:inherit; width:100%; color:var(--faint); margin-top:2px;";
+  fontsDirHint.textContent = s.fontsDirHint;
+
   // Default layout = free-text only (the fallback). Async: if families come
   // back, swap in the dropdown and put the free-text field behind "Custom path…".
-  capBlock.body.append(capToggle, fontRow, fontHint, styleNote);
+  capBlock.body.append(capToggle, fontRow, fontHint, fontsDirRow, fontsDirHint, styleNote);
   root.append(capBlock.root);
 
-  void (async () => {
-    let fonts: { family: string; path?: string }[] = [];
-    try {
-      fonts = await platform.listFonts();
-    } catch {
-      fonts = [];
+  // An option in the picker. A folder font carries `path` (selection sets
+  // captionFont = path so the engine resolves family + fontsdir); a system font
+  // has no path (selection sets captionFont = family, as today). `face` is the
+  // CSS family for the per-row live preview (best-effort).
+  type Opt = { value: string; label: string; face?: string; path?: string };
+
+  let selected = SENTINEL_DEFAULT; // updated by (re)build; the live selection
+  const markSelected = (value: string) => {
+    for (const li of Array.from(popup.children) as HTMLElement[]) {
+      if (li.dataset.value === undefined) continue; // group headers aren't options
+      const on = li.dataset.value === value;
+      li.setAttribute("aria-selected", String(on));
+      li.style.background = on ? "var(--panel-3)" : "";
     }
-    if (fonts.length === 0) return; // keep the free-text-only fallback
+  };
 
-    // De-dupe + sort families (case-insensitive) for a tidy list.
-    const families = Array.from(new Set(fonts.map((f) => f.family).filter((f) => f.trim())));
-    families.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-    if (families.length === 0) return;
+  const groupHeader = (text: string): HTMLElement => {
+    const li = el("li");
+    li.setAttribute("role", "presentation");
+    li.textContent = text;
+    li.style.cssText =
+      "padding:8px 10px 4px; font-size:10.5px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:var(--faint); cursor:default;";
+    return li;
+  };
 
-    type Opt = { value: string; label: string; face?: string };
-    const options: Opt[] = [
-      { value: SENTINEL_DEFAULT, label: s.captionFontSystemDefault },
-      ...families.map((f) => ({ value: f, label: f, face: f })),
-      { value: SENTINEL_CUSTOM, label: s.captionFontCustom },
-    ];
-
-    // The persisted pref decides the initial selection: "" → default; a value
-    // that matches an enumerated family → that family; anything else (a path or
-    // an unlisted name) → Custom path… (the free-text field shows the value).
-    const cur = prefs.captionFont.trim();
-    let selected: string;
-    if (cur === "") selected = SENTINEL_DEFAULT;
-    else if (families.includes(cur)) selected = cur;
-    else selected = SENTINEL_CUSTOM;
-
-    const markSelected = (value: string) => {
-      for (const li of Array.from(popup.children) as HTMLElement[]) {
-        const on = li.dataset.value === value;
-        li.setAttribute("aria-selected", String(on));
-        li.style.background = on ? "var(--panel-3)" : "";
+  const optionRow = (opt: Opt): HTMLElement => {
+    const li = el("li");
+    li.dataset.value = opt.value;
+    li.setAttribute("role", "option");
+    li.textContent = opt.label;
+    li.style.cssText =
+      "padding:7px 10px; border-radius:7px; cursor:pointer; font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+    // Each family row renders in its own face (system fonts resolve by name;
+    // folder fonts not installed system-wide fall back to the default face —
+    // that's fine, the burn uses the file).
+    if (opt.face) li.style.fontFamily = `'${opt.face.replace(/'/g, "")}'`;
+    li.addEventListener("mouseenter", () => {
+      if (li.getAttribute("aria-selected") !== "true") li.style.background = "var(--panel-2)";
+    });
+    li.addEventListener("mouseleave", () => {
+      if (li.getAttribute("aria-selected") !== "true") li.style.background = "";
+    });
+    li.addEventListener("click", (e) => {
+      e.stopPropagation();
+      selected = opt.value;
+      markSelected(selected);
+      if (opt.value === SENTINEL_DEFAULT) {
+        prefs.captionFont = "";
+        fontInput.value = "";
+        save();
+      } else if (opt.value === SENTINEL_CUSTOM) {
+        // Reveal the free-text field; keep whatever path is already there.
+        prefs.captionFont = fontInput.value.trim();
+        save();
+      } else {
+        // A folder font sets captionFont = its file path (engine resolves the
+        // family + fontsdir); a system font sets captionFont = the family.
+        prefs.captionFont = opt.path ?? opt.value;
+        save();
       }
-    };
+      const realFont =
+        opt.value !== SENTINEL_DEFAULT && opt.value !== SENTINEL_CUSTOM;
+      syncPickerUi(
+        opt.value === SENTINEL_CUSTOM ? SENTINEL_CUSTOM : prefs.captionFont || SENTINEL_DEFAULT,
+        realFont && opt.path ? { label: opt.label, face: opt.face ?? opt.label } : undefined,
+      );
+      closePopup();
+      if (opt.value === SENTINEL_CUSTOM) fontInput.focus();
+    });
+    return li;
+  };
 
-    for (const opt of options) {
-      const li = el("li");
-      li.dataset.value = opt.value;
-      li.setAttribute("role", "option");
-      li.textContent = opt.label;
-      li.style.cssText =
-        "padding:7px 10px; border-radius:7px; cursor:pointer; font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
-      // Each family row renders in its own face (system fonts resolve by name).
-      if (opt.face) li.style.fontFamily = `'${opt.face.replace(/'/g, "")}'`;
-      li.addEventListener("mouseenter", () => {
-        if (li.getAttribute("aria-selected") !== "true") li.style.background = "var(--panel-2)";
-      });
-      li.addEventListener("mouseleave", () => {
-        if (li.getAttribute("aria-selected") !== "true") li.style.background = "";
-      });
-      li.addEventListener("click", (e) => {
-        e.stopPropagation();
-        selected = opt.value;
-        markSelected(selected);
-        if (opt.value === SENTINEL_DEFAULT) {
-          prefs.captionFont = "";
-          fontInput.value = "";
-          save();
-        } else if (opt.value === SENTINEL_CUSTOM) {
-          // Reveal the free-text field; keep whatever path is already there.
-          prefs.captionFont = fontInput.value.trim();
-          save();
-        } else {
-          prefs.captionFont = opt.value;
-          save();
+  // (Re)build the dropdown: scan the fonts folder (if set) into a "Your fonts"
+  // group at the top, then list system fonts. Called once on mount and again
+  // whenever the fonts-folder field changes. Each rebuild supersedes the last
+  // (a stale async result is ignored via the token).
+  let buildToken = 0;
+  const rebuildPicker = (): void => {
+    const token = ++buildToken;
+    void (async () => {
+      let sysFonts: { family: string; path?: string }[] = [];
+      try {
+        sysFonts = await platform.listFonts();
+      } catch {
+        sysFonts = [];
+      }
+
+      const dir = readStr(FONTS_DIR_KEY, "").trim();
+      let userFonts: { family: string; path?: string }[] = [];
+      if (dir) {
+        try {
+          userFonts = await platform.listUserFonts(dir);
+        } catch {
+          userFonts = []; // unreadable/throwing → just no "Your fonts" group
         }
-        syncPickerUi(selected);
-        closePopup();
-        if (opt.value === SENTINEL_CUSTOM) fontInput.focus();
-      });
-      popup.append(li);
-    }
+      }
+      if (token !== buildToken) return; // a newer rebuild started — drop this one
 
-    // Swap the free-text-only layout for the dropdown (free-text now behind it).
-    markSelected(selected);
-    syncPickerUi(selected);
-    capBlock.body.insertBefore(pickerRow, fontRow);
-  })();
+      // System families: de-dupe + sort (case-insensitive).
+      const sysFamilies = Array.from(new Set(sysFonts.map((f) => f.family).filter((f) => f.trim())));
+      sysFamilies.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
+      // Folder fonts: keep only those with a real family + path; de-dupe by
+      // family. A folder font that also appears system-wide wins (it's removed
+      // from the System group below) so the file-backed entry is offered.
+      const userByFamily = new Map<string, { family: string; path: string }>();
+      for (const f of userFonts) {
+        const fam = f.family.trim();
+        if (!fam || !f.path) continue;
+        const key = fam.toLowerCase();
+        if (!userByFamily.has(key)) userByFamily.set(key, { family: fam, path: f.path });
+      }
+      const userList = Array.from(userByFamily.values());
+      userList.sort((a, b) => a.family.localeCompare(b.family, undefined, { sensitivity: "base" }));
+      const userKeys = new Set(userList.map((f) => f.family.toLowerCase()));
+
+      // Nothing to offer at all → keep the free-text-only fallback.
+      if (sysFamilies.length === 0 && userList.length === 0) {
+        if (pickerRow.parentElement) pickerRow.remove();
+        return;
+      }
+
+      const userOpts: Opt[] = userList.map((f) => ({
+        value: f.path,
+        label: f.family,
+        face: f.family,
+        path: f.path,
+      }));
+      const sysOpts: Opt[] = sysFamilies
+        .filter((f) => !userKeys.has(f.toLowerCase()))
+        .map((f) => ({ value: f, label: f, face: f }));
+
+      // The persisted pref decides the initial selection: "" → default; a value
+      // matching a folder font's path or a system family → that entry; anything
+      // else (a stray path or an unlisted name) → Custom path… (free-text shows it).
+      const cur = prefs.captionFont.trim();
+      if (cur === "") selected = SENTINEL_DEFAULT;
+      else if (userOpts.some((o) => o.value === cur)) selected = cur;
+      else if (sysOpts.some((o) => o.value === cur)) selected = cur;
+      else selected = SENTINEL_CUSTOM;
+
+      popup.replaceChildren();
+      popup.append(optionRow({ value: SENTINEL_DEFAULT, label: s.captionFontSystemDefault }));
+      if (userOpts.length > 0) {
+        popup.append(groupHeader(s.captionFontGroupYours));
+        for (const o of userOpts) popup.append(optionRow(o));
+      }
+      if (sysOpts.length > 0) {
+        popup.append(groupHeader(s.captionFontGroupSystem));
+        for (const o of sysOpts) popup.append(optionRow(o));
+      }
+      popup.append(optionRow({ value: SENTINEL_CUSTOM, label: s.captionFontCustom }));
+
+      markSelected(selected);
+      // A folder font's stored value is a path — show its family on the trigger.
+      const selUserOpt = userOpts.find((o) => o.value === selected);
+      syncPickerUi(
+        selected === SENTINEL_CUSTOM ? SENTINEL_CUSTOM : prefs.captionFont || SENTINEL_DEFAULT,
+        selUserOpt ? { label: selUserOpt.label, face: selUserOpt.face ?? selUserOpt.label } : undefined,
+      );
+
+      // Swap the free-text-only layout for the dropdown (free-text now behind it).
+      if (!pickerRow.parentElement) capBlock.body.insertBefore(pickerRow, fontRow);
+    })();
+  };
+
+  rebuildPicker();
 
   return root;
 }

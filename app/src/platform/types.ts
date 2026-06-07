@@ -132,6 +132,13 @@ export interface FootlightPlatform {
    */
   listFonts(): Promise<FontInfo[]>;
   /**
+   * List font files in the user's "fonts folder" (`dir`), recursively, each with
+   * its real family name (read via fc-scan / font-kit so libass can match it).
+   * Returns `[]` for an empty/unreadable `dir`. Shown as a separate "Your fonts"
+   * group above System fonts in the caption picker.
+   */
+  listUserFonts(dir: string): Promise<FontInfo[]>;
+  /**
    * Render a JSON manifest via the footlight CLI engine. `manifestJson` is the
    * string produced by `serializeManifestJSON` (clips may carry a `cropPath`).
    * The backend writes it to a temp `.json` so the CLI takes the JSON path.

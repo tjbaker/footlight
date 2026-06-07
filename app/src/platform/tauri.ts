@@ -154,4 +154,10 @@ export const tauriPlatform: FootlightPlatform = {
   async listFonts(): Promise<FontInfo[]> {
     return invoke<FontInfo[]>("list_fonts", {});
   },
+
+  // Stub — real impl (invoke `list_fonts_in_dir`, scanning the folder via
+  // font-kit) lands in the fonts-folder backends slice.
+  async listUserFonts(dir: string): Promise<FontInfo[]> {
+    return invoke<FontInfo[]>("list_fonts_in_dir", { dir }).catch(() => []);
+  },
 };

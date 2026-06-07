@@ -215,4 +215,18 @@ export const webPlatform: FootlightPlatform = {
       return [];
     }
   },
+
+  // Ask the dev server to scan a user fonts folder (`/fonts?dir=`), resolving
+  // each file's family via `fc-scan`. Best-effort like `listFonts`: an empty
+  // `dir` or any failure yields `[]` so the picker falls back to free-text.
+  async listUserFonts(dir: string): Promise<FontInfo[]> {
+    if (!dir) return [];
+    try {
+      const res = await fetch(`${BASE}/fonts?dir=${encodeURIComponent(dir)}`);
+      if (!res.ok) return [];
+      return (await res.json()) as FontInfo[];
+    } catch {
+      return [];
+    }
+  },
 };

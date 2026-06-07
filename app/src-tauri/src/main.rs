@@ -505,6 +505,73 @@ async fn list_fonts() -> Result<Vec<FontInfoDto>, String> {
         .collect())
 }
 
+/// Recursively collect font-file paths (`.ttf`/`.otf`/`.ttc`) under `dir`,
+/// bounded by depth/count so a pathological tree can't wedge the walk.
+/// Best-effort: unreadable sub-directories are skipped silently.
+fn collect_font_files(dir: &std::path::Path, depth: usize, acc: &mut Vec<std::path::PathBuf>) {
+    const MAX_DEPTH: usize = 8;
+    const MAX_FILES: usize = 5000;
+    if depth > MAX_DEPTH || acc.len() >= MAX_FILES {
+        return;
+    }
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return, // unreadable directory — skip.
+    };
+    for entry in entries.flatten() {
+        if acc.len() >= MAX_FILES {
+            return;
+        }
+        let path = entry.path();
+        if path.is_dir() {
+            collect_font_files(&path, depth + 1, acc);
+        } else if path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| matches!(e.to_lowercase().as_str(), "ttf" | "otf" | "ttc"))
+            .unwrap_or(false)
+        {
+            acc.push(path);
+        }
+    }
+}
+
+/// Scan a user fonts folder for `.ttf`/`.otf`/`.ttc`, loading each file with
+/// font-kit to read its real family name, returning a deduped (by `family+path`)
+/// list sorted case-insensitively by family. Unlike `list_fonts`, `path` is
+/// populated here so the caller can reference the exact file. An empty or
+/// unreadable directory yields an empty list rather than an error.
+#[tauri::command]
+async fn list_fonts_in_dir(dir: String) -> Result<Vec<FontInfoDto>, String> {
+    if dir.is_empty() {
+        return Ok(vec![]);
+    }
+    let mut files = Vec::new();
+    collect_font_files(std::path::Path::new(&dir), 0, &mut files);
+
+    let mut seen = std::collections::HashSet::new();
+    let mut fonts: Vec<FontInfoDto> = Vec::new();
+    for file in files {
+        let family = match font_kit::handle::Handle::from_path(file.clone(), 0).load() {
+            Ok(font) => font.family_name(),
+            Err(_) => continue, // unreadable/unsupported font file — skip.
+        };
+        if family.is_empty() {
+            continue;
+        }
+        let path = file.to_string_lossy().to_string();
+        if !seen.insert(format!("{family} {path}")) {
+            continue;
+        }
+        fonts.push(FontInfoDto {
+            family,
+            path: Some(path),
+        });
+    }
+    fonts.sort_by(|a, b| a.family.to_lowercase().cmp(&b.family.to_lowercase()));
+    Ok(fonts)
+}
+
 /// Build a keyring entry for `key` under this app's service. The platform
 /// secretStore seam (app/src/platform/tauri.ts) maps `getSecret`/`setSecret`/
 /// `deleteSecret` to the three commands below.
@@ -700,6 +767,7 @@ fn main() {
             set_secret,
             delete_secret,
             list_fonts,
+            list_fonts_in_dir,
             toggle_activity_window,
             show_activity_window
         ])
