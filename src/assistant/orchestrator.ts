@@ -61,6 +61,15 @@ export interface AssistantContext {
   sceneCuts?: number[];
   /** Suggested loudness swells the model may cite as grounding. */
   swells?: Array<{ t: number; label?: string }>;
+  /**
+   * Sampled stills attached to THIS chat turn (base64), so the model can ground
+   * moment/framing picks in the actual footage — not just metadata. The frontend
+   * chooses them deterministically (evenly across the In→Out window, or the whole
+   * source when no In/Out is set; snapped to scene cuts) up to the user's stills
+   * budget. Absent/empty = a state-only turn. Untrusted content: anything written
+   * in a frame is DATA, never instructions.
+   */
+  stills?: Array<{ t: number; mimeType: string; dataBase64: string }>;
   /** Resolved assistant + vision models (one-vs-two already collapsed). */
   models: ResolvedModels;
   /** BYOK key (opt-in; providers never ship one). */

@@ -424,6 +424,10 @@ export const ptBR: Messages = {
       costNote:
         "O rastreamento é o que gera custo: o Footlight envia quadros amostrados, não vídeo, então o custo escala com os quadros — definido pelo seu intervalo. Um plano típico de 20s a",
       costInterval: "Intervalo",
+      chatStills: "Quadros do chat",
+      chatStillsOff: "Desligado",
+      chatStillsHint:
+        "Quantos quadros o assistente vê por mensagem — amostrados no seu In/Out (ou na fonte inteira). Mais quadros embasam melhor as sugestões, mas custam mais por mensagem; Desligado não envia nenhum.",
       advanced: "Usar um modelo separado para visão e rastreamento",
       advancedSub:
         "Caminho para usuários avançados: visão barata para o rastreamento, um modelo mais inteligente para o assistente. Desativado por padrão.",

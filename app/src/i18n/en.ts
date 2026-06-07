@@ -424,6 +424,10 @@ export const en: Messages = {
       costNote:
         "Tracking is the cost driver: Footlight sends sampled stills, not video, so cost scales with frames — set by your interval. A typical 20s shot at",
       costInterval: "Interval",
+      chatStills: "Chat stills",
+      chatStillsOff: "Off",
+      chatStillsHint:
+        "How many frames the assistant sees per message — sampled across your In/Out (or the whole source). More frames ground its suggestions better but cost more per message; Off sends none.",
       advanced: "Use a separate model for vision & tracking",
       advancedSub:
         "Power-user path: cheap vision for tracking, a smarter model for the assistant. Off by default.",

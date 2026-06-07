@@ -180,9 +180,26 @@ interface AiPrefs {
    * absent. Capped at OVERLAY_MAX_CHARS.
    */
   overlay?: string;
+  /**
+   * How many stills the chat assistant samples + sends per turn so it can SEE the
+   * footage (issue #40). 0 = state-only (no frames). Bounded by CHAT_STILLS_MAX.
+   */
+  chatStills?: number;
 }
 
 const DEFAULT_AI: AiPrefs = { provider: "gemini", model: "gemini-3.5-flash" };
+
+/** Default + ceiling for the per-turn chat-stills budget (cost is per frame). */
+const DEFAULT_CHAT_STILLS = 4;
+const CHAT_STILLS_MAX = 12;
+
+/** The per-turn chat-stills budget (0 = off), clamped to a sane range. */
+export function loadChatStillsBudget(): number {
+  const prefs = readJson<AiPrefs>(AI_KEY, DEFAULT_AI);
+  const n = prefs.chatStills;
+  if (typeof n !== "number" || !Number.isFinite(n)) return DEFAULT_CHAT_STILLS;
+  return Math.max(0, Math.min(CHAT_STILLS_MAX, Math.round(n)));
+}
 
 /**
  * Hard cap on the overlay length. Not a security boundary (the overlay is the
@@ -926,6 +943,29 @@ function buildAiPanel(): HTMLElement {
   paintCost();
   modelBlock.body.append(note);
   root.append(modelBlock.root);
+
+  // Chat stills (#40): how many frames the assistant samples + sees per message.
+  // Cost is per frame, so it lives next to the model/cost block; 0 = state-only.
+  const stillsBlock = block(s.chatStills);
+  const stillsCtl = segmented<string>(
+    [
+      { value: "0", label: s.chatStillsOff },
+      { value: "2", label: "2" },
+      { value: "4", label: "4" },
+      { value: "6", label: "6" },
+      { value: "8", label: "8" },
+    ],
+    String(loadChatStillsBudget()),
+    (v) => {
+      prefs.chatStills = Number(v);
+      save();
+    },
+  );
+  const stillsHint = el("div", "fl-set-secsub");
+  stillsHint.style.marginTop = "8px";
+  stillsHint.textContent = s.chatStillsHint;
+  stillsBlock.body.append(stillsCtl, stillsHint);
+  root.append(stillsBlock.root);
 
   // Framing preferences — an append-only overlay composed ON TOP of the
   // read-only base prompt (it refines, never replaces it; see composeSystemPrompt).

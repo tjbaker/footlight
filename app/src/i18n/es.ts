@@ -424,6 +424,10 @@ export const es: Messages = {
       costNote:
         "El seguimiento es el principal factor de costo: Footlight envía fotogramas muestreados, no video, así que el costo escala con los fotogramas — definido por tu intervalo. Una toma típica de 20s a",
       costInterval: "Intervalo",
+      chatStills: "Fotogramas del chat",
+      chatStillsOff: "Desactivado",
+      chatStillsHint:
+        "Cuántos fotogramas ve el asistente por mensaje — muestreados en tu In/Out (o en toda la fuente). Más fotogramas fundamentan mejor sus sugerencias pero cuestan más por mensaje; Desactivado no envía ninguno.",
       advanced: "Usar un modelo separado para visión y seguimiento",
       advancedSub:
         "Ruta para usuarios avanzados: visión económica para el seguimiento, un modelo más inteligente para el asistente. Desactivado de forma predeterminada.",
