@@ -475,6 +475,8 @@ export const es: Messages = {
       themeToLight: "Cambiar a tema claro",
       themeToDark: "Cambiar a tema oscuro",
       settingsTitle: "Ajustes",
+      clear: "Limpiar",
+      clearTitle: "Limpiar todo y empezar de nuevo",
     },
     stage: {
       sourceTag: "ORIGEN",
@@ -679,8 +681,8 @@ export const es: Messages = {
     queue: {
       queueLabel: "Cola",
       addClip: "+ añadir clip",
-      copyJson: "Copiar JSON",
-      copyJsonTitle: "Copia el JSON de la cola al portapapeles",
+      exportJson: "Exportar JSON",
+      exportJsonTitle: "Guarda la cola como un manifiesto JSON (se reimporta con footlight render)",
       renderN: "Renderizar",
       cardEditTitle: "Haz clic para reabrir este clip y editarlo · arrastra para reordenar",
       duplicateTitle: "Duplicar (p. ej. un segundo encuadre de este momento)",
@@ -741,6 +743,12 @@ export const es: Messages = {
     common: {
       close: "Cerrar",
       dash: "—",
+    },
+    clear: {
+      title: "¿Limpiar todo?",
+      body: "Esto descarta la fuente cargada, toda la cola y tu encuadre, y empieza de cero. Exporta la cola primero si quieres conservarla.",
+      cancel: "Cancelar",
+      confirm: "Limpiar todo",
     },
   },
 

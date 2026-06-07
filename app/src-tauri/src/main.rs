@@ -813,6 +813,14 @@ fn check_outdir(app: AppHandle, outdir: Option<String>) -> OutdirCheck {
     }
 }
 
+/// Write `content` to `path` (a user-chosen file from the Save dialog) — used by
+/// the queue → manifest export. The path is the user's explicit choice, so this
+/// just writes UTF-8 text and surfaces a friendly error on failure.
+#[tauri::command]
+fn write_text_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, content).map_err(|e| format!("write {path}: {e}"))
+}
+
 /// Find the footlight CLI. Resolution order:
 ///   1. `FOOTLIGHT_CLI` env override.
 ///   2. The bundled resource at `<resourceDir>/engine/bin/footlight.js` (works
@@ -872,6 +880,7 @@ fn main() {
             render,
             default_outdir,
             check_outdir,
+            write_text_file,
             load_history,
             save_history,
             load_session,

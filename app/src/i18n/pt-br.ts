@@ -475,6 +475,8 @@ export const ptBR: Messages = {
       themeToLight: "Mudar para o tema claro",
       themeToDark: "Mudar para o tema escuro",
       settingsTitle: "Configurações",
+      clear: "Limpar",
+      clearTitle: "Limpar tudo e começar de novo",
     },
     stage: {
       sourceTag: "ORIGEM",
@@ -679,8 +681,8 @@ export const ptBR: Messages = {
     queue: {
       queueLabel: "Fila",
       addClip: "+ adicionar clipe",
-      copyJson: "Copiar JSON",
-      copyJsonTitle: "Copiar o JSON da fila para a área de transferência",
+      exportJson: "Exportar JSON",
+      exportJsonTitle: "Salva a fila como um manifesto JSON (reimporta via footlight render)",
       renderN: "Renderizar",
       cardEditTitle: "Clique para reabrir este clipe para edição · arraste para reordenar",
       duplicateTitle: "Duplicar (ex.: um segundo enquadramento deste momento)",
@@ -741,6 +743,12 @@ export const ptBR: Messages = {
     common: {
       close: "Fechar",
       dash: "—",
+    },
+    clear: {
+      title: "Limpar tudo?",
+      body: "Isso descarta a fonte carregada, toda a fila e o seu enquadramento, e começa do zero. Exporte a fila primeiro se quiser mantê-la.",
+      cancel: "Cancelar",
+      confirm: "Limpar tudo",
     },
   },
 

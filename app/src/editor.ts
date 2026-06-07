@@ -327,6 +327,8 @@ export function mountEditor(root: HTMLElement): void {
   const historyBtn = button("", "fl-iconbtn", () => void openHistory());
   historyBtn.innerHTML = ICON_HISTORY;
   historyBtn.title = m.topbar.historyTitle;
+  const clearBtn = button(m.topbar.clear, "fl-btn sm ghost", () => confirmClear());
+  clearBtn.title = m.topbar.clearTitle;
   const previewBtn = button("", "fl-iconbtn", () => togglePreview());
   previewBtn.innerHTML = ICON_PHONE;
   function togglePreview(): void {
@@ -347,7 +349,7 @@ export function mountEditor(root: HTMLElement): void {
   const settingsBtn = button("", "fl-iconbtn", () => openSettings());
   settingsBtn.innerHTML = ICON_GEAR;
   settingsBtn.title = m.topbar.settingsTitle;
-  actions.append(renderBtn, previewBtn, assistantBtn, historyBtn, activityToggle, themeBtn, settingsBtn);
+  actions.append(renderBtn, previewBtn, assistantBtn, historyBtn, activityToggle, clearBtn, themeBtn, settingsBtn);
   topbar.append(brand, crumb, actions);
 
   function refreshThemeIcon(): void {
@@ -1845,13 +1847,19 @@ export function mountEditor(root: HTMLElement): void {
   addCard.textContent = m.queue.addClip;
   addCard.addEventListener("click", () => addClip());
   const fsSpacer = el("span", "fl-spacer");
-  const copyManifestBtn = button("", "fl-btn sm ghost", () => {
-    if (state.clips.length) void copyToClipboard(serializeManifestJSON(state.clips), copyManifestBtn);
+  // Export the queue as a JSON manifest (re-imports via `footlight render`) — the
+  // single queue-out action (replaces the old copy-to-clipboard) and the safety
+  // net for Clear.
+  const exportBtn = button("", "fl-btn sm ghost", () => {
+    if (!state.clips.length) return;
+    void platform
+      .exportTextFile("footlight-manifest.json", serializeManifestJSON(state.clips))
+      .catch((err) => setOutput(errMsg(err), "err"));
   });
-  copyManifestBtn.innerHTML = `${ICON_COPY}${escapeHtml(m.queue.copyJson)}`;
-  copyManifestBtn.style.alignSelf = "center";
-  copyManifestBtn.title = m.queue.copyJsonTitle;
-  filmstrip.append(queueLabel, clipList, addCard, fsSpacer, copyManifestBtn);
+  exportBtn.innerHTML = `${ICON_DOWN}${escapeHtml(m.queue.exportJson)}`;
+  exportBtn.style.alignSelf = "center";
+  exportBtn.title = m.queue.exportJsonTitle;
+  filmstrip.append(queueLabel, clipList, addCard, fsSpacer, exportBtn);
 
   appEl.append(topbar, main, timeline, filmstrip);
   root.append(appEl);
@@ -4120,6 +4128,64 @@ export function mountEditor(root: HTMLElement): void {
       srcInput.value = data.source;
       await load(); // re-probe; any error is surfaced but the queue stays intact
     }
+  }
+
+  /**
+   * Clear everything → first-run: persist an empty session (keeping the chosen
+   * destination, a preference not "content"), then reload the editor. A reload is
+   * a guaranteed full reset of every in-memory field + the UI, far safer than
+   * resetting two dozen state vars and their readouts by hand.
+   */
+  async function clearAll(): Promise<void> {
+    try {
+      await platform.saveSession({
+        source: "",
+        outdir: outdirInput.value.trim(),
+        clips: [],
+        savedAt: Date.now(),
+      });
+    } catch {
+      /* non-fatal — the reload drops in-memory state regardless */
+    }
+    location.reload();
+  }
+
+  /** Confirm before Clear when there's work to lose; nudges toward Export first. */
+  function confirmClear(): void {
+    if (!state.source && state.clips.length === 0) return; // nothing to clear
+    const backdrop = el("div", "fl-modal-backdrop");
+    const modal = el("div", "fl-modal");
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-label", m.clear.title);
+    const h = el("div", "fl-modal-h");
+    const title = el("span", "fl-label");
+    title.style.fontSize = "14px";
+    title.textContent = m.clear.title;
+    h.append(title);
+    const bodyEl = el("div");
+    bodyEl.style.cssText = "padding:4px 2px 2px; line-height:1.55; color:var(--muted);";
+    bodyEl.textContent = m.clear.body;
+    const foot = el("div", "fl-modal-foot");
+    const dismiss = (): void => {
+      backdrop.remove();
+      document.removeEventListener("keydown", onKey);
+    };
+    function onKey(e: KeyboardEvent): void {
+      if (e.key === "Escape") dismiss();
+    }
+    const cancelBtn = button(m.clear.cancel, "fl-btn ghost", dismiss);
+    const confirmBtn = button(m.clear.confirm, "fl-btn primary danger", () => {
+      dismiss();
+      void clearAll();
+    });
+    foot.append(el("span", "fl-spacer"), cancelBtn, confirmBtn);
+    modal.append(h, bodyEl, foot);
+    backdrop.append(modal);
+    document.body.append(backdrop);
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) dismiss();
+    });
+    document.addEventListener("keydown", onKey);
   }
 
   function flashErr(msg: string): void {
