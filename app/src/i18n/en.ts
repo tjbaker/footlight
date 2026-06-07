@@ -393,6 +393,13 @@ export const en: Messages = {
         "Bring-your-own — fonts are never bundled. Leave blank for the system default, or point at a .ttf/.otf file or an installed family name.",
       captionStyleNote:
         "Style: white text with a black outline; the hook sits above the title; position comes from the clip.",
+      fontsDir: "Fonts folder",
+      fontsDirBrowse: "Browse…",
+      fontsDirPlaceholder: "Path to a folder of .ttf/.otf fonts",
+      fontsDirHint:
+        "Drop your .ttf/.otf fonts here to use them in captions. They show up under “Your fonts” in the picker above.",
+      captionFontGroupYours: "Your fonts",
+      captionFontGroupSystem: "System fonts",
     },
 
     ai: {
