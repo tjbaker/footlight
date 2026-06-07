@@ -31,6 +31,7 @@ import {
   type Box,
   type Dims,
   type ClipSpec,
+  type CaptionStyle,
   type CropKeyframe,
 } from "@manifest";
 import { planSampleTimes, samplesToCropPath } from "@track";
@@ -65,7 +66,11 @@ function assistantSelection(): { assistantModel: { provider: string; model: stri
   return { assistantModel };
 }
 
-/** Render flags from Settings → Rendering (persisted under `footlight.render`). */
+/**
+ * Render flags from Settings → Rendering (persisted under `footlight.render`).
+ * Caption STYLE is per-clip now (carried on each `ClipSpec.caption` in the
+ * manifest); only the render-wide `burnCaptions` on/off switch lives here.
+ */
 function renderOptions(outdir: string): RenderOptions {
   const opts: RenderOptions = { outdir };
   try {
@@ -78,37 +83,12 @@ function renderOptions(outdir: string): RenderOptions {
         bitrate?: unknown;
         dryRun?: unknown;
         burnCaptions?: unknown;
-        captionFont?: unknown;
-        captionColor?: unknown;
-        captionOutlineColor?: unknown;
-        captionBold?: unknown;
-        captionItalic?: unknown;
-        captionUnderline?: unknown;
-        captionShadow?: unknown;
-        captionBox?: unknown;
-        captionBoxColor?: unknown;
-        captionAngle?: unknown;
       };
       if (typeof p.crf === "number") opts.crf = p.crf;
       if (typeof p.preset === "string") opts.preset = p.preset;
       if (p.audio === "reencode" && typeof p.bitrate === "string") opts.audioBitrate = p.bitrate;
       if (p.dryRun === true) opts.dryRun = true;
       if (p.burnCaptions === true) opts.burnCaptions = true;
-      if (typeof p.captionFont === "string" && p.captionFont.trim())
-        opts.captionFont = p.captionFont.trim();
-      if (typeof p.captionColor === "string" && p.captionColor.trim())
-        opts.captionColor = p.captionColor.trim();
-      if (typeof p.captionOutlineColor === "string" && p.captionOutlineColor.trim())
-        opts.captionOutlineColor = p.captionOutlineColor.trim();
-      if (p.captionBold === true) opts.captionBold = true;
-      if (p.captionItalic === true) opts.captionItalic = true;
-      if (p.captionUnderline === true) opts.captionUnderline = true;
-      if (p.captionShadow === true) opts.captionShadow = true;
-      if (p.captionBox === true) opts.captionBox = true;
-      if (typeof p.captionBoxColor === "string" && p.captionBoxColor.trim())
-        opts.captionBoxColor = p.captionBoxColor.trim();
-      if (typeof p.captionAngle === "number" && Number.isFinite(p.captionAngle))
-        opts.captionAngle = p.captionAngle;
     }
   } catch {
     /* fall back to the engine's own defaults */
@@ -173,6 +153,87 @@ interface EditorState {
    * `"<v>-<h>"` otherwise (e.g. `"bottom-left"`, `"top-right"`).
    */
   textPosition: string;
+  /**
+   * Per-clip caption styling, edited in situ next to the caption text/preview.
+   * Fields are always populated here (defaults mirror the engine); `captionStyleToSpec`
+   * narrows them to a sparse `CaptionStyle` (omitting defaults) on the saved clip.
+   */
+  caption: CaptionStyleState;
+}
+
+/** Editor working copy of `CaptionStyle` — every field populated for the controls. */
+interface CaptionStyleState {
+  /** Family name, or a `.ttf`/`.otf`/`.ttc` file path; `""` = system default. */
+  font: string;
+  /** Fill colour `#RRGGBB`. */
+  color: string;
+  /** Outline colour `#RRGGBB`. */
+  outlineColor: string;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  shadow: boolean;
+  box: boolean;
+  /** Opaque-box fill colour `#RRGGBB` (used when `box`). */
+  boxColor: string;
+  /** Rotation in degrees. */
+  angle: number;
+}
+
+/** A fresh caption style at the engine defaults (white fill, black outline, flat). */
+function defaultCaptionStyle(): CaptionStyleState {
+  return {
+    font: "",
+    color: "#FFFFFF",
+    outlineColor: "#000000",
+    bold: false,
+    italic: false,
+    underline: false,
+    shadow: false,
+    box: false,
+    boxColor: "#000000",
+    angle: 0,
+  };
+}
+
+/**
+ * Narrow the editor's fully-populated caption style to the sparse `CaptionStyle`
+ * stored on a clip: only non-default fields are kept, so manifests stay clean and
+ * a clip with default styling carries no `caption` object at all (returns null).
+ */
+function captionStyleToSpec(c: CaptionStyleState): CaptionStyle | null {
+  const out: CaptionStyle = {};
+  const font = c.font.trim();
+  if (font) out.font = font;
+  if (c.color.toUpperCase() !== "#FFFFFF") out.color = c.color;
+  if (c.outlineColor.toUpperCase() !== "#000000") out.outlineColor = c.outlineColor;
+  if (c.bold) out.bold = true;
+  if (c.italic) out.italic = true;
+  if (c.underline) out.underline = true;
+  if (c.shadow) out.shadow = true;
+  if (c.box) {
+    out.box = true;
+    if (c.boxColor.toUpperCase() !== "#000000") out.boxColor = c.boxColor;
+  }
+  if (Number.isFinite(c.angle) && c.angle !== 0) out.angle = c.angle;
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/** Hydrate the editor's working caption style from a clip's sparse `CaptionStyle`. */
+function captionStyleFromSpec(spec: CaptionStyle | undefined): CaptionStyleState {
+  const c = defaultCaptionStyle();
+  if (!spec) return c;
+  if (typeof spec.font === "string") c.font = spec.font;
+  if (typeof spec.color === "string") c.color = spec.color;
+  if (typeof spec.outlineColor === "string") c.outlineColor = spec.outlineColor;
+  c.bold = spec.bold === true;
+  c.italic = spec.italic === true;
+  c.underline = spec.underline === true;
+  c.shadow = spec.shadow === true;
+  c.box = spec.box === true;
+  if (typeof spec.boxColor === "string") c.boxColor = spec.boxColor;
+  if (typeof spec.angle === "number" && Number.isFinite(spec.angle)) c.angle = spec.angle;
+  return c;
 }
 
 type TextPosV = "top" | "center" | "bottom";
@@ -216,6 +277,7 @@ export function mountEditor(root: HTMLElement): void {
     hook: "",
     title: "",
     textPosition: "bottom",
+    caption: defaultCaptionStyle(),
   };
 
   const autoTrack: AutoTrackSettings = loadAutoTrackSettings();
@@ -616,7 +678,246 @@ export function mountEditor(root: HTMLElement): void {
   posVSelect.addEventListener("change", syncPosFromSelects);
   posHSelect.addEventListener("change", syncPosFromSelects);
   posField.append(posVSelect, posHSelect);
-  capSect.append(hookField, titleCapField, posField);
+
+  // --- Per-clip caption style (SPEC §6.5) ---------------------------------
+  // Font + colour + emphasis + effects + rotation, edited in situ so each clip
+  // can look different. The controls bind to `state.caption` (a populated working
+  // copy); `addClip` narrows it to a sparse `spec.caption`. The fonts FOLDER stays
+  // in Settings — its dir feeds the "Your fonts" group of the picker here.
+  const FONTS_DIR_KEY = "footlight.fontsDir";
+  const styleWrap = el("div", "fl-cap-style");
+  styleWrap.style.cssText = "display:flex; flex-direction:column; gap:8px; margin-top:8px;";
+
+  // Font picker: a native select grouped into Default / Your fonts / System fonts
+  // / Custom path…. Folder fonts store their FILE PATH (engine resolves family +
+  // fontsdir); system fonts store the family NAME; custom reveals a text field.
+  const FONT_DEFAULT = "__default__";
+  const FONT_CUSTOM = "__custom__";
+  const fontSelect = document.createElement("select");
+  fontSelect.title = "Caption font — your fonts (from the Settings folder), system fonts, or a custom file path.";
+  const fontField = el("div", "fl-field");
+  fontField.style.marginTop = "2px";
+  const fontPathInput = input("text", "/path/to/font.ttf");
+  fontPathInput.classList.add("mono");
+  fontField.append(fontPathInput);
+  fontField.style.display = "none";
+
+  /** Sync the custom-path field's visibility from the current selection. */
+  const syncFontCustom = (): void => {
+    fontField.style.display = fontSelect.value === FONT_CUSTOM ? "" : "none";
+  };
+  fontSelect.addEventListener("change", () => {
+    if (fontSelect.value === FONT_DEFAULT) state.caption.font = "";
+    else if (fontSelect.value === FONT_CUSTOM) state.caption.font = fontPathInput.value.trim();
+    else state.caption.font = fontSelect.value;
+    syncFontCustom();
+    drawPreview();
+  });
+  fontPathInput.addEventListener("input", () => {
+    if (fontSelect.value === FONT_CUSTOM) {
+      state.caption.font = fontPathInput.value.trim();
+      drawPreview();
+    }
+  });
+
+  // Folder-font paths (so a restored clip whose font is a path selects the right
+  // option instead of falling to "Custom path…"). Filled by rebuildFontPicker.
+  let folderFontPaths = new Set<string>();
+  /** Point the select at `state.caption.font` (default / a known option / custom). */
+  const syncFontSelect = (): void => {
+    const f = state.caption.font.trim();
+    if (!f) fontSelect.value = FONT_DEFAULT;
+    else if ([...fontSelect.options].some((o) => o.value === f)) fontSelect.value = f;
+    else {
+      fontSelect.value = FONT_CUSTOM;
+      fontPathInput.value = f;
+    }
+    syncFontCustom();
+  };
+
+  /** (Re)load the picker: System fonts + a "Your fonts" group from the Settings folder. */
+  async function rebuildFontPicker(): Promise<void> {
+    const prev = state.caption.font.trim();
+    fontSelect.innerHTML = "";
+    const optDefault = document.createElement("option");
+    optDefault.value = FONT_DEFAULT;
+    optDefault.textContent = "System default";
+    fontSelect.append(optDefault);
+
+    folderFontPaths = new Set();
+    let userFonts: { family: string; path?: string }[] = [];
+    let sysFonts: { family: string; path?: string }[] = [];
+    try {
+      const dir = localStorage.getItem(FONTS_DIR_KEY)?.trim() ?? "";
+      if (dir) userFonts = await platform.listUserFonts(dir);
+    } catch {
+      /* unreadable folder → no "Your fonts" group */
+    }
+    try {
+      sysFonts = await platform.listFonts();
+    } catch {
+      /* enumeration unavailable → system-default + custom path only */
+    }
+
+    if (userFonts.length) {
+      const grp = document.createElement("optgroup");
+      grp.label = "Your fonts";
+      for (const f of userFonts) {
+        if (!f.family) continue;
+        const value = f.path ?? f.family; // folder fonts select by PATH
+        if (f.path) folderFontPaths.add(f.path);
+        const o = document.createElement("option");
+        o.value = value;
+        o.textContent = f.family;
+        grp.append(o);
+      }
+      if (grp.children.length) fontSelect.append(grp);
+    }
+    if (sysFonts.length) {
+      const grp = document.createElement("optgroup");
+      grp.label = "System fonts";
+      const seen = new Set<string>();
+      for (const f of sysFonts.map((x) => x.family).sort((a, b) => a.localeCompare(b))) {
+        if (!f || seen.has(f)) continue;
+        seen.add(f);
+        const o = document.createElement("option");
+        o.value = f;
+        o.textContent = f;
+        grp.append(o);
+      }
+      fontSelect.append(grp);
+    }
+    const optCustom = document.createElement("option");
+    optCustom.value = FONT_CUSTOM;
+    optCustom.textContent = "Custom path…";
+    fontSelect.append(optCustom);
+
+    state.caption.font = prev;
+    syncFontSelect();
+  }
+  const fontRow = el("div", "fl-field");
+  fontRow.append(fontSelect);
+
+  /** A `#RRGGBB` colour control: swatch + live hex label, bound to `bind`. */
+  function colorControl(
+    label: string,
+    get: () => string,
+    set: (v: string) => void,
+  ): HTMLElement {
+    const row = el("div", "fl-rowg");
+    row.style.cssText = "align-items:center; gap:8px;";
+    const lab = el("span", "fl-label");
+    lab.style.cssText = "flex:1; font-size:12px;";
+    lab.textContent = label;
+    const swatch = document.createElement("input");
+    swatch.type = "color";
+    swatch.value = get();
+    const hex = el("span", "mono");
+    hex.style.cssText = "font-size:12px; color:var(--faint); min-width:62px; text-align:right;";
+    hex.textContent = get().toUpperCase();
+    swatch.addEventListener("input", () => {
+      set(swatch.value);
+      hex.textContent = swatch.value.toUpperCase();
+      drawPreview();
+    });
+    (swatch as HTMLInputElement & { _sync?: () => void })._sync = () => {
+      swatch.value = get();
+      hex.textContent = get().toUpperCase();
+    };
+    row.append(lab, swatch, hex);
+    return row;
+  }
+  const fillRow = colorControl("Fill", () => state.caption.color, (v) => (state.caption.color = v));
+  const outlineRow = colorControl(
+    "Outline",
+    () => state.caption.outlineColor,
+    (v) => (state.caption.outlineColor = v),
+  );
+
+  /** A B/I/U-style toggle button bound to a boolean on `state.caption`. */
+  function toggleBtn(
+    glyph: string,
+    css: string,
+    title: string,
+    get: () => boolean,
+    set: (v: boolean) => void,
+  ): HTMLButtonElement {
+    const b = button(glyph, "fl-btn sm");
+    if (css) b.style.cssText = css;
+    b.title = title;
+    const refresh = () => b.classList.toggle("primary", get());
+    b.addEventListener("click", () => {
+      set(!get());
+      refresh();
+      drawPreview();
+    });
+    (b as HTMLButtonElement & { _sync?: () => void })._sync = refresh;
+    refresh();
+    return b;
+  }
+  const boldBtn = toggleBtn("B", "font-weight:700;", "Bold", () => state.caption.bold, (v) => (state.caption.bold = v));
+  const italicBtn = toggleBtn("I", "font-style:italic;", "Italic", () => state.caption.italic, (v) => (state.caption.italic = v));
+  const underlineBtn = toggleBtn("U", "text-decoration:underline;", "Underline", () => state.caption.underline, (v) => (state.caption.underline = v));
+  const emphasisRow = el("div", "fl-rowg");
+  emphasisRow.style.gap = "6px";
+  emphasisRow.append(boldBtn, italicBtn, underlineBtn);
+
+  const boxColorRow = colorControl("Box color", () => state.caption.boxColor, (v) => (state.caption.boxColor = v));
+  const shadowBtn = toggleBtn("Shadow", "", "Drop shadow behind the caption", () => state.caption.shadow, (v) => (state.caption.shadow = v));
+  const boxBtn = toggleBtn("Box", "", "Opaque box behind the caption", () => state.caption.box, (v) => {
+    state.caption.box = v;
+    boxColorRow.style.display = v ? "" : "none";
+  });
+  boxColorRow.style.display = state.caption.box ? "" : "none";
+  const fxRow = el("div", "fl-rowg");
+  fxRow.style.gap = "6px";
+  fxRow.append(shadowBtn, boxBtn);
+
+  const angleRow = el("div", "fl-rowg");
+  angleRow.style.cssText = "align-items:center; gap:8px;";
+  const angleLab = el("span", "fl-label");
+  angleLab.style.cssText = "flex:none; font-size:12px;";
+  angleLab.textContent = "Rotate";
+  const angleInput = document.createElement("input");
+  angleInput.type = "range";
+  angleInput.min = "-30";
+  angleInput.max = "30";
+  angleInput.step = "1";
+  angleInput.style.flex = "1";
+  angleInput.value = String(state.caption.angle);
+  const angleVal = el("span", "mono");
+  angleVal.style.cssText = "font-size:12px; color:var(--faint); min-width:34px; text-align:right;";
+  angleVal.textContent = `${state.caption.angle}°`;
+  angleInput.addEventListener("input", () => {
+    state.caption.angle = Number(angleInput.value);
+    angleVal.textContent = `${state.caption.angle}°`;
+    drawPreview();
+  });
+  angleRow.append(angleLab, angleInput, angleVal);
+
+  styleWrap.append(fontRow, fontField, fillRow, outlineRow, emphasisRow, fxRow, boxColorRow, angleRow);
+
+  /** Refresh every caption-style control from `state.caption` (used on clip restore). */
+  function syncCaptionControls(): void {
+    syncFontSelect();
+    for (const c of [fillRow, outlineRow, boxColorRow]) {
+      const sw = c.querySelector('input[type="color"]') as
+        | (HTMLInputElement & { _sync?: () => void })
+        | null;
+      sw?._sync?.();
+    }
+    for (const b of [boldBtn, italicBtn, underlineBtn, shadowBtn, boxBtn] as Array<
+      HTMLButtonElement & { _sync?: () => void }
+    >) {
+      b._sync?.();
+    }
+    boxColorRow.style.display = state.caption.box ? "" : "none";
+    angleInput.value = String(state.caption.angle);
+    angleVal.textContent = `${state.caption.angle}°`;
+  }
+  void rebuildFontPicker();
+
+  capSect.append(hookField, titleCapField, posField, styleWrap);
 
   const kfSect = el("div", "fl-sect");
   kfSect.append(sectionHeader("Moving crop — keyframes"));
@@ -1861,10 +2162,12 @@ export function mountEditor(root: HTMLElement): void {
 
   /**
    * Rough on-canvas approximation of the burned caption: hook above title,
-   * white fill with a dark outline, placed on the 9-zone grid per text_position
-   * (vertical top/center/bottom × horizontal left/center/right). This is a
-   * runtime-visual hint only — the AUTHORITATIVE render is the engine's drawtext
-   * (`--burn-captions`); spacing/fonts will differ.
+   * placed on the 9-zone grid per text_position (vertical top/center/bottom ×
+   * horizontal left/center/right) and styled per the clip's `caption` (fill /
+   * outline colour, bold/italic/underline, drop shadow, opaque box, rotation,
+   * and the font family when it's a name the browser can render). This is a
+   * runtime-visual HINT only — the AUTHORITATIVE render is the engine's libass
+   * (`--burn-captions`); spacing/fonts/metrics will differ.
    */
   function drawPreviewCaptions(
     ctx: CanvasRenderingContext2D,
@@ -1875,6 +2178,7 @@ export function mountEditor(root: HTMLElement): void {
     const title = state.title.trim();
     if (!hook && !title) return;
 
+    const cap = state.caption;
     const hookSize = Math.round(ch * 0.052);
     const titleSize = Math.round(ch * 0.036);
     const gap = Math.round(ch * 0.012);
@@ -1891,19 +2195,65 @@ export function mountEditor(root: HTMLElement): void {
     else if (v === "center") top = (ch - blockH) / 2;
     else top = ch - blockH - pad;
 
+    // A bare family name can be rendered by the canvas; a file path can't (no
+    // @font-face here), so those fall back to the system UI face for the hint.
+    const isPath = /[\\/]/.test(cap.font) || /\.(ttf|otf|ttc)$/i.test(cap.font);
+    const family = cap.font && !isPath ? `'${cap.font.replace(/'/g, "")}', ` : "";
+    const weight = cap.bold ? 800 : 600;
+    const style = cap.italic ? "italic " : "";
+    const fontFor = (size: number): string => `${style}${weight} ${size}px ${family}system-ui, sans-serif`;
+
     ctx.save();
     ctx.textAlign = h === "left" ? "left" : h === "right" ? "right" : "center";
     ctx.textBaseline = "top";
     ctx.lineJoin = "round";
     const x = h === "left" ? pad : h === "right" ? cw - pad : cw / 2;
+
+    // Rotate the whole block around its anchor (ASS positive angle = CCW).
+    if (cap.angle) {
+      ctx.translate(x, top + blockH / 2);
+      ctx.rotate((-cap.angle * Math.PI) / 180);
+      ctx.translate(-x, -(top + blockH / 2));
+    }
+
+    // Opaque box behind the block, sized to the widest line.
+    if (cap.box) {
+      let widest = 0;
+      if (hook) {
+        ctx.font = fontFor(hookSize);
+        widest = Math.max(widest, ctx.measureText(hook).width);
+      }
+      if (title) {
+        ctx.font = fontFor(titleSize);
+        widest = Math.max(widest, ctx.measureText(title).width);
+      }
+      const bpad = Math.round(hookSize * 0.18);
+      const bx = h === "left" ? x - bpad : h === "right" ? x - widest - bpad : x - widest / 2 - bpad;
+      ctx.fillStyle = cap.boxColor;
+      ctx.fillRect(bx, top - bpad, widest + bpad * 2, blockH + bpad * 2);
+    }
+
     let y = top;
     const drawLine = (text: string, size: number): void => {
-      ctx.font = `700 ${size}px system-ui, sans-serif`;
-      ctx.lineWidth = Math.max(2, Math.round(size * 0.14));
-      ctx.strokeStyle = "rgba(0,0,0,0.85)";
-      ctx.strokeText(text, x, y);
-      ctx.fillStyle = "#fff";
+      ctx.font = fontFor(size);
+      if (cap.shadow) {
+        ctx.save();
+        ctx.fillStyle = "rgba(0,0,0,0.55)";
+        ctx.fillText(text, x + Math.round(size * 0.05), y + Math.round(size * 0.05));
+        ctx.restore();
+      }
+      if (!cap.box) {
+        ctx.lineWidth = Math.max(2, Math.round(size * 0.14));
+        ctx.strokeStyle = cap.outlineColor;
+        ctx.strokeText(text, x, y);
+      }
+      ctx.fillStyle = cap.color;
       ctx.fillText(text, x, y);
+      if (cap.underline) {
+        const w = ctx.measureText(text).width;
+        const ux = h === "left" ? x : h === "right" ? x - w : x - w / 2;
+        ctx.fillRect(ux, y + size, w, Math.max(2, Math.round(size * 0.07)));
+      }
       y += size + gap;
     };
     if (hook) drawLine(hook, hookSize);
@@ -2914,6 +3264,11 @@ export function mountEditor(root: HTMLElement): void {
     if (title) spec.title = title;
     // Omit the default (bottom-center, stored as "bottom") to keep manifests clean.
     if ((hook || title) && state.textPosition !== "bottom") spec.text_position = state.textPosition;
+    // Per-clip caption style (omitting engine defaults). Only meaningful with text.
+    if (hook || title) {
+      const cap = captionStyleToSpec(state.caption);
+      if (cap) spec.caption = cap;
+    }
 
     state.clips.push(spec);
     refreshManifest();
@@ -3197,6 +3552,8 @@ export function mountEditor(root: HTMLElement): void {
     hookInput.value = state.hook;
     titleCapInput.value = state.title;
     syncSelectsFromPos();
+    state.caption = captionStyleFromSpec(spec.caption);
+    syncCaptionControls();
     refreshContentReadout();
     refreshCropReadout();
     refreshKeyframes();
