@@ -93,34 +93,10 @@ export interface SettingsMessages {
     captions: string;
     burnCaptions: string;
     burnCaptionsHint: string;
-    captionFont: string;
-    captionFontSystemDefault: string;
-    captionFontCustom: string;
-    captionFontPlaceholder: string;
-    captionFontHint: string;
-    captionStyleNote: string;
-    captionStyle: string;
-    captionStyleAppliesHint: string;
-    captionColor: string;
-    captionOutlineColor: string;
-    captionEmphasis: string;
-    captionBold: string;
-    captionItalic: string;
-    captionUnderline: string;
-    captionBoldGlyph: string;
-    captionItalicGlyph: string;
-    captionUnderlineGlyph: string;
-    captionEffects: string;
-    captionShadow: string;
-    captionBox: string;
-    captionBoxColor: string;
-    captionRotation: string;
     fontsDir: string;
     fontsDirBrowse: string;
     fontsDirPlaceholder: string;
     fontsDirHint: string;
-    captionFontGroupYours: string;
-    captionFontGroupSystem: string;
   };
 
   ai: {
