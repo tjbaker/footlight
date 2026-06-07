@@ -144,11 +144,14 @@ export interface SettingsMessages {
   about: {
     title: string;
     subtitle: string;
+    tagline: string;
     repo: string;
     reportBug: string;
     licenses: string;
     environment: string;
     environmentHint: string;
+    /** Prefix for the credit line; the linked name ("Lincoln Durham") is appended. */
+    thanks: string;
   };
 }
 

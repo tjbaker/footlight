@@ -1097,7 +1097,7 @@ function buildAboutPanel(): HTMLElement {
   idName.textContent = APP_NAME;
   const idTagline = el("div", "fl-rowhint");
   idTagline.style.marginTop = "2px";
-  idTagline.textContent = "Your stage, vertical.";
+  idTagline.textContent = s.tagline;
   const idVer = el("div", "fl-rowhint");
   idVer.style.marginTop = "3px";
   idVer.textContent = `v${APP_VERSION} · ${LICENSE} · © 2026 Trevor Baker`;
@@ -1128,7 +1128,7 @@ function buildAboutPanel(): HTMLElement {
     e.preventDefault();
     void platform.openExternal("https://www.lincolndurham.com/").catch(() => undefined);
   });
-  thanks.append(document.createTextNode("Special thanks to "), thanksLink);
+  thanks.append(document.createTextNode(s.thanks), thanksLink);
   idBlock.body.append(id, links, thanks);
   root.append(idBlock.root);
 

@@ -442,11 +442,13 @@ export const en: Messages = {
     about: {
       title: "About",
       subtitle: "Version, licenses, and your local ffmpeg environment.",
+      tagline: "Your stage, vertical.",
       repo: "GitHub repository",
       reportBug: "Report a bug",
       licenses: "Licenses & notices",
       environment: "Environment",
       environmentHint: "Footlight invokes ffmpeg/ffprobe from your PATH — they are not bundled.",
+      thanks: "Special thanks to ",
     },
   },
 };
