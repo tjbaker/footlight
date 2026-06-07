@@ -131,7 +131,7 @@ const THEME_KEY = "footlight.theme"; // shared with the editor's top-bar toggle
 const OUTDIR_KEY = "footlight.outdir"; // shared with the editor's destination field
 const TIMECODE_KEY = "footlight.timecode";
 const AUTOSAVE_KEY = "footlight.autosave";
-const RENDER_KEY = "footlight.render"; // { crf, preset, audio, bitrate, dryRun }
+const RENDER_KEY = "footlight.render"; // { crf, preset, audio, bitrate, dryRun, burnCaptions }
 const FONTS_DIR_KEY = "footlight.fontsDir"; // plain string: a folder of user .ttf/.otf fonts
 const AI_KEY = "footlight.ai"; // { provider, model }
 
@@ -156,31 +156,10 @@ interface RenderPrefs {
   dryRun: boolean;
   /**
    * Burn captions into the exported video (off by default — a clean export is
-   * the default). The caption content/position comes from the clip; this is the
-   * global opt-in to render them at all.
+   * the default). The caption content/position/style comes from the clip; this
+   * is the render-wide opt-in to render them at all.
    */
   burnCaptions: boolean;
-  /**
-   * Bring-your-own caption font: a `.ttf`/`.otf` path or an installed font
-   * family name. Empty means the system default — fonts are NEVER bundled.
-   */
-  captionFont: string;
-  /** Caption fill (text) color, `#RRGGBB`. Default white. */
-  captionColor: string;
-  /** Caption outline color, `#RRGGBB`. Default black. */
-  captionOutlineColor: string;
-  /** Caption text styling — bold / italic / underline (word-processor style). */
-  captionBold: boolean;
-  captionItalic: boolean;
-  captionUnderline: boolean;
-  /** Caption drop shadow (offset shadow behind the text). */
-  captionShadow: boolean;
-  /** Caption background box behind the text. */
-  captionBox: boolean;
-  /** Caption box color, `#RRGGBB`. Default black. */
-  captionBoxColor: string;
-  /** Caption rotation in degrees (e.g. −30…30). Default 0. */
-  captionAngle: number;
 }
 
 const DEFAULT_RENDER: RenderPrefs = {
@@ -190,16 +169,6 @@ const DEFAULT_RENDER: RenderPrefs = {
   bitrate: "256k",
   dryRun: false,
   burnCaptions: false,
-  captionFont: "",
-  captionColor: "#FFFFFF",
-  captionOutlineColor: "#000000",
-  captionBold: false,
-  captionItalic: false,
-  captionUnderline: false,
-  captionShadow: false,
-  captionBox: false,
-  captionBoxColor: "#000000",
-  captionAngle: 0,
 };
 
 interface AiPrefs {
@@ -762,280 +731,10 @@ function buildRenderingPanel(): HTMLElement {
     }),
   );
 
-  // --- Caption style: a familiar word-processor text toolbar — fill/outline
-  // color (native <input type=color>) + a B/I/U toggle row. Always shown (not
-  // gated behind the burn toggle) with a subtle "applies when on" hint; binds
-  // to the captionColor / captionOutlineColor / captionBold/Italic/Underline
-  // RenderPrefs keys and persists via save().
-  const styleGroupHead = el("div", "fl-set-blockh");
-  styleGroupHead.style.marginTop = "14px";
-  const styleGroupLab = el("span", "fl-label");
-  styleGroupLab.textContent = s.captionStyle;
-  styleGroupHead.append(styleGroupLab);
-
-  // A labeled native color input bound to a RenderPrefs string key.
-  const colorRow = (label: string, value: string, onPick: (v: string) => void): HTMLElement => {
-    const field = el("div", "fl-field");
-    field.style.cssText = "flex:1; gap:9px; align-items:center; cursor:pointer;";
-    const input = document.createElement("input");
-    input.type = "color";
-    input.value = value;
-    input.style.cssText =
-      "width:30px; height:24px; padding:0; border:none; background:none; cursor:pointer; flex:none;";
-    const hex = el("span", "mono");
-    hex.style.cssText = "font-size:12px; color:var(--faint);";
-    hex.textContent = value.toUpperCase();
-    input.addEventListener("input", () => {
-      const v = input.value.toUpperCase();
-      hex.textContent = v;
-      onPick(v);
-    });
-    field.append(input, hex);
-    return labeledRow(label, field);
-  };
-
-  const fillRow = colorRow(s.captionColor, prefs.captionColor, (v) => {
-    prefs.captionColor = v;
-    save();
-  });
-  const outlineRow = colorRow(s.captionOutlineColor, prefs.captionOutlineColor, (v) => {
-    prefs.captionOutlineColor = v;
-    save();
-  });
-
-  // B / I / U — a small segmented row of toggle buttons (each glyph rendered in
-  // its own face). Each toggles its boolean key independently.
-  const biuSeg = el("div", "fl-seg");
-  const biuButton = (
-    label: string,
-    css: string,
-    aria: string,
-    initial: boolean,
-    onToggle: (v: boolean) => void,
-  ): HTMLButtonElement => {
-    const b = button(label, initial ? "on" : undefined);
-    b.type = "button";
-    b.style.cssText = css;
-    b.setAttribute("aria-pressed", String(initial));
-    b.addEventListener("click", () => {
-      const next = !b.classList.contains("on");
-      b.classList.toggle("on", next);
-      b.setAttribute("aria-pressed", String(next));
-      onToggle(next);
-    });
-    b.setAttribute("aria-label", aria);
-    return b;
-  };
-  biuSeg.append(
-    biuButton(s.captionBoldGlyph, "font-weight:700;", s.captionBold, prefs.captionBold, (v) => {
-      prefs.captionBold = v;
-      save();
-    }),
-    biuButton(s.captionItalicGlyph, "font-style:italic;", s.captionItalic, prefs.captionItalic, (v) => {
-      prefs.captionItalic = v;
-      save();
-    }),
-    biuButton(
-      s.captionUnderlineGlyph,
-      "text-decoration:underline;",
-      s.captionUnderline,
-      prefs.captionUnderline,
-      (v) => {
-        prefs.captionUnderline = v;
-        save();
-      },
-    ),
-  );
-  const biuRow = labeledRow(s.captionEmphasis, biuSeg);
-
-  // --- Effects: drop shadow + background box (with its own color) — a second
-  // segmented toggle row, same biuButton helper as B/I/U. The box-color input
-  // sits beside the row and dims to a disabled look when the box is off.
-  const fxSeg = el("div", "fl-seg");
-  let boxOn = prefs.captionBox;
-  // The box color sits in its own labeled row; reflect the box on/off state by
-  // disabling + dimming the input (kept visible so the layout doesn't jump).
-  const boxColorInput = document.createElement("input");
-  boxColorInput.type = "color";
-  boxColorInput.value = prefs.captionBoxColor;
-  boxColorInput.style.cssText =
-    "width:30px; height:24px; padding:0; border:none; background:none; cursor:pointer; flex:none;";
-  const boxColorHex = el("span", "mono");
-  boxColorHex.style.cssText = "font-size:12px; color:var(--faint);";
-  boxColorHex.textContent = prefs.captionBoxColor.toUpperCase();
-  const reflectBoxColorState = () => {
-    boxColorInput.disabled = !boxOn;
-    boxColorRow.style.opacity = boxOn ? "" : "0.45";
-    boxColorRow.style.pointerEvents = boxOn ? "" : "none";
-  };
-  boxColorInput.addEventListener("input", () => {
-    const v = boxColorInput.value.toUpperCase();
-    boxColorHex.textContent = v;
-    prefs.captionBoxColor = v;
-    save();
-  });
-  const boxColorField = el("div", "fl-field");
-  boxColorField.style.cssText = "flex:1; gap:9px; align-items:center; cursor:pointer;";
-  boxColorField.append(boxColorInput, boxColorHex);
-  const boxColorRow = labeledRow(s.captionBoxColor, boxColorField);
-
-  fxSeg.append(
-    biuButton("", "", s.captionShadow, prefs.captionShadow, (v) => {
-      prefs.captionShadow = v;
-      save();
-    }),
-    biuButton("", "", s.captionBox, prefs.captionBox, (v) => {
-      prefs.captionBox = v;
-      boxOn = v;
-      reflectBoxColorState();
-      save();
-    }),
-  );
-  // The biuButton helper sets textContent from its label; give these word
-  // labels (not glyphs) since they're toggles for named effects.
-  (fxSeg.children[0] as HTMLElement).textContent = s.captionShadow;
-  (fxSeg.children[1] as HTMLElement).textContent = s.captionBox;
-  const fxRow = labeledRow(s.captionEffects, fxSeg);
-  reflectBoxColorState();
-
-  // --- Rotation: a range slider (−30…30°) with the live degree value shown.
-  const angleField = el("div", "fl-field");
-  angleField.style.cssText = "flex:1; gap:9px; align-items:center;";
-  const angleInput = document.createElement("input");
-  angleInput.type = "range";
-  angleInput.min = "-30";
-  angleInput.max = "30";
-  angleInput.step = "1";
-  angleInput.value = String(prefs.captionAngle);
-  angleInput.style.cssText = "flex:1; cursor:pointer;";
-  const angleVal = el("span", "mono");
-  angleVal.style.cssText = "font-size:12px; color:var(--faint); min-width:34px; text-align:right;";
-  angleVal.textContent = `${prefs.captionAngle}°`;
-  angleInput.addEventListener("input", () => {
-    const v = Number(angleInput.value);
-    angleVal.textContent = `${v}°`;
-    prefs.captionAngle = v;
-    save();
-  });
-  angleField.append(angleInput, angleVal);
-  const angleRow = labeledRow(s.captionRotation, angleField);
-
-  const styleAppliesHint = el("div", "fl-set-secsub");
-  styleAppliesHint.style.marginTop = "8px";
-  styleAppliesHint.textContent = s.captionStyleAppliesHint;
-
-  // --- Caption font: a custom dropdown (per-row live preview) over the free-
-  // text field. The picker SETS prefs.captionFont (a family name); "Custom
-  // path…" reveals the free-text field for a .ttf/.otf path. If font
-  // enumeration is unavailable we show only the free-text field (today's UX).
-
-  // The free-text path field (always built; hidden behind "Custom path…" once
-  // the dropdown is in play, shown on its own as the no-enumeration fallback).
-  const fontField = el("div", "fl-field path");
-  fontField.style.flex = "1";
-  const fontInput = document.createElement("input");
-  fontInput.type = "text";
-  fontInput.className = "mono";
-  fontInput.placeholder = s.captionFontPlaceholder;
-  fontInput.value = prefs.captionFont;
-  fontInput.addEventListener("change", () => {
-    prefs.captionFont = fontInput.value.trim();
-    save();
-  });
-  fontField.append(fontInput);
-  const fontRow = labeledRow(s.captionFont, fontField);
-
-  // Sentinels for the two non-family rows (leading space keeps them out of any
-  // real family namespace).
-  const SENTINEL_DEFAULT = " default";
-  const SENTINEL_CUSTOM = " custom";
-
-  // The dropdown trigger (a .fl-field-styled button) + its popup. Built up
-  // front but only inserted once listFonts() yields families.
-  const pickerField = el("div", "fl-field");
-  pickerField.style.cssText = "flex:1; position:relative; cursor:pointer; gap:0;";
-  const trigger = button("", undefined);
-  trigger.type = "button";
-  trigger.setAttribute("aria-haspopup", "listbox");
-  trigger.setAttribute("aria-expanded", "false");
-  trigger.style.cssText =
-    "flex:1; min-width:0; display:flex; align-items:center; justify-content:space-between; gap:9px; background:none; border:none; outline:none; color:var(--text); font:inherit; font-size:13px; padding:0; text-align:left; cursor:pointer;";
-  const triggerLabel = el("span");
-  triggerLabel.style.cssText = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
-  const caret = el("span");
-  caret.textContent = "▾"; // ▾
-  caret.style.cssText = "flex:none; color:var(--faint); font-size:11px;";
-  trigger.append(triggerLabel, caret);
-  pickerField.append(trigger);
-
-  const popup = el("ul");
-  popup.setAttribute("role", "listbox");
-  popup.setAttribute("aria-label", s.captionFont);
-  popup.style.cssText =
-    "position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:40; margin:0; padding:5px; list-style:none; max-height:260px; overflow-y:auto; background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); display:none;";
-  pickerField.append(popup);
-  const pickerRow = labeledRow(s.captionFont, pickerField);
-
-  const closePopup = () => {
-    popup.style.display = "none";
-    trigger.setAttribute("aria-expanded", "false");
-  };
-  const openPopup = () => {
-    popup.style.display = "block";
-    trigger.setAttribute("aria-expanded", "true");
-    popup.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
-  };
-  trigger.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (popup.style.display === "block") closePopup();
-    else openPopup();
-  });
-  // Click-away + Esc anywhere close the popup.
-  const onDocClick = (e: MouseEvent) => {
-    if (!pickerField.contains(e.target as Node)) closePopup();
-  };
-  const onDocKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape") closePopup();
-  };
-  document.addEventListener("click", onDocClick);
-  document.addEventListener("keydown", onDocKey);
-
-  // Reflect a selection onto the trigger label (in its own face) + free-text
-  // visibility. Single-quotes are stripped so the inline family value can't
-  // break out of its quoting. `display` overrides the shown text/face for a
-  // family whose stored value is a file path (folder fonts) — show the family,
-  // never the raw path.
-  const syncPickerUi = (value: string, display?: { label: string; face: string }) => {
-    const custom = value === SENTINEL_CUSTOM;
-    fontRow.style.display = custom ? "" : "none";
-    if (custom) {
-      triggerLabel.textContent = s.captionFontCustom;
-      triggerLabel.style.fontFamily = "";
-    } else if (value === SENTINEL_DEFAULT || value === "") {
-      triggerLabel.textContent = s.captionFontSystemDefault;
-      triggerLabel.style.fontFamily = "";
-    } else if (display) {
-      triggerLabel.textContent = display.label;
-      triggerLabel.style.fontFamily = `'${display.face.replace(/'/g, "")}'`;
-    } else {
-      triggerLabel.textContent = value;
-      triggerLabel.style.fontFamily = `'${value.replace(/'/g, "")}'`;
-    }
-  };
-
-  const fontHint = el("div", "fl-set-secsub");
-  fontHint.style.marginTop = "8px";
-  fontHint.textContent = s.captionFontHint;
-
-  const styleNote = el("div", "fl-set-secsub");
-  styleNote.style.marginTop = "8px";
-  styleNote.textContent = s.captionStyleNote;
-
   // --- Fonts folder: a typed path (web) / Browse… (Tauri) bound to its own
-  // plain-string key (footlight.fontsDir). When set, the picker scans it via
-  // listUserFonts() and lists the results in a top "Your fonts" group. The
-  // free-text field above is unrelated (a single .ttf path / family name); this
-  // is a *folder* you drop fonts into.
+  // plain-string key (footlight.fontsDir). Fonts dropped here are offered in the
+  // editor's per-clip caption font picker — caption styling itself is per-clip
+  // and lives in the editor, not in Settings.
   const fontsDirField = el("div", "fl-field path");
   fontsDirField.style.flex = "1";
   fontsDirField.innerHTML = `<span class="ic">${ICON_FOLDER}</span>`;
@@ -1050,7 +749,6 @@ function buildRenderingPanel(): HTMLElement {
       if (dir) {
         fontsDirInput.value = dir;
         writeStr(FONTS_DIR_KEY, dir);
-        rebuildPicker();
       }
     });
   });
@@ -1058,199 +756,13 @@ function buildRenderingPanel(): HTMLElement {
   const fontsDirRow = labeledRow(s.fontsDir, fontsDirField, fontsDirBrowse);
   fontsDirInput.addEventListener("change", () => {
     writeStr(FONTS_DIR_KEY, fontsDirInput.value.trim());
-    rebuildPicker();
   });
   const fontsDirHint = el("div", "fl-rowhint");
   fontsDirHint.style.cssText = "font-family:inherit; width:100%; color:var(--faint); margin-top:2px;";
   fontsDirHint.textContent = s.fontsDirHint;
 
-  // Default layout = free-text only (the fallback). Async: if families come
-  // back, swap in the dropdown and put the free-text field behind "Custom path…".
-  capBlock.body.append(
-    capToggle,
-    styleGroupHead,
-    fillRow,
-    outlineRow,
-    biuRow,
-    fxRow,
-    boxColorRow,
-    angleRow,
-    styleAppliesHint,
-    fontRow,
-    fontHint,
-    fontsDirRow,
-    fontsDirHint,
-    styleNote,
-  );
+  capBlock.body.append(capToggle, fontsDirRow, fontsDirHint);
   root.append(capBlock.root);
-
-  // An option in the picker. A folder font carries `path` (selection sets
-  // captionFont = path so the engine resolves family + fontsdir); a system font
-  // has no path (selection sets captionFont = family, as today). `face` is the
-  // CSS family for the per-row live preview (best-effort).
-  type Opt = { value: string; label: string; face?: string; path?: string };
-
-  let selected = SENTINEL_DEFAULT; // updated by (re)build; the live selection
-  const markSelected = (value: string) => {
-    for (const li of Array.from(popup.children) as HTMLElement[]) {
-      if (li.dataset.value === undefined) continue; // group headers aren't options
-      const on = li.dataset.value === value;
-      li.setAttribute("aria-selected", String(on));
-      li.style.background = on ? "var(--panel-3)" : "";
-    }
-  };
-
-  const groupHeader = (text: string): HTMLElement => {
-    const li = el("li");
-    li.setAttribute("role", "presentation");
-    li.textContent = text;
-    li.style.cssText =
-      "padding:8px 10px 4px; font-size:10.5px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:var(--faint); cursor:default;";
-    return li;
-  };
-
-  const optionRow = (opt: Opt): HTMLElement => {
-    const li = el("li");
-    li.dataset.value = opt.value;
-    li.setAttribute("role", "option");
-    li.textContent = opt.label;
-    li.style.cssText =
-      "padding:7px 10px; border-radius:7px; cursor:pointer; font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
-    // Each family row renders in its own face (system fonts resolve by name;
-    // folder fonts not installed system-wide fall back to the default face —
-    // that's fine, the burn uses the file).
-    if (opt.face) li.style.fontFamily = `'${opt.face.replace(/'/g, "")}'`;
-    li.addEventListener("mouseenter", () => {
-      if (li.getAttribute("aria-selected") !== "true") li.style.background = "var(--panel-2)";
-    });
-    li.addEventListener("mouseleave", () => {
-      if (li.getAttribute("aria-selected") !== "true") li.style.background = "";
-    });
-    li.addEventListener("click", (e) => {
-      e.stopPropagation();
-      selected = opt.value;
-      markSelected(selected);
-      if (opt.value === SENTINEL_DEFAULT) {
-        prefs.captionFont = "";
-        fontInput.value = "";
-        save();
-      } else if (opt.value === SENTINEL_CUSTOM) {
-        // Reveal the free-text field; keep whatever path is already there.
-        prefs.captionFont = fontInput.value.trim();
-        save();
-      } else {
-        // A folder font sets captionFont = its file path (engine resolves the
-        // family + fontsdir); a system font sets captionFont = the family.
-        prefs.captionFont = opt.path ?? opt.value;
-        save();
-      }
-      const realFont =
-        opt.value !== SENTINEL_DEFAULT && opt.value !== SENTINEL_CUSTOM;
-      syncPickerUi(
-        opt.value === SENTINEL_CUSTOM ? SENTINEL_CUSTOM : prefs.captionFont || SENTINEL_DEFAULT,
-        realFont && opt.path ? { label: opt.label, face: opt.face ?? opt.label } : undefined,
-      );
-      closePopup();
-      if (opt.value === SENTINEL_CUSTOM) fontInput.focus();
-    });
-    return li;
-  };
-
-  // (Re)build the dropdown: scan the fonts folder (if set) into a "Your fonts"
-  // group at the top, then list system fonts. Called once on mount and again
-  // whenever the fonts-folder field changes. Each rebuild supersedes the last
-  // (a stale async result is ignored via the token).
-  let buildToken = 0;
-  const rebuildPicker = (): void => {
-    const token = ++buildToken;
-    void (async () => {
-      let sysFonts: { family: string; path?: string }[] = [];
-      try {
-        sysFonts = await platform.listFonts();
-      } catch {
-        sysFonts = [];
-      }
-
-      const dir = readStr(FONTS_DIR_KEY, "").trim();
-      let userFonts: { family: string; path?: string }[] = [];
-      if (dir) {
-        try {
-          userFonts = await platform.listUserFonts(dir);
-        } catch {
-          userFonts = []; // unreadable/throwing → just no "Your fonts" group
-        }
-      }
-      if (token !== buildToken) return; // a newer rebuild started — drop this one
-
-      // System families: de-dupe + sort (case-insensitive).
-      const sysFamilies = Array.from(new Set(sysFonts.map((f) => f.family).filter((f) => f.trim())));
-      sysFamilies.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-
-      // Folder fonts: keep only those with a real family + path; de-dupe by
-      // family. A folder font that also appears system-wide wins (it's removed
-      // from the System group below) so the file-backed entry is offered.
-      const userByFamily = new Map<string, { family: string; path: string }>();
-      for (const f of userFonts) {
-        const fam = f.family.trim();
-        if (!fam || !f.path) continue;
-        const key = fam.toLowerCase();
-        if (!userByFamily.has(key)) userByFamily.set(key, { family: fam, path: f.path });
-      }
-      const userList = Array.from(userByFamily.values());
-      userList.sort((a, b) => a.family.localeCompare(b.family, undefined, { sensitivity: "base" }));
-      const userKeys = new Set(userList.map((f) => f.family.toLowerCase()));
-
-      // Nothing to offer at all → keep the free-text-only fallback.
-      if (sysFamilies.length === 0 && userList.length === 0) {
-        if (pickerRow.parentElement) pickerRow.remove();
-        return;
-      }
-
-      const userOpts: Opt[] = userList.map((f) => ({
-        value: f.path,
-        label: f.family,
-        face: f.family,
-        path: f.path,
-      }));
-      const sysOpts: Opt[] = sysFamilies
-        .filter((f) => !userKeys.has(f.toLowerCase()))
-        .map((f) => ({ value: f, label: f, face: f }));
-
-      // The persisted pref decides the initial selection: "" → default; a value
-      // matching a folder font's path or a system family → that entry; anything
-      // else (a stray path or an unlisted name) → Custom path… (free-text shows it).
-      const cur = prefs.captionFont.trim();
-      if (cur === "") selected = SENTINEL_DEFAULT;
-      else if (userOpts.some((o) => o.value === cur)) selected = cur;
-      else if (sysOpts.some((o) => o.value === cur)) selected = cur;
-      else selected = SENTINEL_CUSTOM;
-
-      popup.replaceChildren();
-      popup.append(optionRow({ value: SENTINEL_DEFAULT, label: s.captionFontSystemDefault }));
-      if (userOpts.length > 0) {
-        popup.append(groupHeader(s.captionFontGroupYours));
-        for (const o of userOpts) popup.append(optionRow(o));
-      }
-      if (sysOpts.length > 0) {
-        popup.append(groupHeader(s.captionFontGroupSystem));
-        for (const o of sysOpts) popup.append(optionRow(o));
-      }
-      popup.append(optionRow({ value: SENTINEL_CUSTOM, label: s.captionFontCustom }));
-
-      markSelected(selected);
-      // A folder font's stored value is a path — show its family on the trigger.
-      const selUserOpt = userOpts.find((o) => o.value === selected);
-      syncPickerUi(
-        selected === SENTINEL_CUSTOM ? SENTINEL_CUSTOM : prefs.captionFont || SENTINEL_DEFAULT,
-        selUserOpt ? { label: selUserOpt.label, face: selUserOpt.face ?? selUserOpt.label } : undefined,
-      );
-
-      // Swap the free-text-only layout for the dropdown (free-text now behind it).
-      if (!pickerRow.parentElement) capBlock.body.insertBefore(pickerRow, fontRow);
-    })();
-  };
-
-  rebuildPicker();
 
   return root;
 }
