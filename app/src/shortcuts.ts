@@ -5,66 +5,16 @@
  * binding the editor implements, grouped by purpose. Mirrors the imperative
  * modal pattern used by the Settings modal (backdrop > modal > h3 > … > .close)
  * with dismissal on the close button, on backdrop click, and on Escape.
+ *
+ * The binding list is single-sourced in the i18n catalog (`messages.shortcuts`),
+ * shared with the Settings → Shortcuts panel so the two never drift.
  */
 
-interface Shortcut {
-  /** Individual keys, rendered each as its own <kbd>, chained with "+". */
-  keys: string[];
-  /** Human-readable description of what the shortcut does. */
-  desc: string;
-}
-
-interface ShortcutGroup {
-  title: string;
-  shortcuts: Shortcut[];
-}
-
-const GROUPS: ShortcutGroup[] = [
-  {
-    title: "Playback",
-    shortcuts: [
-      { keys: ["Space"], desc: "Play / pause" },
-      { keys: ["←", "→"], desc: "Step 1 frame back / forward" },
-      { keys: ["Shift", "←"], desc: "Nudge time −0.1s" },
-      { keys: ["Shift", "→"], desc: "Nudge time +0.1s" },
-    ],
-  },
-  {
-    title: "Marking",
-    shortcuts: [
-      { keys: ["I"], desc: "Set In at the playhead" },
-      { keys: ["O"], desc: "Set Out at the playhead" },
-      { keys: ["S"], desc: "Add the current clip to the queue" },
-    ],
-  },
-  {
-    title: "Navigation",
-    shortcuts: [
-      { keys: ["["], desc: "Jump to previous scene cut" },
-      { keys: ["]"], desc: "Jump to next scene cut" },
-    ],
-  },
-  {
-    title: "Framing",
-    shortcuts: [
-      { keys: ["Alt", "←"], desc: "Nudge the crop left" },
-      { keys: ["Alt", "→"], desc: "Nudge the crop right" },
-      { keys: ["Alt", "↑"], desc: "Nudge the crop up (punch-in)" },
-      { keys: ["Alt", "↓"], desc: "Nudge the crop down (punch-in)" },
-      { keys: ["Double-click"], desc: "Reset framing to full-height 9:16" },
-    ],
-  },
-  {
-    title: "Help",
-    shortcuts: [
-      { keys: ["?"], desc: "Show this shortcuts overlay" },
-      { keys: ["Esc"], desc: "Close any dialog" },
-    ],
-  },
-];
+import { messages } from "./i18n/index.js";
 
 /** Show the Keyboard shortcuts modal. */
 export function openShortcuts(): void {
+  const m = messages.shortcuts;
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop";
 
@@ -72,12 +22,12 @@ export function openShortcuts(): void {
   modal.className = "modal shortcuts";
 
   const h3 = document.createElement("h3");
-  h3.textContent = "Keyboard shortcuts";
+  h3.textContent = m.modalTitle;
 
   const groups = document.createElement("div");
   groups.className = "shortcuts-groups";
 
-  for (const group of GROUPS) {
+  for (const group of m.groups) {
     const groupEl = document.createElement("div");
     groupEl.className = "shortcuts-group";
 
@@ -85,7 +35,7 @@ export function openShortcuts(): void {
     h4.textContent = group.title;
     groupEl.append(h4);
 
-    for (const shortcut of group.shortcuts) {
+    for (const shortcut of group.items) {
       const rowEl = document.createElement("div");
       rowEl.className = "shortcut-row";
 
@@ -111,7 +61,7 @@ export function openShortcuts(): void {
 
   const close = document.createElement("button");
   close.className = "close";
-  close.textContent = "Close";
+  close.textContent = m.close;
 
   modal.append(h3, groups, close);
   backdrop.append(modal);

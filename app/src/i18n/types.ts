@@ -163,8 +163,32 @@ export interface SettingsMessages {
   };
 }
 
+/** One key binding in the shortcuts reference: physical keys + what it does. */
+export interface ShortcutBinding {
+  /** Physical keys (NOT localized) — each rendered as its own `<kbd>`, joined by "+". */
+  keys: string[];
+  desc: string;
+}
+
+/** A titled group of key bindings. */
+export interface ShortcutGroup {
+  title: string;
+  items: ShortcutBinding[];
+}
+
+/**
+ * Strings for the keyboard-shortcuts reference. Single source of truth shared by
+ * the Help overlay (`shortcuts.ts`) and the Settings → Shortcuts panel.
+ */
+export interface ShortcutsMessages {
+  modalTitle: string;
+  close: string;
+  groups: ShortcutGroup[];
+}
+
 /** The full message catalog for one locale. */
 export interface Messages {
   help: HelpMessages;
   settings: SettingsMessages;
+  shortcuts: ShortcutsMessages;
 }
