@@ -148,7 +148,9 @@ footlight render manifest.csv|.json [--outdir clips] [--crf 19] [--preset medium
                                     [--audio-bitrate copy] [--dry-run] \
                                     [--burn-captions [--caption-font <path|name>] \
                                       [--caption-color #RRGGBB] [--caption-outline-color #RRGGBB] \
-                                      [--caption-bold] [--caption-italic] [--caption-underline]]
+                                      [--caption-bold] [--caption-italic] [--caption-underline] \
+                                      [--caption-shadow] [--caption-box [--caption-box-color #RRGGBB]] \
+                                      [--caption-angle <deg>]]
 
 # Inspect a source: dimensions + a cropdetect suggestion (black bars only).
 footlight probe <source>
@@ -173,6 +175,10 @@ footlight scenes <source>
 | `--caption-bold` | off | render captions **bold** (only with `--burn-captions`) |
 | `--caption-italic` | off | render captions *italic* (only with `--burn-captions`) |
 | `--caption-underline` | off | underline captions (only with `--burn-captions`) |
+| `--caption-shadow` | off | drop a shadow behind the caption text (only with `--burn-captions`) |
+| `--caption-box` | off | draw an opaque box behind the caption text (only with `--burn-captions`) |
+| `--caption-box-color` | `#000000` | box fill color, `#RRGGBB` (only with `--caption-box`) |
+| `--caption-angle` | `0` | rotate the caption by N degrees (only with `--burn-captions`) |
 
 `probe` reports the source's dimensions and a `cropdetect` content-region
 suggestion. `scenes` reports detected cut timestamps you can use as switch points
@@ -192,7 +198,7 @@ The manifest is the source of truth: **one row per clip.**
 | `out_name` | optional | output filename; auto-generated from source + timestamps if blank |
 | `hook` | optional | caption: the big headline line (see [Captions](#captions-optional)) |
 | `title` | optional | caption: the secondary line below the hook |
-| `text_position` | defaults `bottom` | caption placement: `top` / `center` / `bottom` |
+| `text_position` | defaults `bottom` | caption placement, one of 9 zones: a vertical keyword `top` / `center` / `bottom`, optionally suffixed `-left` / `-center` / `-right` (e.g. `bottom-left`, `top-right`); plain `top` / `center` / `bottom` stay horizontally centered |
 
 The `hook` / `title` / `text_position` fields carry your caption shot-list with the
 manifest. Clips export **clean by default** — these are only burned in when you pass
@@ -237,7 +243,7 @@ the cut even when nothing is burned:
 |-------|---------|
 | `hook` | the big headline line |
 | `title` | the secondary line, set below the hook |
-| `text_position` | `top` / `center` / `bottom` (default `bottom`) |
+| `text_position` | one of 9 zones — `top` / `center` / `bottom`, optionally `-left` / `-center` / `-right` (default `bottom`, horizontally centered) |
 
 To actually burn them into the video, add `--burn-captions` at render time:
 
@@ -257,6 +263,10 @@ footlight render manifest.csv --burn-captions --caption-font "Helvetica Neue"
 # Style the burned text — fill/outline color (#RRGGBB) and bold/italic/underline.
 footlight render manifest.csv --burn-captions \
   --caption-color "#FFE600" --caption-outline-color "#101010" --caption-bold
+
+# Add a drop shadow, an opaque box behind the text, and a slight rotation.
+footlight render manifest.csv --burn-captions \
+  --caption-shadow --caption-box --caption-box-color "#101010" --caption-angle -4
 ```
 
 **Bring your own font.** Captions are bring-your-own-font and **local-first** —
@@ -279,19 +289,27 @@ with three ways to choose, all local — nothing is fetched:
   access — drop a font in the folder and it appears.
 - **Custom path…** — the escape hatch for a single one-off font file.
 
-**Style.** Captions render `hook` above `title` as one centered block, with the hook
-at roughly `h/18` and the title at `h/26` of the 1080×1920 output, inset by ~12%
-top/bottom safe margins. The burned text (via the `libass` renderer) can be styled:
+**Style.** Captions render `hook` above `title` as one block, placed at the clip's
+`text_position`, with the hook at roughly `h/18` and the title at `h/26` of the
+1080×1920 output, inset by ~12% safe margins. The burned text (via the `libass`
+renderer) can be styled:
 
 - **Fill color** and **outline color** as `#RRGGBB` — `--caption-color` /
   `--caption-outline-color`.
 - **Bold**, **italic**, **underline** — `--caption-bold` / `--caption-italic` /
   `--caption-underline`.
+- **Drop shadow** behind the text — `--caption-shadow`.
+- **Opaque box** behind the text, with its own `#RRGGBB` color — `--caption-box`
+  (defaults to black) / `--caption-box-color`. A box replaces the outline.
+- **Rotation** by N degrees — `--caption-angle`.
+- **Position** — the per-clip `text_position` field (9 zones; see the schema above).
 
-In the app these live under **Settings → Rendering → Captions** as a small text
-toolbar: two color inputs plus B / I / U toggles. Defaults are unchanged — white
-fill, black outline, no bold/italic/underline — so existing manifests render exactly
-as before. More styling (position, rotation, shadow) is on the roadmap.
+In the app, the text styling lives under **Settings → Rendering → Captions**: two
+color inputs and B / I / U toggles, plus shadow/box toggles, a box-color input, and
+a rotation control. Position is per-clip, set in the editor's Captions group.
+Defaults are unchanged — white fill, black outline, no bold/italic/underline, no
+shadow, no box, no rotation, `bottom` center — so existing manifests render exactly
+as before.
 
 ## Audio
 
