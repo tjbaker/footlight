@@ -845,7 +845,7 @@ export function mountEditor(root: HTMLElement): void {
   const loadedFolderFaces = new Set<string>();
   const loadFolderFontFace = (family: string, path: string): void => {
     if (platformName !== "tauri") return; // no cross-backend local-file URL on web
-    const key = `${family} ${path}`;
+    const key = `${family}\u0000${path}`;
     if (loadedFolderFaces.has(key)) return;
     loadedFolderFaces.add(key);
     void (async () => {
@@ -1740,9 +1740,12 @@ export function mountEditor(root: HTMLElement): void {
       }
       case "ArrowUp":
       case "ArrowDown":
+        e.preventDefault();
         if (e.altKey) {
-          e.preventDefault();
           nudgeCrop(0, (e.key === "ArrowDown" ? 1 : -1) * CROP_NUDGE_PX);
+        } else {
+          // NLE convention: ↑/↓ jump to the previous/next scene cut (alias of [ / ]).
+          jumpCut(e.key === "ArrowUp" ? -1 : 1);
         }
         break;
       case "i":
@@ -1788,6 +1791,30 @@ export function mountEditor(root: HTMLElement): void {
       case "L":
         e.preventDefault();
         void shuttle(1);
+        break;
+      // Avid-style go-to aliases (mirror Shift+I / Shift+O).
+      case "q":
+      case "Q":
+        if (state.inPoint != null) {
+          seek(state.inPoint);
+          setSelectedMarker("in");
+        }
+        break;
+      case "w":
+      case "W":
+        if (state.outPoint != null) {
+          seek(state.outPoint);
+          setSelectedMarker("out");
+        }
+        break;
+      // Jump to the source start / end (NLE Home/End convention).
+      case "Home":
+        e.preventDefault();
+        seek(0);
+        break;
+      case "End":
+        e.preventDefault();
+        seek(state.duration);
         break;
       case "s":
       case "S":

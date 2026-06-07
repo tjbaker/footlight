@@ -761,16 +761,18 @@ export const es: Messages = {
         items: [
           { keys: ["I"], desc: "Marcar In en el cabezal de reproducción" },
           { keys: ["O"], desc: "Marcar Out en el cabezal de reproducción" },
-          { keys: ["Shift", "I"], desc: "Ir al punto In" },
-          { keys: ["Shift", "O"], desc: "Ir al punto Out" },
+          { keys: ["Shift", "I"], desc: "Ir al punto In (también Q)" },
+          { keys: ["Shift", "O"], desc: "Ir al punto Out (también W)" },
           { keys: ["S"], desc: "Añadir el clip actual a la cola" },
         ],
       },
       {
         title: "Navegación",
         items: [
-          { keys: ["["], desc: "Saltar al corte de escena anterior" },
-          { keys: ["]"], desc: "Saltar al corte de escena siguiente" },
+          { keys: ["["], desc: "Corte de escena anterior (también ↑)" },
+          { keys: ["]"], desc: "Corte de escena siguiente (también ↓)" },
+          { keys: ["Home"], desc: "Ir al inicio" },
+          { keys: ["End"], desc: "Ir al final" },
         ],
       },
       {

@@ -761,16 +761,18 @@ export const ptBR: Messages = {
         items: [
           { keys: ["I"], desc: "Definir Entrada no cabeçote" },
           { keys: ["O"], desc: "Definir Saída no cabeçote" },
-          { keys: ["Shift", "I"], desc: "Ir para o ponto de Entrada" },
-          { keys: ["Shift", "O"], desc: "Ir para o ponto de Saída" },
+          { keys: ["Shift", "I"], desc: "Ir para o ponto de Entrada (também Q)" },
+          { keys: ["Shift", "O"], desc: "Ir para o ponto de Saída (também W)" },
           { keys: ["S"], desc: "Adicionar o clipe atual à fila" },
         ],
       },
       {
         title: "Navegação",
         items: [
-          { keys: ["["], desc: "Pular para o corte de cena anterior" },
-          { keys: ["]"], desc: "Pular para o próximo corte de cena" },
+          { keys: ["["], desc: "Corte de cena anterior (também ↑)" },
+          { keys: ["]"], desc: "Próximo corte de cena (também ↓)" },
+          { keys: ["Home"], desc: "Ir para o início" },
+          { keys: ["End"], desc: "Ir para o fim" },
         ],
       },
       {
