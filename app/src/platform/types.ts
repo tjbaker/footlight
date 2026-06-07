@@ -96,6 +96,14 @@ export interface TrackRequest {
   contentCrop?: string;
 }
 
+/** An installed/available font the caption picker can offer. */
+export interface FontInfo {
+  /** Family name — the ASS `Fontname` / CSS `font-family` value used for captions. */
+  family: string;
+  /** Absolute path to a font file when known (for `fontsdir` / preview). */
+  path?: string;
+}
+
 /** The contract every backend must satisfy. */
 export interface FootlightPlatform {
   /** Extract a single frame at `tSeconds`; returns an image URL usable in <img>. */
@@ -116,6 +124,13 @@ export interface FootlightPlatform {
    * (Gemini) path needs a real key, `mock:true` runs offline.
    */
   track(req: TrackRequest): Promise<TrackSample[]>;
+  /**
+   * List installed/available fonts for the caption font picker. Best-effort:
+   * the native backend enumerates system fonts; the web/dev backend asks the dev
+   * server (fontconfig). Returns `[]` when enumeration isn't available — the UI
+   * then falls back to the free-text font field.
+   */
+  listFonts(): Promise<FontInfo[]>;
   /**
    * Render a JSON manifest via the footlight CLI engine. `manifestJson` is the
    * string produced by `serializeManifestJSON` (clips may carry a `cropPath`).

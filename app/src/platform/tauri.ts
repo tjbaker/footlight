@@ -146,4 +146,10 @@ export const tauriPlatform: FootlightPlatform = {
   async deleteSecret(key: string): Promise<void> {
     await invoke<void>("delete_secret", { key });
   },
+
+  // Stub — real impl (invoke the Rust `list_fonts` command) lands in the
+  // font-picker backends slice.
+  async listFonts() {
+    return [];
+  },
 };

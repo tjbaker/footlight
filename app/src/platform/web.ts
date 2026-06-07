@@ -201,4 +201,10 @@ export const webPlatform: FootlightPlatform = {
       /* localStorage unavailable — non-fatal in the dev build. */
     }
   },
+
+  // Stub — real impl (fetch the dev server's /fonts via fontconfig) lands in the
+  // font-picker backends slice.
+  async listFonts() {
+    return [];
+  },
 };
