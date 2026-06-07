@@ -173,6 +173,14 @@ interface RenderPrefs {
   captionBold: boolean;
   captionItalic: boolean;
   captionUnderline: boolean;
+  /** Caption drop shadow (offset shadow behind the text). */
+  captionShadow: boolean;
+  /** Caption background box behind the text. */
+  captionBox: boolean;
+  /** Caption box color, `#RRGGBB`. Default black. */
+  captionBoxColor: string;
+  /** Caption rotation in degrees (e.g. −30…30). Default 0. */
+  captionAngle: number;
 }
 
 const DEFAULT_RENDER: RenderPrefs = {
@@ -188,6 +196,10 @@ const DEFAULT_RENDER: RenderPrefs = {
   captionBold: false,
   captionItalic: false,
   captionUnderline: false,
+  captionShadow: false,
+  captionBox: false,
+  captionBoxColor: "#000000",
+  captionAngle: 0,
 };
 
 interface AiPrefs {
@@ -836,6 +848,78 @@ function buildRenderingPanel(): HTMLElement {
   );
   const biuRow = labeledRow(s.captionEmphasis, biuSeg);
 
+  // --- Effects: drop shadow + background box (with its own color) — a second
+  // segmented toggle row, same biuButton helper as B/I/U. The box-color input
+  // sits beside the row and dims to a disabled look when the box is off.
+  const fxSeg = el("div", "fl-seg");
+  let boxOn = prefs.captionBox;
+  // The box color sits in its own labeled row; reflect the box on/off state by
+  // disabling + dimming the input (kept visible so the layout doesn't jump).
+  const boxColorInput = document.createElement("input");
+  boxColorInput.type = "color";
+  boxColorInput.value = prefs.captionBoxColor;
+  boxColorInput.style.cssText =
+    "width:30px; height:24px; padding:0; border:none; background:none; cursor:pointer; flex:none;";
+  const boxColorHex = el("span", "mono");
+  boxColorHex.style.cssText = "font-size:12px; color:var(--faint);";
+  boxColorHex.textContent = prefs.captionBoxColor.toUpperCase();
+  const reflectBoxColorState = () => {
+    boxColorInput.disabled = !boxOn;
+    boxColorRow.style.opacity = boxOn ? "" : "0.45";
+    boxColorRow.style.pointerEvents = boxOn ? "" : "none";
+  };
+  boxColorInput.addEventListener("input", () => {
+    const v = boxColorInput.value.toUpperCase();
+    boxColorHex.textContent = v;
+    prefs.captionBoxColor = v;
+    save();
+  });
+  const boxColorField = el("div", "fl-field");
+  boxColorField.style.cssText = "flex:1; gap:9px; align-items:center; cursor:pointer;";
+  boxColorField.append(boxColorInput, boxColorHex);
+  const boxColorRow = labeledRow(s.captionBoxColor, boxColorField);
+
+  fxSeg.append(
+    biuButton("", "", s.captionShadow, prefs.captionShadow, (v) => {
+      prefs.captionShadow = v;
+      save();
+    }),
+    biuButton("", "", s.captionBox, prefs.captionBox, (v) => {
+      prefs.captionBox = v;
+      boxOn = v;
+      reflectBoxColorState();
+      save();
+    }),
+  );
+  // The biuButton helper sets textContent from its label; give these word
+  // labels (not glyphs) since they're toggles for named effects.
+  (fxSeg.children[0] as HTMLElement).textContent = s.captionShadow;
+  (fxSeg.children[1] as HTMLElement).textContent = s.captionBox;
+  const fxRow = labeledRow(s.captionEffects, fxSeg);
+  reflectBoxColorState();
+
+  // --- Rotation: a range slider (−30…30°) with the live degree value shown.
+  const angleField = el("div", "fl-field");
+  angleField.style.cssText = "flex:1; gap:9px; align-items:center;";
+  const angleInput = document.createElement("input");
+  angleInput.type = "range";
+  angleInput.min = "-30";
+  angleInput.max = "30";
+  angleInput.step = "1";
+  angleInput.value = String(prefs.captionAngle);
+  angleInput.style.cssText = "flex:1; cursor:pointer;";
+  const angleVal = el("span", "mono");
+  angleVal.style.cssText = "font-size:12px; color:var(--faint); min-width:34px; text-align:right;";
+  angleVal.textContent = `${prefs.captionAngle}°`;
+  angleInput.addEventListener("input", () => {
+    const v = Number(angleInput.value);
+    angleVal.textContent = `${v}°`;
+    prefs.captionAngle = v;
+    save();
+  });
+  angleField.append(angleInput, angleVal);
+  const angleRow = labeledRow(s.captionRotation, angleField);
+
   const styleAppliesHint = el("div", "fl-set-secsub");
   styleAppliesHint.style.marginTop = "8px";
   styleAppliesHint.textContent = s.captionStyleAppliesHint;
@@ -988,6 +1072,9 @@ function buildRenderingPanel(): HTMLElement {
     fillRow,
     outlineRow,
     biuRow,
+    fxRow,
+    boxColorRow,
+    angleRow,
     styleAppliesHint,
     fontRow,
     fontHint,

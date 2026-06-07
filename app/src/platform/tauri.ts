@@ -78,6 +78,10 @@ export const tauriPlatform: FootlightPlatform = {
       captionBold: opts?.captionBold ?? false,
       captionItalic: opts?.captionItalic ?? false,
       captionUnderline: opts?.captionUnderline ?? false,
+      captionShadow: opts?.captionShadow ?? false,
+      captionBox: opts?.captionBox ?? false,
+      captionBoxColor: opts?.captionBoxColor ?? null,
+      captionAngle: opts?.captionAngle ?? null,
     });
   },
 

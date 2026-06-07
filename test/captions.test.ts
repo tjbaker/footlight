@@ -139,6 +139,40 @@ describe("buildCaptionAss styling (color + bold/italic/underline)", () => {
   });
 });
 
+describe("buildCaptionAss styling v2 (shadow, box, position, angle)", () => {
+  // Style fields, comma-split: [5]=OutlineColour(box fill when boxed)
+  // [14]=Angle [15]=BorderStyle [17]=Shadow [18]=Alignment.
+  const fields = (over: Partial<RenderOptions>, pos?: string) =>
+    styleLine(buildCaptionAss({ ...ROW, hook: "H", text_position: pos }, opts(over))!).split(",");
+
+  it("9-zone text_position maps to ASS alignment 1–9", () => {
+    expect(fields({}, "bottom-left")[18]).toBe("1");
+    expect(fields({}, "bottom")[18]).toBe("2");
+    expect(fields({}, "bottom-right")[18]).toBe("3");
+    expect(fields({}, "center-left")[18]).toBe("4");
+    expect(fields({}, "center")[18]).toBe("5");
+    expect(fields({}, "top-right")[18]).toBe("9");
+    expect(fields({}, undefined)[18]).toBe("2"); // default bottom-center
+  });
+
+  it("angle sets the ASS Angle field", () => {
+    expect(fields({ captionAngle: 12 })[14]).toBe("12");
+    expect(fields({})[14]).toBe("0");
+  });
+
+  it("shadow sets a non-zero Shadow depth", () => {
+    expect(Number(fields({ captionShadow: true })[17])).toBeGreaterThan(0);
+    expect(fields({})[17]).toBe("0");
+  });
+
+  it("box uses BorderStyle 3 with the box colour in the outline slot", () => {
+    const s = fields({ captionBox: true, captionBoxColor: "#FFCC00" });
+    expect(s[15]).toBe("3"); // BorderStyle = opaque box
+    expect(s[5]).toBe("&H0000CCFF"); // box colour (#FFCC00 -> BGR)
+    expect(fields({})[15]).toBe("1"); // default = outline
+  });
+});
+
 describe("ffmpegListHasFilter (libass preflight)", () => {
   const WITH = [
     "Filters:",
