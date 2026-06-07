@@ -165,8 +165,30 @@ interface EditorState {
   hook: string;
   /** Caption secondary line (`title`). */
   title: string;
-  /** Vertical caption placement: `top` | `center` | `bottom` (default bottom). */
-  textPosition: "top" | "center" | "bottom";
+  /**
+   * Caption placement on a 9-zone grid: a vertical keyword
+   * (`top` | `center` | `bottom`, default bottom) optionally suffixed with a
+   * horizontal one (`-left` | `-center` | `-right`, default center). Stored as the
+   * bare vertical keyword when horizontal is center (back-compat: `"bottom"`), or
+   * `"<v>-<h>"` otherwise (e.g. `"bottom-left"`, `"top-right"`).
+   */
+  textPosition: string;
+}
+
+type TextPosV = "top" | "center" | "bottom";
+type TextPosH = "left" | "center" | "right";
+
+/** Split a stored `text_position` into its vertical/horizontal axes. */
+function parseTextPosition(value: string | undefined): { v: TextPosV; h: TextPosH } {
+  const [rawV, rawH] = (value || "").trim().toLowerCase().split("-");
+  const v: TextPosV = rawV === "top" || rawV === "center" ? rawV : "bottom";
+  const h: TextPosH = rawH === "left" || rawH === "right" ? rawH : "center";
+  return { v, h };
+}
+
+/** Combine the two axes back into a stored value (`"<v>"` or `"<v>-<h>"`). */
+function joinTextPosition(v: TextPosV, h: TextPosH): string {
+  return h === "center" ? v : `${v}-${h}`;
 }
 
 const DEFAULT_FPS = 30;
@@ -550,21 +572,50 @@ export function mountEditor(root: HTMLElement): void {
     drawPreview();
   });
   titleCapField.append(titleCapInput);
-  const posField = el("div", "fl-field");
-  const posSelect = document.createElement("select");
-  posSelect.title = "Vertical placement of the caption.";
-  for (const v of ["top", "center", "bottom"] as const) {
+  // Caption placement on a 9-zone grid: two small selects (vertical × horizontal)
+  // combined into one stored `text_position` (`"<v>"` when horizontal is center for
+  // back-compat, else `"<v>-<h>"`). The engine maps this to ASS alignment 1–9.
+  const posField = el("div", "fl-rowg");
+  const posVSelect = document.createElement("select");
+  posVSelect.title = "Vertical placement of the caption.";
+  for (const [value, label] of [
+    ["top", "Top"],
+    ["center", "Center"],
+    ["bottom", "Bottom"],
+  ] as const) {
     const opt = document.createElement("option");
-    opt.value = v;
-    opt.textContent = v;
-    posSelect.append(opt);
+    opt.value = value;
+    opt.textContent = label;
+    posVSelect.append(opt);
   }
-  posSelect.value = state.textPosition;
-  posSelect.addEventListener("change", () => {
-    state.textPosition = posSelect.value as EditorState["textPosition"];
+  const posHSelect = document.createElement("select");
+  posHSelect.title = "Horizontal placement of the caption.";
+  for (const [value, label] of [
+    ["left", "Left"],
+    ["center", "Center"],
+    ["right", "Right"],
+  ] as const) {
+    const opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = label;
+    posHSelect.append(opt);
+  }
+  const syncPosFromSelects = (): void => {
+    state.textPosition = joinTextPosition(
+      posVSelect.value as TextPosV,
+      posHSelect.value as TextPosH,
+    );
     drawPreview();
-  });
-  posField.append(posSelect);
+  };
+  const syncSelectsFromPos = (): void => {
+    const { v, h } = parseTextPosition(state.textPosition);
+    posVSelect.value = v;
+    posHSelect.value = h;
+  };
+  syncSelectsFromPos();
+  posVSelect.addEventListener("change", syncPosFromSelects);
+  posHSelect.addEventListener("change", syncPosFromSelects);
+  posField.append(posVSelect, posHSelect);
   capSect.append(hookField, titleCapField, posField);
 
   const kfSect = el("div", "fl-sect");
@@ -1810,9 +1861,10 @@ export function mountEditor(root: HTMLElement): void {
 
   /**
    * Rough on-canvas approximation of the burned caption: hook above title,
-   * white fill with a dark outline, placed top/center/bottom per text_position.
-   * This is a runtime-visual hint only — the AUTHORITATIVE render is the
-   * engine's drawtext (`--burn-captions`); spacing/fonts will differ.
+   * white fill with a dark outline, placed on the 9-zone grid per text_position
+   * (vertical top/center/bottom × horizontal left/center/right). This is a
+   * runtime-visual hint only — the AUTHORITATIVE render is the engine's drawtext
+   * (`--burn-captions`); spacing/fonts will differ.
    */
   function drawPreviewCaptions(
     ctx: CanvasRenderingContext2D,
@@ -1833,16 +1885,17 @@ export function mountEditor(root: HTMLElement): void {
     const titleH = title ? titleSize : 0;
     const blockH = hookH + titleH + (hook && title ? gap : 0);
 
+    const { v, h } = parseTextPosition(state.textPosition);
     let top: number;
-    if (state.textPosition === "top") top = pad;
-    else if (state.textPosition === "center") top = (ch - blockH) / 2;
+    if (v === "top") top = pad;
+    else if (v === "center") top = (ch - blockH) / 2;
     else top = ch - blockH - pad;
 
     ctx.save();
-    ctx.textAlign = "center";
+    ctx.textAlign = h === "left" ? "left" : h === "right" ? "right" : "center";
     ctx.textBaseline = "top";
     ctx.lineJoin = "round";
-    const x = cw / 2;
+    const x = h === "left" ? pad : h === "right" ? cw - pad : cw / 2;
     let y = top;
     const drawLine = (text: string, size: number): void => {
       ctx.font = `700 ${size}px system-ui, sans-serif`;
@@ -2859,6 +2912,7 @@ export function mountEditor(root: HTMLElement): void {
     const title = state.title.trim();
     if (hook) spec.hook = hook;
     if (title) spec.title = title;
+    // Omit the default (bottom-center, stored as "bottom") to keep manifests clean.
     if ((hook || title) && state.textPosition !== "bottom") spec.text_position = state.textPosition;
 
     state.clips.push(spec);
@@ -3136,11 +3190,13 @@ export function mountEditor(root: HTMLElement): void {
     // the manifest module); read them straight off the spec for round-trip.
     state.hook = spec.hook ?? "";
     state.title = spec.title ?? "";
-    state.textPosition =
-      spec.text_position === "top" || spec.text_position === "center" ? spec.text_position : "bottom";
+    // Re-normalize through the parse/join round-trip so any 9-zone value (or a
+    // legacy bare keyword) restores cleanly and the two selects reflect it.
+    const restored = parseTextPosition(spec.text_position);
+    state.textPosition = joinTextPosition(restored.v, restored.h);
     hookInput.value = state.hook;
     titleCapInput.value = state.title;
-    posSelect.value = state.textPosition;
+    syncSelectsFromPos();
     refreshContentReadout();
     refreshCropReadout();
     refreshKeyframes();
