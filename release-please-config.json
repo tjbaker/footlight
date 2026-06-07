@@ -3,7 +3,12 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "package-name": "footlight"
+      "package-name": "footlight",
+      "extra-files": [
+        { "type": "json", "path": "app/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "app/src-tauri/tauri.conf.json", "jsonpath": "$.version" },
+        { "type": "toml", "path": "app/src-tauri/Cargo.toml", "jsonpath": "$.package.version" }
+      ]
     }
   },
   "changelog-sections": [

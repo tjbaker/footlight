@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.4.0](https://github.com/tjbaker/footlight/compare/footlight-v0.3.0...footlight-v0.4.0) (2026-06-07)
+
+**The captions release.** Burn a styled hook + title into each clip, using your own fonts. Plus a public landing page at [footlight.dev](https://footlight.dev), a sturdier render-output folder, and a tidied-up About. Captions are **off by default** — a clean export stays the default.
+
+### Burned-in captions (opt-in)
+
+* **Hook + title burned over the clip**, rendered with [libass](https://github.com/libass/libass) (ASS subtitles) for crisp, styled text. Turn it on per render with the burn-captions toggle / `--burn-captions`. ([#49](https://github.com/tjbaker/footlight/pull/49), [#65](https://github.com/tjbaker/footlight/pull/65))
+* **Per-clip styling, edited in situ** next to the caption text with a live preview: font, fill & outline colour, **bold / italic / underline**, drop shadow, opaque box, rotation, and 9-zone placement. ([#90](https://github.com/tjbaker/footlight/pull/90), styling [#83](https://github.com/tjbaker/footlight/pull/83) / [#89](https://github.com/tjbaker/footlight/pull/89))
+* **Each clip carries its own caption style**, so one render can mix differently-styled captions. CSV manifests carry the text + position; JSON manifests carry the full per-clip `caption` object. ([#90](https://github.com/tjbaker/footlight/pull/90))
+* **CLI:** `--burn-captions` plus `--caption-font / -color / -outline-color / -bold / -italic / -underline / -shadow / -box / -box-color / -angle` as render-wide defaults that a per-clip style overrides. A preflight check fails loudly when your ffmpeg lacks libass. ([#60](https://github.com/tjbaker/footlight/pull/60), [#64](https://github.com/tjbaker/footlight/pull/64))
+
+### Custom fonts
+
+* **System font picker** with a live preview, so you can match a clip's look without typing a font name. ([#61](https://github.com/tjbaker/footlight/issues/61), [#73](https://github.com/tjbaker/footlight/pull/73))
+* **"Your fonts" folder** — point Settings at a folder of `.ttf`/`.otf` files and they show up in the picker, grouped above the system fonts. No bundled fonts and no font CDN (keeps the no-telemetry promise). ([#74](https://github.com/tjbaker/footlight/issues/74), [#78](https://github.com/tjbaker/footlight/pull/78))
+
+### Other features
+
+* **Bring-your-own key from the environment** — set `GEMINI_API_KEY` (or a local `.env`) instead of pasting into Settings. ([#69](https://github.com/tjbaker/footlight/pull/69))
+* **Sturdier render output folder** — Footlight verifies the destination is writable *before* rendering (a clear message instead of a raw error mid-run), and a fresh install defaults to `~/Movies/footlight`. ([#94](https://github.com/tjbaker/footlight/pull/94))
+* **[footlight.dev](https://footlight.dev) landing page**, deployed via GitHub Pages. ([#48](https://github.com/tjbaker/footlight/pull/48), [#66](https://github.com/tjbaker/footlight/pull/66))
+
+### Bug Fixes
+
+* No more OS-keychain prompt at every launch — the BYOK key is now read lazily, only when an AI feature actually needs it. ([#67](https://github.com/tjbaker/footlight/pull/67))
+* Captions fail loudly with an actionable message when ffmpeg has no libass, instead of a cryptic per-clip error. ([#60](https://github.com/tjbaker/footlight/pull/60))
+* Dropped a ReDoS-prone path regex flagged by CodeQL. ([#65](https://github.com/tjbaker/footlight/pull/65))
+
+### Refactors
+
+* **One About surface** — the macOS app menu and the in-app Help menu both open **Settings → About** now; the duplicate About modal is gone. ([#96](https://github.com/tjbaker/footlight/pull/96))
+
+### Documentation
+
+* Froze `SPEC.md` as design rationale; the living roadmap moved to GitHub issues.
+* Documented captions end to end — burn-in, bring-your-own fonts + the fonts folder, styling, and the manifest fields. ([#51](https://github.com/tjbaker/footlight/pull/51), [#75](https://github.com/tjbaker/footlight/pull/75), [#86](https://github.com/tjbaker/footlight/pull/86))
+
+### Build System / CI
+
+* Stabilised a flaky real-render test with a per-test timeout. ([#84](https://github.com/tjbaker/footlight/pull/84))
+* Bumped the GitHub Pages actions off the deprecated Node version. ([#72](https://github.com/tjbaker/footlight/pull/72))
+
 ## [0.3.0](https://github.com/tjbaker/footlight/compare/footlight-v0.2.0...footlight-v0.3.0) (2026-06-05)
 
 
