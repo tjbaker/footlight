@@ -127,7 +127,10 @@ The CLI is also available directly after `make build` — see **CLI usage** belo
 - **Moving crop:** drop **keyframes** for a time-keyed schedule that hard-switches
   the crop at cuts.
 - **Auto-track** (optional, BYOK): AI subject tracking builds a smooth eased crop
-  path across one shot — a reviewable suggestion. Add a Gemini key in **Settings**.
+  path across one shot — a reviewable suggestion. Add a Gemini key in **Settings**
+  (stored in your OS keychain), or set **`GEMINI_API_KEY`** in your environment /
+  `.env` — the env var works for the CLI and `make gui` and takes precedence over a
+  stored key (see `.env.example`). AI is entirely optional; the core never needs a key.
 - **Add clip → queue** (editable: click a card to re-edit, drag to reorder,
   duplicate), choose a **Destination**, and **Render**. Past renders are saved to
   **History** for one-click re-framing; your working session is autosaved and

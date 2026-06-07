@@ -164,6 +164,20 @@ export const webPlatform: FootlightPlatform = {
   // build (`tauriPlatform`) is the one that actually puts the key in the OS
   // keychain. Do not ship the web build as a product surface for real keys.
   async getSecret(key: string): Promise<string | null> {
+    // Env override (dev): if the dev server's shell has a GEMINI_API_KEY, use it
+    // so `make gui` works without pasting a key. Only for the Gemini secret; the
+    // pasted localStorage value is the fallback when no env var is set.
+    if (key.includes("gemini")) {
+      try {
+        const res = await fetch(`${BASE}/env-key`);
+        if (res.ok) {
+          const v = (await res.text()).trim();
+          if (v) return v;
+        }
+      } catch {
+        /* dev server unreachable — fall through to the localStorage shim. */
+      }
+    }
     try {
       return localStorage.getItem(`${SECRET_PREFIX}${key}`);
     } catch {
