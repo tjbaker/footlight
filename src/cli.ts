@@ -11,12 +11,15 @@
  *   footlight track  <request.json>  # locate a subject; print TrackSample[] JSON
  */
 
-import { readFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { parseCsv } from "./csv.js";
 import {
   buildFfmpegArgs,
+  buildCaptionAss,
   probeDimensions,
   ffmpegHasFilter,
   run,
@@ -147,8 +150,8 @@ async function cmdRender(argv: string[]): Promise<number> {
   const dryRun = flags.get("dry-run") === true;
 
   // Captions (SPEC §6.5): off unless --burn-captions. --caption-font takes a
-  // file path (.ttf/.otf, or anything with a path separator) → drawtext
-  // fontfile=, otherwise a fontconfig family name → font=.
+  // file path (.ttf/.otf, or anything with a path separator) → an embedded
+  // font dir for libass, otherwise a fontconfig family name.
   const burnCaptions = flags.get("burn-captions") === true;
   const captionFontArg = flags.has("caption-font") ? String(flags.get("caption-font")) : "";
   const looksLikePath = /[\\/]/.test(captionFontArg) || /\.(ttf|otf|ttc)$/i.test(captionFontArg);
@@ -185,14 +188,15 @@ async function cmdRender(argv: string[]): Promise<number> {
     return 1;
   }
 
-  // Captions preflight (SPEC §6.5): the `drawtext` filter exists only when ffmpeg
-  // is built with libfreetype. Check once up front and fail with an actionable
-  // message rather than letting every clip die on a cryptic "No such filter".
+  // Captions preflight (SPEC §6.5): captions are burned in via libass's
+  // `subtitles` filter, which exists only when ffmpeg is built with libass.
+  // Check once up front and fail with an actionable message rather than letting
+  // every clip die on a cryptic "No such filter".
   if (burnCaptions) {
     try {
-      if (!(await ffmpegHasFilter("drawtext"))) {
+      if (!(await ffmpegHasFilter("subtitles"))) {
         console.error(
-          'render: --burn-captions needs an ffmpeg built with libfreetype, but yours has no "drawtext" filter.\n' +
+          'render: --burn-captions needs an ffmpeg built with libass, but yours has no "subtitles" filter.\n' +
             "  Install one (macOS: brew install homebrew-ffmpeg/ffmpeg/ffmpeg) or drop --burn-captions.",
         );
         return 1;
@@ -209,44 +213,82 @@ async function cmdRender(argv: string[]): Promise<number> {
     const { row, cropPath } = items[i]!;
     const label = `[${i + 1}/${items.length}]`;
 
-    let built;
-    try {
-      const source = (row.source_file ?? "").trim();
-      if (!source) {
-        throw new Error("source_file is empty");
-      }
-      if (!existsSync(source)) {
-        throw new Error(`source_file not found: ${source}`);
-      }
-      const dims = await probeDimensions(source);
-      built = buildFfmpegArgs(row, {
-        outdir,
+    // Per-clip caption ASS document (SPEC §6.5). When captions are on and the
+    // row has a hook/title, `buildCaptionAss` returns an ASS document; write it
+    // to a unique temp file and hand its path to the engine, which appends a
+    // `subtitles=filename='…'` filter. The file is always removed below.
+    let captionAssPath: string | undefined;
+    if (burnCaptions) {
+      const ass = buildCaptionAss(row, {
         crf,
         preset,
         audioBitrate,
-        dims,
-        cropPath,
-        cropWindow: items[i]!.cropWindow,
         burnCaptions,
         ...(captionFontFile ? { captionFontFile } : {}),
         ...(captionFontName ? { captionFontName } : {}),
       });
-    } catch (err) {
-      console.error(`${label} SKIP — ${errMsg(err)}`);
-      failures++;
-      continue;
+      if (ass !== null) {
+        const path = join(tmpdir(), `footlight_cap_${i}_${process.pid}.ass`);
+        try {
+          writeFileSync(path, ass, "utf8");
+          captionAssPath = path;
+        } catch (err) {
+          console.error(`${label} SKIP — cannot write caption file: ${errMsg(err)}`);
+          failures++;
+          continue;
+        }
+      }
     }
 
-    if (dryRun) {
-      console.log(`${label} ffmpeg ${built.args.join(" ")}`);
-      continue;
-    }
+    try {
+      let built;
+      try {
+        const source = (row.source_file ?? "").trim();
+        if (!source) {
+          throw new Error("source_file is empty");
+        }
+        if (!existsSync(source)) {
+          throw new Error(`source_file not found: ${source}`);
+        }
+        const dims = await probeDimensions(source);
+        built = buildFfmpegArgs(row, {
+          outdir,
+          crf,
+          preset,
+          audioBitrate,
+          dims,
+          cropPath,
+          cropWindow: items[i]!.cropWindow,
+          burnCaptions,
+          ...(captionAssPath ? { captionAssPath } : {}),
+          ...(captionFontFile ? { captionFontFile } : {}),
+          ...(captionFontName ? { captionFontName } : {}),
+        });
+      } catch (err) {
+        console.error(`${label} SKIP — ${errMsg(err)}`);
+        failures++;
+        continue;
+      }
 
-    console.log(`${label} ${built.outPath}`);
-    const result = await run("ffmpeg", built.args, { inheritStdio: true });
-    if (result.code !== 0) {
-      console.error(`${label} FAILED — ffmpeg exit ${result.code}`);
-      failures++;
+      if (dryRun) {
+        console.log(`${label} ffmpeg ${built.args.join(" ")}`);
+        continue;
+      }
+
+      console.log(`${label} ${built.outPath}`);
+      const result = await run("ffmpeg", built.args, { inheritStdio: true });
+      if (result.code !== 0) {
+        console.error(`${label} FAILED — ffmpeg exit ${result.code}`);
+        failures++;
+      }
+    } finally {
+      if (captionAssPath) {
+        try {
+          unlinkSync(captionAssPath);
+        } catch {
+          // Best-effort cleanup; ignore if it's already gone.
+        }
+      }
     }
   }
 
