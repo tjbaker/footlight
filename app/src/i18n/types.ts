@@ -163,6 +163,299 @@ export interface SettingsMessages {
   };
 }
 
+/** Strings for the single-clip cutter editor (the app's main surface). */
+export interface EditorMessages {
+  /** Top bar: breadcrumb + the icon-button tooltips. */
+  topbar: {
+    noSource: string;
+    render: string;
+    renderTitle: string;
+    activityTitle: string;
+    historyTitle: string;
+    previewHide: string;
+    previewShow: string;
+    assistantTitle: string;
+    themeToLight: string;
+    themeToDark: string;
+    settingsTitle: string;
+  };
+  /** The stage (frame viewer): empty-state hero, tags and tooltips. */
+  stage: {
+    sourceTag: string;
+    overlayTitle: string;
+    previewHeadTitle: string;
+    guides: string;
+    guidesTitle: string;
+    heroH: string;
+    heroSub: string;
+    heroCta: string;
+    frameAlt: string;
+  };
+  /** Transport: the play button and the in→out chip. */
+  transport: {
+    playTitle: string;
+    inOut: string;
+  };
+  /** Inspector tab labels. */
+  tabs: {
+    frame: string;
+    track: string;
+  };
+  /** Source & destination section. */
+  source: {
+    header: string;
+    sourcePlaceholder: string;
+    sourceTitle: string;
+    load: string;
+    browse: string;
+    notLoaded: string;
+    probing: string;
+    destPlaceholder: string;
+    destTitle: string;
+    dimKey: string;
+    durKey: string;
+    arKey: string;
+    cropdetectPrefix: string;
+    cropdetectNone: string;
+    enterPath: string;
+    dropHint: string;
+  };
+  /** Clip In/Out section. */
+  clip: {
+    header: string;
+    setIn: string;
+    setInTitle: string;
+    setOut: string;
+    setOutTitle: string;
+    inKey: string;
+    outKey: string;
+    durKey: string;
+    offsetKey: string;
+  };
+  /** Framing section + crop readouts. */
+  framing: {
+    header: string;
+    loadASource: string;
+    contentOff: string;
+    /** `punch-in: WxH @ (x,y) · zoom Z× · double-click to reset` — composed in code. */
+    punchInPrefix: string;
+    zoomMid: string;
+    resetSuffix: string;
+    cropOffsetPrefix: string;
+    contentCropPrefix: string;
+    /** Framing-mode labels in the clip "offset" readout. */
+    modeTrack: string;
+    modePunchIn: string;
+    modeSchedule: string;
+    defaultOffset: string;
+  };
+  /** Captions section. */
+  captions: {
+    header: string;
+    hookPlaceholder: string;
+    hookTitle: string;
+    titlePlaceholder: string;
+    titleTitle: string;
+    posVTitle: string;
+    posHTitle: string;
+    posTop: string;
+    posCenter: string;
+    posBottom: string;
+    posLeft: string;
+    posRight: string;
+    fontTitle: string;
+    fontPathPlaceholder: string;
+    fontSystemDefault: string;
+    fontYourFonts: string;
+    fontSystemFonts: string;
+    fontCustomPath: string;
+    fill: string;
+    outline: string;
+    bold: string;
+    italic: string;
+    underline: string;
+    boxColor: string;
+    shadow: string;
+    shadowTitle: string;
+    box: string;
+    boxTitle: string;
+    rotate: string;
+  };
+  /** Moving-crop keyframes section. */
+  keyframes: {
+    header: string;
+    add: string;
+    addTitle: string;
+    clear: string;
+    schedulePrefix: string;
+    scheduleNone: string;
+    scheduleNoKeyframes: string;
+    needIn: string;
+  };
+  /** Add-to-queue section. */
+  add: {
+    header: string;
+    namePlaceholder: string;
+    addClip: string;
+    addClipTitle: string;
+  };
+  /** Track-subject (auto-track) tab. */
+  track: {
+    header: string;
+    help: string;
+    subjectPlaceholder: string;
+    intervalPlaceholder: string;
+    intervalLabel: string;
+    autoTrack: string;
+    autoTrackTitle: string;
+    clearTrack: string;
+    clearTrackTitle: string;
+    statusNone: string;
+    statusLoadSource: string;
+    statusNeedInOut: string;
+    statusOutAfterIn: string;
+    statusNeedKey: string;
+    /** `track: extracting frames + querying Gemini… {n}s — this can take a while` */
+    statusWorkingPrefix: string;
+    statusWorkingSuffix: string;
+    statusNoBoxes: string;
+    /** `track: ON · {n} keyframe(s). Clear track to revert.` — composed in code. */
+    statusOnPrefix: string;
+    statusOnSuffix: string;
+    statusFailed: string;
+    noBoxesOutput: string;
+    /** `Auto-track: {n} keyframe(s) from {m} sample(s). …` — composed in code. */
+    resultPrefix: string;
+    resultMid: string;
+    resultSuffix: string;
+    failedOutputPrefix: string;
+  };
+  /** Inspector-base "Ask the assistant" button. */
+  ask: {
+    button: string;
+    title: string;
+  };
+  /** AI assistant dock. */
+  assistant: {
+    title: string;
+    sub: string;
+    closeTitle: string;
+    suggestions: string[];
+    composerPlaceholder: string;
+    sendTitle: string;
+    greeting: string;
+    youLabel: string;
+    assistantLabel: string;
+    needSource: string;
+    needKey: string;
+    turnFailedPrefix: string;
+    grounded: string;
+    proposed: string;
+    /** `{n} action` / `{n} actions` — composed in code. */
+    actionSingular: string;
+    actionPlural: string;
+    arrow: string;
+    acceptAll: string;
+    step: string;
+    discard: string;
+    /** Accept / step / discard completion notes. */
+    appliedStagedPrefix: string;
+    appliedStagedSuffix: string;
+    appliedPrefix: string;
+    appliedSuffixSingular: string;
+    appliedSuffixPlural: string;
+    steppedThrough: string;
+    discarded: string;
+    renderStaged: string;
+    trackFromAssistantPrefix: string;
+    trackFromAssistantSuffix: string;
+  };
+  /** Timeline (loudness track). */
+  timeline: {
+    prevCutTitle: string;
+    nextCutTitle: string;
+    suggested: string;
+    cutsLabel: string;
+    swellsLabel: string;
+    detectScenes: string;
+    detectScenesTitle: string;
+    /** `Seek to just before this swell ({clock})` — composed in code. */
+    seekSwellPrefix: string;
+    seekSwellSuffix: string;
+  };
+  /** Filmstrip queue + cards. */
+  queue: {
+    queueLabel: string;
+    addClip: string;
+    copyJson: string;
+    copyJsonTitle: string;
+    /** `Render {n}` — composed in code. */
+    renderN: string;
+    cardEditTitle: string;
+    duplicateTitle: string;
+    removeTitle: string;
+  };
+  /** Activity / Output panel. */
+  activity: {
+    title: string;
+    copy: string;
+    copyTitle: string;
+    closeTitle: string;
+    placeholder: string;
+    rendering: string;
+    okNoOutput: string;
+    renderFailed: string;
+    /** `Can't write to {path} — {reason}.` — composed in code. */
+    cantWritePrefix: string;
+    cantWriteFallbackReason: string;
+    clipsWrittenTo: string;
+    detectingScenes: string;
+    /** `Scene cuts (s): {list}  (…)` — composed in code. */
+    sceneCutsPrefix: string;
+    sceneCutsSuffix: string;
+    noScenes: string;
+    stagedForRender: string;
+    copied: string;
+    copyFailed: string;
+    copyIdle: string;
+  };
+  /** History modal. */
+  history: {
+    ariaLabel: string;
+    title: string;
+    clearAll: string;
+    filterPlaceholder: string;
+    storedLabel: string;
+    storedValue: string;
+    emptyHint: string;
+    footHtmlBody: string;
+    open: string;
+    removeTitle: string;
+    noMatches: string;
+    /** `{n} render` / `{n} renders` — composed in code. */
+    renderSingular: string;
+    renderPlural: string;
+    today: string;
+    yesterday: string;
+    modeTrack: string;
+    modePunchIn: string;
+    modeKeyframes: string;
+  };
+  /** Add-clip / render validation errors (inline or in Output). */
+  errors: {
+    loadSourceFirst: string;
+    setInOut: string;
+    outAfterIn: string;
+    addAtLeastOne: string;
+    previewPlayerFailed: string;
+  };
+  /** Shared, reused short labels. */
+  common: {
+    close: string;
+    dash: string;
+  };
+}
+
 /** One key binding in the shortcuts reference: physical keys + what it does. */
 export interface ShortcutBinding {
   /** Physical keys (NOT localized) — each rendered as its own `<kbd>`, joined by "+". */
@@ -190,5 +483,6 @@ export interface ShortcutsMessages {
 export interface Messages {
   help: HelpMessages;
   settings: SettingsMessages;
+  editor: EditorMessages;
   shortcuts: ShortcutsMessages;
 }

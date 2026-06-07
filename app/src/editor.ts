@@ -44,6 +44,10 @@ import type {
   Grounding,
 } from "@assistant-types";
 import { platform, platformName } from "./platform/index.js";
+import { messages } from "./i18n/index.js";
+
+/** The editor's localized strings (the `editor` namespace of the catalog). */
+const m = messages.editor;
 
 /**
  * The assistant model the user picked in Settings → AI & models (persisted under
@@ -308,48 +312,48 @@ export function mountEditor(root: HTMLElement): void {
   const crumb = el("div", "fl-crumb mono");
   const crumbDot = el("span", "fl-dot");
   const crumbPath = el("span", "path");
-  crumbPath.textContent = "no source loaded";
+  crumbPath.textContent = m.topbar.noSource;
   crumb.append(crumbDot, crumbPath);
 
   const actions = el("div", "fl-actions");
-  const renderBtn = button("Render", "fl-btn primary", doRender);
-  renderBtn.title = "Encode every clip in the queue to 1080×1920 H.264.";
+  const renderBtn = button(m.topbar.render, "fl-btn primary", doRender);
+  renderBtn.title = m.topbar.renderTitle;
   const activityToggle = button("", "fl-iconbtn", () => {
     if (isTauri) void toggleNativeActivity();
     else setActivityOpen(activityPanel.hidden);
   });
   activityToggle.innerHTML = ICON_ACTIVITY;
-  activityToggle.title = "Show render, scene-detect and auto-track output";
+  activityToggle.title = m.topbar.activityTitle;
   const historyBtn = button("", "fl-iconbtn", () => void openHistory());
   historyBtn.innerHTML = ICON_HISTORY;
-  historyBtn.title = "History — re-open a past render to tweak and re-encode";
+  historyBtn.title = m.topbar.historyTitle;
   const previewBtn = button("", "fl-iconbtn", () => togglePreview());
   previewBtn.innerHTML = ICON_PHONE;
   function togglePreview(): void {
     previewOn = !previewOn;
     savePreviewPref(previewOn);
     previewBtn.classList.toggle("on", previewOn);
-    previewBtn.title = previewOn ? "Hide the 9:16 output preview" : "Show the 9:16 output preview";
+    previewBtn.title = previewOn ? m.topbar.previewHide : m.topbar.previewShow;
     drawPreview();
   }
   previewBtn.classList.toggle("on", previewOn);
-  previewBtn.title = previewOn ? "Hide the 9:16 output preview" : "Show the 9:16 output preview";
+  previewBtn.title = previewOn ? m.topbar.previewHide : m.topbar.previewShow;
   // Spark toggles the AI assistant dock — a third rail mode that slides over the
   // Frame / Track-subject inspector (SPEC §6.7). Active state mirrors `.on`.
   const assistantBtn = button("", "fl-iconbtn assistant", () => toggleAssistant());
   assistantBtn.innerHTML = ICON_SPARK;
-  assistantBtn.title = "AI assistant (A) — propose framing in plain language";
+  assistantBtn.title = m.topbar.assistantTitle;
   const themeBtn = button("", "fl-iconbtn", () => toggleTheme());
   const settingsBtn = button("", "fl-iconbtn", () => openSettings());
   settingsBtn.innerHTML = ICON_GEAR;
-  settingsBtn.title = "Settings";
+  settingsBtn.title = m.topbar.settingsTitle;
   actions.append(renderBtn, previewBtn, assistantBtn, historyBtn, activityToggle, themeBtn, settingsBtn);
   topbar.append(brand, crumb, actions);
 
   function refreshThemeIcon(): void {
     const dark = document.documentElement.getAttribute("data-theme") === "dark";
     themeBtn.innerHTML = dark ? ICON_SUN : ICON_MOON;
-    themeBtn.title = dark ? "Switch to light theme" : "Switch to dark theme";
+    themeBtn.title = dark ? m.topbar.themeToLight : m.topbar.themeToDark;
   }
   function toggleTheme(): void {
     const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
@@ -368,18 +372,18 @@ export function mountEditor(root: HTMLElement): void {
   const stage = el("div", "fl-stage empty");
   const stageMeta = el("div", "fl-stage-meta");
   const stageTag = el("span", "fl-stage-tag rec");
-  stageTag.textContent = "SOURCE";
+  stageTag.textContent = m.stage.sourceTag;
   const stageTimeTag = el("span", "fl-stage-tag");
   stageTimeTag.textContent = "t = 0.000s";
   stageMeta.append(stageTag, stageTimeTag);
   const emptyMsg = el("div", "fl-stage-center");
   emptyMsg.innerHTML =
-    '<div class="fl-hero-h">Your stage, vertical.</div>' +
-    '<div class="fl-hero-sub">Footlight turns 16:9 performance video into frame-perfect 9:16 clips — you make every call.</div>' +
-    '<div class="fl-hero-cta">Browse… or paste a path to load — then mark, frame, queue, render.</div>';
+    `<div class="fl-hero-h">${escapeHtml(m.stage.heroH)}</div>` +
+    `<div class="fl-hero-sub">${escapeHtml(m.stage.heroSub)}</div>` +
+    `<div class="fl-hero-cta">${escapeHtml(m.stage.heroCta)}</div>`;
   const img = document.createElement("img");
   img.id = "frame";
-  img.alt = "current frame";
+  img.alt = m.stage.frameAlt;
   img.style.display = "none";
   const video = document.createElement("video");
   video.id = "preview-video";
@@ -389,7 +393,7 @@ export function mountEditor(root: HTMLElement): void {
   const overlay = document.createElement("canvas");
   overlay.id = "overlay";
   overlay.style.display = "none";
-  overlay.title = "Drag to reframe · drag a corner to punch-in / zoom · double-click to reset";
+  overlay.title = m.stage.overlayTitle;
   // Live 9:16 output preview — the actual vertical result (cropped + scaled, with
   // the moving-crop/track applied), pinned bottom-right of the stage.
   const preview = el("div", "fl-preview empty");
@@ -403,16 +407,16 @@ export function mountEditor(root: HTMLElement): void {
   // the overlay). Tag shows live zoom (1.0× full-frame, >1× punched in); the output
   // is always 9:16, so labelling that is noise.
   const previewHead = el("div", "fl-preview-head");
-  previewHead.title = "Drag to move · toggle the preview off in the top bar";
+  previewHead.title = m.stage.previewHeadTitle;
   const previewTag = el("span", "fl-preview-tag mono");
   previewTag.textContent = "1.0×";
   let safeAreas = false;
-  const safeToggle = button("guides", "fl-preview-safe", () => {
+  const safeToggle = button(m.stage.guides, "fl-preview-safe", () => {
     safeAreas = !safeAreas;
     safeToggle.classList.toggle("on", safeAreas);
     drawPreview();
   });
-  safeToggle.title = "Show TikTok/Reels safe-area guides — the bottom caption + right button zones a platform overlays, so you don't frame the subject where it gets covered";
+  safeToggle.title = m.stage.guidesTitle;
   previewHead.append(previewTag, safeToggle);
   preview.append(previewCanvas, previewHead);
   stage.append(stageMeta, emptyMsg, img, video, overlay, preview);
@@ -457,7 +461,7 @@ export function mountEditor(root: HTMLElement): void {
   const transport = el("div", "fl-transport");
   const playBtn = button("", "fl-play", () => void togglePlay());
   playBtn.innerHTML = PLAY_GLYPH;
-  playBtn.title = "Play with audio to find your In/Out by ear — Set In/Out works while playing";
+  playBtn.title = m.transport.playTitle;
   playBtn.disabled = true;
   const mkStep = (label: string, delta: () => number) =>
     button(label, "fl-step", () => seek(state.t + delta()));
@@ -477,7 +481,7 @@ export function mountEditor(root: HTMLElement): void {
   jog.append(stepsLeft, playBtn, stepsRight);
 
   const ioChip = el("div", "fl-rdchip");
-  ioChip.innerHTML = '<span class="lab">in→out</span><span class="val">—</span>';
+  ioChip.innerHTML = `<span class="lab">${escapeHtml(m.transport.inOut)}</span><span class="val">${escapeHtml(m.common.dash)}</span>`;
   const tpLeft = el("div", "fl-tp-side");
   tpLeft.append(ioChip);
   const tLabel = el("div", "fl-time tnum");
@@ -491,20 +495,20 @@ export function mountEditor(root: HTMLElement): void {
   const inspector = el("div", "fl-inspector");
   const seg = el("div", "fl-seg");
   seg.style.margin = "16px 16px 4px";
-  const frameTab = button("Frame", undefined, () => selectTab("frame"));
+  const frameTab = button(m.tabs.frame, undefined, () => selectTab("frame"));
   const trackTab = button("", undefined, () => selectTab("track"));
-  trackTab.textContent = "Track subject";
+  trackTab.textContent = m.tabs.track;
   seg.append(frameTab, trackTab);
 
   // -- Frame tab --
   const framePane = el("div");
 
   const srcSect = el("div", "fl-sect");
-  srcSect.append(sectionHeader("Source"));
+  srcSect.append(sectionHeader(m.source.header));
   const srcStack = el("div", "fl-stack");
-  const srcInput = input("text", "/absolute/path/to/source.mp4");
+  const srcInput = input("text", m.source.sourcePlaceholder);
   srcInput.classList.add("mono");
-  srcInput.title = "Type or paste an absolute path and press Enter, or use Browse…";
+  srcInput.title = m.source.sourceTitle;
   // Recent sources as a native autocomplete on the path field.
   const recentsList = document.createElement("datalist");
   recentsList.id = "fl-recents";
@@ -517,14 +521,14 @@ export function mountEditor(root: HTMLElement): void {
       recentsList.append(opt);
     }
   }
-  const loadBtn = button("Load", "fl-btn sm", () => void load());
+  const loadBtn = button(m.source.load, "fl-btn sm", () => void load());
   const srcField = el("div", "fl-field path");
   srcField.innerHTML = `<span class="ic">${ICON_FOLDER}</span>`;
   srcField.append(srcInput, recentsList);
   const srcRow = el("div", "fl-rowg");
   srcRow.append(srcField);
   if (platform.supportsFilePicker) {
-    const browseBtn = button("Browse…", "fl-btn sm", () => void browse());
+    const browseBtn = button(m.source.browse, "fl-btn sm", () => void browse());
     browseBtn.style.flex = "none";
     srcRow.append(browseBtn);
   } else {
@@ -532,12 +536,12 @@ export function mountEditor(root: HTMLElement): void {
     srcRow.append(loadBtn);
   }
   const dimsLine = el("div", "hint");
-  dimsLine.textContent = "Not loaded.";
+  dimsLine.textContent = m.source.notLoaded;
   const cropdetectLine = el("div", "hint");
-  const outdirInput = input("text", "clips");
+  const outdirInput = input("text", m.source.destPlaceholder);
   outdirInput.classList.add("mono");
   outdirInput.value = loadOutdir();
-  outdirInput.title = "Folder where rendered clips are written.";
+  outdirInput.title = m.source.destTitle;
   outdirInput.addEventListener("change", () => {
     saveOutdir(outdirInput.value);
     saveSessionSoon();
@@ -561,7 +565,7 @@ export function mountEditor(root: HTMLElement): void {
   const destRow = el("div", "fl-rowg");
   destRow.append(destField);
   if (platform.supportsFilePicker) {
-    const browseDest = button("Browse…", "fl-btn sm", () => void browseOutdir());
+    const browseDest = button(m.source.browse, "fl-btn sm", () => void browseOutdir());
     browseDest.style.flex = "none";
     destRow.append(browseDest);
   }
@@ -569,21 +573,21 @@ export function mountEditor(root: HTMLElement): void {
   srcSect.append(srcStack);
 
   const clipSect = el("div", "fl-sect");
-  clipSect.append(sectionHeader("Clip"));
+  clipSect.append(sectionHeader(m.clip.header));
   const ioRow = el("div", "fl-rowg");
   ioRow.style.marginBottom = "12px";
   const setInBtn = button("", "fl-btn", () => {
     state.inPoint = state.t;
     refreshIO();
   });
-  setInBtn.innerHTML = '<span class="idot in"></span>Set In';
-  setInBtn.title = "Mark the clip start at the current frame.";
+  setInBtn.innerHTML = `<span class="idot in"></span>${escapeHtml(m.clip.setIn)}`;
+  setInBtn.title = m.clip.setInTitle;
   const setOutBtn = button("", "fl-btn", () => {
     state.outPoint = state.t;
     refreshIO();
   });
-  setOutBtn.innerHTML = '<span class="idot out"></span>Set Out';
-  setOutBtn.title = "Mark the clip end at the current frame.";
+  setOutBtn.innerHTML = `<span class="idot out"></span>${escapeHtml(m.clip.setOut)}`;
+  setOutBtn.title = m.clip.setOutTitle;
   ioRow.append(setInBtn, setOutBtn);
   // 2×2 readout grid so the second column aligns:  in | out  /  dur | offset
   const kSpan = (t: string): HTMLElement => {
@@ -607,32 +611,32 @@ export function mountEditor(root: HTMLElement): void {
   offsetVal.textContent = "—";
   const ioGrid = el("div", "fl-readgrid");
   ioGrid.append(
-    readCell(dotSpan("in"), kSpan("in"), inVal),
-    readCell(dotSpan("out"), kSpan("out"), outVal),
-    readCell(dotSpan("dur"), kSpan("dur"), durVal),
-    readCell(kSpan("offset"), offsetVal),
+    readCell(dotSpan("in"), kSpan(m.clip.inKey), inVal),
+    readCell(dotSpan("out"), kSpan(m.clip.outKey), outVal),
+    readCell(dotSpan("dur"), kSpan(m.clip.durKey), durVal),
+    readCell(kSpan(m.clip.offsetKey), offsetVal),
   );
   clipSect.append(ioRow, ioGrid);
 
   const framingSect = el("div", "fl-sect");
-  framingSect.append(sectionHeader("Framing"));
+  framingSect.append(sectionHeader(m.framing.header));
   const cropReadout = el("div", "fl-readout");
-  cropReadout.textContent = "crop_offset: (load a source)";
+  cropReadout.textContent = m.framing.loadASource;
   framingSect.append(cropReadout);
   // content-crop omitted from the UI (engine still supports it via the manifest);
   // contentReadout stays so the inert content-crop code paths keep compiling.
   const contentReadout = el("div", "hint");
-  contentReadout.textContent = "content_crop: (off)";
+  contentReadout.textContent = m.framing.contentOff;
 
   // Captions (SPEC §6.5): shot-list text carried in the manifest (hook/title/
   // text_position). It is stored regardless of whether burn-in is enabled in
   // Settings → Rendering; the engine's drawtext is the authoritative render.
   const capSect = el("div", "fl-sect");
-  capSect.append(sectionHeader("Captions"));
+  capSect.append(sectionHeader(m.captions.header));
   const hookField = el("div", "fl-field");
   hookField.style.marginBottom = "8px";
-  const hookInput = input("text", "hook (big line, optional)");
-  hookInput.title = "The big caption line burned over the clip (when burn-in is on).";
+  const hookInput = input("text", m.captions.hookPlaceholder);
+  hookInput.title = m.captions.hookTitle;
   hookInput.addEventListener("input", () => {
     state.hook = hookInput.value;
     drawPreview();
@@ -640,8 +644,8 @@ export function mountEditor(root: HTMLElement): void {
   hookField.append(hookInput);
   const titleCapField = el("div", "fl-field");
   titleCapField.style.marginBottom = "8px";
-  const titleCapInput = input("text", "title (secondary line, optional)");
-  titleCapInput.title = "The secondary caption line, shown under the hook.";
+  const titleCapInput = input("text", m.captions.titlePlaceholder);
+  titleCapInput.title = m.captions.titleTitle;
   titleCapInput.addEventListener("input", () => {
     state.title = titleCapInput.value;
     drawPreview();
@@ -652,11 +656,11 @@ export function mountEditor(root: HTMLElement): void {
   // back-compat, else `"<v>-<h>"`). The engine maps this to ASS alignment 1–9.
   const posField = el("div", "fl-rowg");
   const posVSelect = document.createElement("select");
-  posVSelect.title = "Vertical placement of the caption.";
+  posVSelect.title = m.captions.posVTitle;
   for (const [value, label] of [
-    ["top", "Top"],
-    ["center", "Center"],
-    ["bottom", "Bottom"],
+    ["top", m.captions.posTop],
+    ["center", m.captions.posCenter],
+    ["bottom", m.captions.posBottom],
   ] as const) {
     const opt = document.createElement("option");
     opt.value = value;
@@ -664,11 +668,11 @@ export function mountEditor(root: HTMLElement): void {
     posVSelect.append(opt);
   }
   const posHSelect = document.createElement("select");
-  posHSelect.title = "Horizontal placement of the caption.";
+  posHSelect.title = m.captions.posHTitle;
   for (const [value, label] of [
-    ["left", "Left"],
-    ["center", "Center"],
-    ["right", "Right"],
+    ["left", m.captions.posLeft],
+    ["center", m.captions.posCenter],
+    ["right", m.captions.posRight],
   ] as const) {
     const opt = document.createElement("option");
     opt.value = value;
@@ -707,10 +711,10 @@ export function mountEditor(root: HTMLElement): void {
   const FONT_DEFAULT = "__default__";
   const FONT_CUSTOM = "__custom__";
   const fontSelect = document.createElement("select");
-  fontSelect.title = "Caption font — your fonts (from the Settings folder), system fonts, or a custom file path.";
+  fontSelect.title = m.captions.fontTitle;
   const fontField = el("div", "fl-field");
   fontField.style.marginTop = "2px";
-  const fontPathInput = input("text", "/path/to/font.ttf");
+  const fontPathInput = input("text", m.captions.fontPathPlaceholder);
   fontPathInput.classList.add("mono");
   fontField.append(fontPathInput);
   fontField.style.display = "none";
@@ -754,7 +758,7 @@ export function mountEditor(root: HTMLElement): void {
     fontSelect.innerHTML = "";
     const optDefault = document.createElement("option");
     optDefault.value = FONT_DEFAULT;
-    optDefault.textContent = "System default";
+    optDefault.textContent = m.captions.fontSystemDefault;
     fontSelect.append(optDefault);
 
     folderFontPaths = new Set();
@@ -774,7 +778,7 @@ export function mountEditor(root: HTMLElement): void {
 
     if (userFonts.length) {
       const grp = document.createElement("optgroup");
-      grp.label = "Your fonts";
+      grp.label = m.captions.fontYourFonts;
       for (const f of userFonts) {
         if (!f.family) continue;
         const value = f.path ?? f.family; // folder fonts select by PATH
@@ -788,7 +792,7 @@ export function mountEditor(root: HTMLElement): void {
     }
     if (sysFonts.length) {
       const grp = document.createElement("optgroup");
-      grp.label = "System fonts";
+      grp.label = m.captions.fontSystemFonts;
       const seen = new Set<string>();
       for (const f of sysFonts.map((x) => x.family).sort((a, b) => a.localeCompare(b))) {
         if (!f || seen.has(f)) continue;
@@ -802,7 +806,7 @@ export function mountEditor(root: HTMLElement): void {
     }
     const optCustom = document.createElement("option");
     optCustom.value = FONT_CUSTOM;
-    optCustom.textContent = "Custom path…";
+    optCustom.textContent = m.captions.fontCustomPath;
     fontSelect.append(optCustom);
 
     state.caption.font = prev;
@@ -840,9 +844,9 @@ export function mountEditor(root: HTMLElement): void {
     row.append(lab, swatch, hex);
     return row;
   }
-  const fillRow = colorControl("Fill", () => state.caption.color, (v) => (state.caption.color = v));
+  const fillRow = colorControl(m.captions.fill, () => state.caption.color, (v) => (state.caption.color = v));
   const outlineRow = colorControl(
-    "Outline",
+    m.captions.outline,
     () => state.caption.outlineColor,
     (v) => (state.caption.outlineColor = v),
   );
@@ -868,16 +872,16 @@ export function mountEditor(root: HTMLElement): void {
     refresh();
     return b;
   }
-  const boldBtn = toggleBtn("B", "font-weight:700;", "Bold", () => state.caption.bold, (v) => (state.caption.bold = v));
-  const italicBtn = toggleBtn("I", "font-style:italic;", "Italic", () => state.caption.italic, (v) => (state.caption.italic = v));
-  const underlineBtn = toggleBtn("U", "text-decoration:underline;", "Underline", () => state.caption.underline, (v) => (state.caption.underline = v));
+  const boldBtn = toggleBtn("B", "font-weight:700;", m.captions.bold, () => state.caption.bold, (v) => (state.caption.bold = v));
+  const italicBtn = toggleBtn("I", "font-style:italic;", m.captions.italic, () => state.caption.italic, (v) => (state.caption.italic = v));
+  const underlineBtn = toggleBtn("U", "text-decoration:underline;", m.captions.underline, () => state.caption.underline, (v) => (state.caption.underline = v));
   const emphasisRow = el("div", "fl-rowg");
   emphasisRow.style.gap = "6px";
   emphasisRow.append(boldBtn, italicBtn, underlineBtn);
 
-  const boxColorRow = colorControl("Box color", () => state.caption.boxColor, (v) => (state.caption.boxColor = v));
-  const shadowBtn = toggleBtn("Shadow", "", "Drop shadow behind the caption", () => state.caption.shadow, (v) => (state.caption.shadow = v));
-  const boxBtn = toggleBtn("Box", "", "Opaque box behind the caption", () => state.caption.box, (v) => {
+  const boxColorRow = colorControl(m.captions.boxColor, () => state.caption.boxColor, (v) => (state.caption.boxColor = v));
+  const shadowBtn = toggleBtn(m.captions.shadow, "", m.captions.shadowTitle, () => state.caption.shadow, (v) => (state.caption.shadow = v));
+  const boxBtn = toggleBtn(m.captions.box, "", m.captions.boxTitle, () => state.caption.box, (v) => {
     state.caption.box = v;
     boxColorRow.style.display = v ? "" : "none";
   });
@@ -890,7 +894,7 @@ export function mountEditor(root: HTMLElement): void {
   angleRow.style.cssText = "align-items:center; gap:8px;";
   const angleLab = el("span", "fl-label");
   angleLab.style.cssText = "flex:none; font-size:12px;";
-  angleLab.textContent = "Rotate";
+  angleLab.textContent = m.captions.rotate;
   const angleInput = document.createElement("input");
   angleInput.type = "range";
   angleInput.min = "-30";
@@ -933,12 +937,12 @@ export function mountEditor(root: HTMLElement): void {
   capSect.append(hookField, titleCapField, posField, styleWrap);
 
   const kfSect = el("div", "fl-sect");
-  kfSect.append(sectionHeader("Moving crop — keyframes"));
+  kfSect.append(sectionHeader(m.keyframes.header));
   const kfRow = el("div", "fl-rowg");
   kfRow.style.marginBottom = "10px";
-  const addKfBtn = button("Add keyframe", "fl-btn sm", addKeyframe);
-  addKfBtn.title = "Record the current time + box position as a crop switch point.";
-  const clearKfBtn = button("Clear", "fl-btn sm ghost", () => {
+  const addKfBtn = button(m.keyframes.add, "fl-btn sm", addKeyframe);
+  addKfBtn.title = m.keyframes.addTitle;
+  const clearKfBtn = button(m.keyframes.clear, "fl-btn sm ghost", () => {
     state.keyframes = [];
     refreshKeyframes();
   });
@@ -946,19 +950,19 @@ export function mountEditor(root: HTMLElement): void {
   const kfList = el("ul", "fl-kf-list") as HTMLUListElement;
   const scheduleReadout = el("div", "fl-readout");
   scheduleReadout.style.marginTop = "8px";
-  scheduleReadout.textContent = "schedule: (none)";
+  scheduleReadout.textContent = m.keyframes.scheduleNone;
   kfSect.append(kfRow, kfList, scheduleReadout);
 
   const addSect = el("div", "fl-sect");
-  addSect.append(sectionHeader("Add to queue"));
+  addSect.append(sectionHeader(m.add.header));
   const nameField = el("div", "fl-field");
   nameField.style.marginBottom = "12px";
-  const nameInput = input("text", "out_name (optional, e.g. chorus_closeup)");
+  const nameInput = input("text", m.add.namePlaceholder);
   nameInput.classList.add("mono");
   nameField.append(nameInput);
   const addClipBtn = button("", "fl-btn lg primary", addClip);
-  addClipBtn.innerHTML = `${ICON_PLUS}Add clip → queue`;
-  addClipBtn.title = "Add the current In/Out + framing to the queue.";
+  addClipBtn.innerHTML = `${ICON_PLUS}${escapeHtml(m.add.addClip)}`;
+  addClipBtn.title = m.add.addClipTitle;
   const clipErr = el("div", "err-text");
   addSect.append(nameField, addClipBtn, clipErr);
 
@@ -967,36 +971,35 @@ export function mountEditor(root: HTMLElement): void {
   // -- Track tab (auto-track) --
   const trackPane = el("div");
   const trackSect = el("div", "fl-sect");
-  trackSect.append(sectionHeader("Track subject"));
+  trackSect.append(sectionHeader(m.track.header));
   const trackHelp = el("div", "fl-help");
-  trackHelp.textContent =
-    "Opt-in. Pans to follow a subject across one shot. Set your Gemini key in Settings.";
+  trackHelp.textContent = m.track.help;
   const hintField = el("div", "fl-field");
   hintField.style.marginBottom = "10px";
-  const hintInput = input("text", 'subject, e.g. "the person playing guitar"');
+  const hintInput = input("text", m.track.subjectPlaceholder);
   hintInput.classList.add("mono");
   hintInput.value = autoTrack.subjectHint;
   hintField.append(hintInput);
   const intervalField = el("div", "fl-field");
   intervalField.style.cssText = "justify-content:space-between; margin-bottom:12px;";
-  const intervalInput = input("number", "0.75");
+  const intervalInput = input("number", m.track.intervalPlaceholder);
   intervalInput.value = String(autoTrack.intervalSec);
   intervalInput.step = "0.05";
   intervalInput.min = "0.05";
   intervalInput.classList.add("mono");
   intervalInput.style.maxWidth = "90px";
   const intervalLab = el("span", "hint");
-  intervalLab.textContent = "interval (s)";
+  intervalLab.textContent = m.track.intervalLabel;
   intervalField.append(intervalLab, intervalInput);
   const trackBtnRow = el("div", "fl-rowg");
-  const trackBtn = button("Auto-track", "fl-btn primary", () => void doAutoTrack());
-  trackBtn.title = "Track the subject across the In/Out shot and build an eased crop path.";
-  const clearTrackBtn = button("Clear track", "fl-btn ghost", clearTrack);
-  clearTrackBtn.title = "Discard the tracked path; revert to manual framing.";
+  const trackBtn = button(m.track.autoTrack, "fl-btn primary", () => void doAutoTrack());
+  trackBtn.title = m.track.autoTrackTitle;
+  const clearTrackBtn = button(m.track.clearTrack, "fl-btn ghost", clearTrack);
+  clearTrackBtn.title = m.track.clearTrackTitle;
   trackBtnRow.append(trackBtn, clearTrackBtn);
   const trackStatus = el("div", "fl-readout");
   trackStatus.style.marginTop = "10px";
-  trackStatus.textContent = "track: (none — manual crop_offset in use)";
+  trackStatus.textContent = m.track.statusNone;
   trackSect.append(trackHelp, hintField, intervalField, trackBtnRow, trackStatus);
   trackPane.append(trackSect);
 
@@ -1014,8 +1017,8 @@ export function mountEditor(root: HTMLElement): void {
   // (the spark in the top bar is the first). Opening the dock hides the inspector.
   const askSect = el("div", "fl-sect");
   const askBtn = button("", "fl-btn", () => openAssistant());
-  askBtn.innerHTML = `${ICON_SPARK}Ask the assistant…`;
-  askBtn.title = "Open the AI assistant to propose framing in plain language";
+  askBtn.innerHTML = `${ICON_SPARK}${escapeHtml(m.ask.button)}`;
+  askBtn.title = m.ask.title;
   askSect.append(askBtn);
 
   inspector.append(seg, framePane, trackPane, askSect);
@@ -1048,16 +1051,16 @@ export function mountEditor(root: HTMLElement): void {
   const tlCluster = el("div", "fl-tl-cluster");
   const tlPrevCut = button("", "fl-iconbtn", () => jumpCut(-1));
   tlPrevCut.innerHTML = ICON_PREV_CUT;
-  tlPrevCut.title = "Jump to previous cut";
+  tlPrevCut.title = m.timeline.prevCutTitle;
   const tlNextCut = button("", "fl-iconbtn", () => jumpCut(1));
   tlNextCut.innerHTML = ICON_NEXT_CUT;
-  tlNextCut.title = "Jump to next cut";
+  tlNextCut.title = m.timeline.nextCutTitle;
   tlCluster.append(tlPrevCut, tlNextCut);
 
   const tlCol = el("div", "fl-tl-col");
   const suggestLane = el("div", "fl-tl-suggest");
   const suggestTag = el("span", "fl-suggest-tag");
-  suggestTag.innerHTML = '<span class="sparkdot"></span>suggested';
+  suggestTag.innerHTML = `<span class="sparkdot"></span>${escapeHtml(m.timeline.suggested)}`;
   suggestLane.append(suggestTag);
 
   const tlTrack = el("div", "fl-tl-track");
@@ -1099,11 +1102,11 @@ export function mountEditor(root: HTMLElement): void {
 
   const tlInfo = el("div", "fl-tl-cluster");
   const cutsChip = el("span", "fl-rdchip");
-  cutsChip.innerHTML = '<span class="lab">cuts</span><span class="val">0</span>';
+  cutsChip.innerHTML = `<span class="lab">${escapeHtml(m.timeline.cutsLabel)}</span><span class="val">0</span>`;
   const swellsChip = el("span", "fl-rdchip swell");
-  swellsChip.innerHTML = '<span class="lab">swells</span><span class="val">0</span>';
-  const scenesBtn = button("Detect scenes", "fl-btn sm", doScenes);
-  scenesBtn.title = "Detect scene cuts — align keyframe switch times to these.";
+  swellsChip.innerHTML = `<span class="lab">${escapeHtml(m.timeline.swellsLabel)}</span><span class="val">0</span>`;
+  const scenesBtn = button(m.timeline.detectScenes, "fl-btn sm", doScenes);
+  scenesBtn.title = m.timeline.detectScenesTitle;
   tlInfo.append(cutsChip, swellsChip, scenesBtn);
 
   timeline.append(tlCluster, tlCol, tlInfo);
@@ -1171,7 +1174,7 @@ export function mountEditor(root: HTMLElement): void {
       chip.innerHTML =
         '<span class="spark"><i style="height:28%"></i><i style="height:52%"></i>' +
         `<i style="height:78%"></i><i style="height:100%"></i></span>${sw.label}`;
-      chip.title = `Seek to just before this swell (${fmtClock(sw.t, true)})`;
+      chip.title = `${m.timeline.seekSwellPrefix}${fmtClock(sw.t, true)}${m.timeline.seekSwellSuffix}`;
       suggestLane.append(chip);
       const mark = el("div", "fl-tl-suggest-mark");
       mark.style.left = pct(sw.t);
@@ -1577,19 +1580,19 @@ export function mountEditor(root: HTMLElement): void {
   const filmstrip = el("div", "fl-filmstrip");
   const queueLabel = el("span", "fl-label");
   queueLabel.style.alignSelf = "center";
-  queueLabel.innerHTML = 'Queue <span class="n">0</span>';
+  queueLabel.innerHTML = `${escapeHtml(m.queue.queueLabel)} <span class="n">0</span>`;
   const clipList = el("div");
   clipList.style.display = "contents";
   const addCard = el("div", "fl-strip-card add");
-  addCard.textContent = "+ add clip";
+  addCard.textContent = m.queue.addClip;
   addCard.addEventListener("click", () => addClip());
   const fsSpacer = el("span", "fl-spacer");
   const copyManifestBtn = button("", "fl-btn sm ghost", () => {
     if (state.clips.length) void copyToClipboard(serializeManifestJSON(state.clips), copyManifestBtn);
   });
-  copyManifestBtn.innerHTML = `${ICON_COPY}Copy JSON`;
+  copyManifestBtn.innerHTML = `${ICON_COPY}${escapeHtml(m.queue.copyJson)}`;
   copyManifestBtn.style.alignSelf = "center";
-  copyManifestBtn.title = "Copy the queue JSON to the clipboard";
+  copyManifestBtn.title = m.queue.copyJsonTitle;
   filmstrip.append(queueLabel, clipList, addCard, fsSpacer, copyManifestBtn);
 
   appEl.append(topbar, main, timeline, filmstrip);
@@ -1602,16 +1605,16 @@ export function mountEditor(root: HTMLElement): void {
   activityPanel.hidden = true;
   const activityHead = el("div", "activity-head");
   const activityTitle = el("div", "activity-title");
-  activityTitle.textContent = "Activity";
+  activityTitle.textContent = m.activity.title;
   const outDirLine = el("div", "hint");
-  const copyLogBtn = button("⧉ Copy", "iconbtn", () => void copyLog());
-  copyLogBtn.title = "Copy the output to the clipboard";
+  const copyLogBtn = button(m.activity.copy, "iconbtn", () => void copyLog());
+  copyLogBtn.title = m.activity.copyTitle;
   const closeActivityBtn = button("✕", "iconbtn", () => setActivityOpen(false));
-  closeActivityBtn.title = "Hide the activity window";
+  closeActivityBtn.title = m.activity.closeTitle;
   activityHead.append(activityTitle, outDirLine, copyLogBtn, closeActivityBtn);
   const logPre = document.createElement("pre");
   logPre.className = "log";
-  logPre.textContent = "(output appears here)";
+  logPre.textContent = m.activity.placeholder;
   activityPanel.append(activityHead, logPre);
 
   // Always-visible toggle (bottom-right) that shows/hides the activity window.
@@ -1620,7 +1623,7 @@ export function mountEditor(root: HTMLElement): void {
   // shared data model, replayed to the native window when it opens.
   const isTauri = platformName === "tauri";
   let lastOutput: { text: string; kind: "" | "ok" | "err"; outDir: string } = {
-    text: "(output appears here)",
+    text: m.activity.placeholder,
     kind: "",
     outDir: "",
   };
@@ -1669,7 +1672,7 @@ export function mountEditor(root: HTMLElement): void {
       setDropActive(false);
       if (e.dataTransfer?.files?.length) {
         dimsLine.innerHTML =
-          '<span class="err-text">Drag-drop loads files in the desktop app — paste the absolute path above.</span>';
+          `<span class="err-text">${escapeHtml(m.source.dropHint)}</span>`;
         srcInput.focus();
       }
     });
@@ -1802,11 +1805,11 @@ export function mountEditor(root: HTMLElement): void {
     const source = srcInput.value.trim();
     if (!source) {
       dimsLine.innerHTML =
-        '<span class="err-text">Enter an absolute path to a source file, then click Load.</span>';
+        `<span class="err-text">${escapeHtml(m.source.enterPath)}</span>`;
       srcInput.focus();
       return;
     }
-    dimsLine.textContent = "Probing…";
+    dimsLine.textContent = m.source.probing;
     cropdetectLine.textContent = "";
     try {
       const p = await platform.probe(source);
@@ -1817,13 +1820,13 @@ export function mountEditor(root: HTMLElement): void {
       state.t = Math.min(state.t, p.duration);
       dimsLine.innerHTML =
         '<div class="fl-readgrid">' +
-        `<div><span class="k">dim</span><span class="v">${p.width}×${p.height}</span></div>` +
-        `<div><span class="k">dur</span><span class="v">${p.duration.toFixed(2)}s</span></div>` +
-        `<div><span class="k">ar</span><span class="v">${(p.width / p.height).toFixed(3)}</span></div>` +
+        `<div><span class="k">${escapeHtml(m.source.dimKey)}</span><span class="v">${p.width}×${p.height}</span></div>` +
+        `<div><span class="k">${escapeHtml(m.source.durKey)}</span><span class="v">${p.duration.toFixed(2)}s</span></div>` +
+        `<div><span class="k">${escapeHtml(m.source.arKey)}</span><span class="v">${(p.width / p.height).toFixed(3)}</span></div>` +
         "</div>";
       cropdetectLine.textContent = p.cropdetect
-        ? `cropdetect (black bars only): crop=${p.cropdetect}`
-        : "cropdetect: no black bars detected (colored/blurred pillarbox is invisible to it — eyeball the frame).";
+        ? `${m.source.cropdetectPrefix}${p.cropdetect}`
+        : m.source.cropdetectNone;
       crumbPath.textContent = source.split(/[\\/]/).pop() || source;
       crumbDot.classList.add("live");
       stage.classList.remove("empty");
@@ -1946,7 +1949,7 @@ export function mountEditor(root: HTMLElement): void {
         };
         const onErr = () => {
           cleanup();
-          reject(new Error("the preview player could not load this source"));
+          reject(new Error(m.errors.previewPlayerFailed));
         };
         video.addEventListener("loadedmetadata", onMeta);
         video.addEventListener("error", onErr);
@@ -2548,7 +2551,7 @@ export function mountEditor(root: HTMLElement): void {
     if (win) {
       const region = currentRegion();
       const zoom = (region.height / win.h).toFixed(2);
-      cropReadout.textContent = `punch-in: ${win.w}×${win.h} @ (${win.x},${win.y}) · zoom ${zoom}× · double-click to reset`;
+      cropReadout.textContent = `${m.framing.punchInPrefix}${win.w}×${win.h} @ (${win.x},${win.y})${m.framing.zoomMid}${zoom}${m.framing.resetSuffix}`;
     } else {
       // Full-height box → plain horizontal crop_offset, relative to the content
       // box when one is active.
@@ -2557,17 +2560,17 @@ export function mountEditor(root: HTMLElement): void {
       if (state.contentMode && state.contentBox) {
         box = { ...state.cropBox, x: state.cropBox.x - state.contentBox.x };
       }
-      cropReadout.textContent = `crop_offset: ${cropBoxToOffset(box, region)}`;
+      cropReadout.textContent = `${m.framing.cropOffsetPrefix}${cropBoxToOffset(box, region)}`;
     }
     refreshIO(); // keep the Clip "offset" readout in sync with framing changes
   }
 
   function refreshContentReadout(): void {
     if (!state.contentMode || !state.contentBox || state.contentBox.w === 0) {
-      contentReadout.textContent = "content_crop: (off)";
+      contentReadout.textContent = m.framing.contentOff;
       return;
     }
-    contentReadout.textContent = `content_crop: ${contentCropFromBox(state.contentBox)}`;
+    contentReadout.textContent = `${m.framing.contentCropPrefix}${contentCropFromBox(state.contentBox)}`;
   }
 
   function refreshIO(): void {
@@ -2582,11 +2585,11 @@ export function mountEditor(root: HTMLElement): void {
     // The framing mode this clip would render with (mirrors addClip's precedence).
     offsetVal.textContent =
       state.cropPath && state.cropPath.length > 0
-        ? "track"
+        ? m.framing.modeTrack
         : cropWindowSpec()
-          ? "punch-in"
+          ? m.framing.modePunchIn
           : state.keyframes.length
-            ? "schedule"
+            ? m.framing.modeSchedule
             : currentOffset();
     const valEl = ioChip.querySelector(".val");
     if (valEl) valEl.textContent = dur;
@@ -2624,7 +2627,7 @@ export function mountEditor(root: HTMLElement): void {
 
   function addKeyframe(): void {
     if (state.inPoint == null) {
-      flashErr("Set the In point before adding keyframes (keyframe times are clip-relative).");
+      flashErr(m.keyframes.needIn);
       return;
     }
     const rel = Math.max(0, state.t - state.inPoint);
@@ -2649,8 +2652,8 @@ export function mountEditor(root: HTMLElement): void {
         kfList.append(li);
       });
     scheduleReadout.textContent = state.keyframes.length
-      ? `schedule: ${scheduleToString(state.keyframes)}`
-      : "schedule: (no keyframes — uses current box offset)";
+      ? `${m.keyframes.schedulePrefix}${scheduleToString(state.keyframes)}`
+      : m.keyframes.scheduleNoKeyframes;
     renderKf();
   }
 
@@ -2664,15 +2667,15 @@ export function mountEditor(root: HTMLElement): void {
   async function doAutoTrack(): Promise<void> {
     persistAutoTrack();
     if (!state.source || !state.dims) {
-      trackStatus.textContent = "track: load a source first.";
+      trackStatus.textContent = m.track.statusLoadSource;
       return;
     }
     if (state.inPoint == null || state.outPoint == null) {
-      trackStatus.textContent = "track: set both In and Out points first.";
+      trackStatus.textContent = m.track.statusNeedInOut;
       return;
     }
     if (state.outPoint <= state.inPoint) {
-      trackStatus.textContent = "track: Out must be after In.";
+      trackStatus.textContent = m.track.statusOutAfterIn;
       return;
     }
     // First keychain touch happens here (lazily), not at launch — so a user who
@@ -2680,7 +2683,7 @@ export function mountEditor(root: HTMLElement): void {
     // key entered in Settings this session is honored. Absent ⇒ "no key".
     await ensureApiKey();
     if (!apiKey.trim()) {
-      trackStatus.textContent = "track: set a Gemini API key in Settings first.";
+      trackStatus.textContent = m.track.statusNeedKey;
       return;
     }
 
@@ -2696,7 +2699,7 @@ export function mountEditor(root: HTMLElement): void {
     // Live elapsed counter + spinner so a long run reads as "working", not frozen.
     let elapsed = 0;
     const renderTrackStatus = () => {
-      trackStatus.textContent = `track: extracting frames + querying Gemini… ${elapsed}s — this can take a while`;
+      trackStatus.textContent = `${m.track.statusWorkingPrefix}${elapsed}${m.track.statusWorkingSuffix}`;
     };
     trackStatus.classList.add("working");
     renderTrackStatus();
@@ -2728,16 +2731,13 @@ export function mountEditor(root: HTMLElement): void {
       const path = samplesToCropPath(samples, region);
       if (path.length === 0) {
         state.cropPath = null;
-        trackStatus.textContent = "track: no usable boxes — using manual crop_offset.";
-        setOutput(
-          `Auto-track: the tracker returned no usable boxes for the In→Out window. Falling back to the manual crop_offset.`,
-        );
+        trackStatus.textContent = m.track.statusNoBoxes;
+        setOutput(m.track.noBoxesOutput);
       } else {
         state.cropPath = path;
-        trackStatus.textContent = `track: ON · ${path.length} keyframe(s). Clear track to revert.`;
+        trackStatus.textContent = `${m.track.statusOnPrefix}${path.length}${m.track.statusOnSuffix}`;
         setOutput(
-          `Auto-track: ${path.length} keyframe(s) from ${samples.length} sample(s). ` +
-            `The preview box now follows the subject across the shot — Add clip → queue to render with the eased crop path.`,
+          `${m.track.resultPrefix}${path.length}${m.track.resultMid}${samples.length}${m.track.resultSuffix}`,
           "ok",
         );
       }
@@ -2745,8 +2745,8 @@ export function mountEditor(root: HTMLElement): void {
       refreshIO();
     } catch (err) {
       state.cropPath = null;
-      trackStatus.textContent = "track: failed — see Output.";
-      setOutput(`Auto-track failed: ${errMsg(err)}`, "err");
+      trackStatus.textContent = m.track.statusFailed;
+      setOutput(`${m.track.failedOutputPrefix}${errMsg(err)}`, "err");
       drawOverlay();
     } finally {
       window.clearInterval(trackTimer);
@@ -2758,7 +2758,7 @@ export function mountEditor(root: HTMLElement): void {
   /** Drop the tracked crop path; revert to the manual crop_offset / schedule. */
   function clearTrack(): void {
     state.cropPath = null;
-    trackStatus.textContent = "track: (none — manual crop_offset in use)";
+    trackStatus.textContent = m.track.statusNone;
     drawOverlay();
     refreshIO();
   }
@@ -2802,13 +2802,13 @@ export function mountEditor(root: HTMLElement): void {
     spark.innerHTML = ICON_SPARK;
     const headText = el("div");
     const title = el("div", "fl-assist-title");
-    title.textContent = "Assistant";
+    title.textContent = m.assistant.title;
     const sub = el("div", "fl-assist-sub");
-    sub.textContent = "Proposes cuts & framing — you accept. Never hears the audio.";
+    sub.textContent = m.assistant.sub;
     headText.append(title, sub);
     const closeBtn = button("", "fl-iconbtn sm", () => closeAssistant());
     closeBtn.innerHTML = ICON_X;
-    closeBtn.title = "Close the assistant (Esc / A)";
+    closeBtn.title = m.assistant.closeTitle;
     closeBtn.style.marginLeft = "auto";
     head.append(spark, headText, closeBtn);
 
@@ -2816,12 +2816,7 @@ export function mountEditor(root: HTMLElement): void {
 
     const foot = el("div", "fl-assist-foot");
     const chips = el("div", "fl-chips");
-    const SUGGESTIONS = [
-      "Find a tight chorus around the loud part",
-      "Track the guitarist across this shot",
-      "Frame the singer at the current moment",
-      "Set In/Out to the cleanest 15 seconds",
-    ];
+    const SUGGESTIONS = m.assistant.suggestions;
     for (const s of SUGGESTIONS) {
       const chip = button(s, "fl-chip", () => {
         textarea.value = s;
@@ -2833,11 +2828,11 @@ export function mountEditor(root: HTMLElement): void {
     const composer = el("div", "fl-composer");
     const textarea = document.createElement("textarea");
     textarea.rows = 1;
-    textarea.placeholder = "Ask the assistant to find a moment or frame a subject…";
+    textarea.placeholder = m.assistant.composerPlaceholder;
     const send = button("", "fl-send", () => void sendTurn()) as HTMLButtonElement;
     send.innerHTML = ICON_SEND;
     send.disabled = true;
-    send.title = "Send (Enter)";
+    send.title = m.assistant.sendTitle;
     composer.append(textarea, send);
 
     const syncSend = () => {
@@ -2883,20 +2878,14 @@ export function mountEditor(root: HTMLElement): void {
 
   /** Seed the log with a one-time greeting (the first time the dock opens). */
   function greetAssistant(): void {
-    appendBubble(
-      "ai",
-      "Tell me the moment or subject you want and I'll propose the cut and framing. " +
-        "I work from your project state — scene cuts and loudness swells — and look at " +
-        "specific frames when I frame or track a subject. I never hear the audio, and " +
-        "every proposal previews before it changes anything.",
-    );
+    appendBubble("ai", m.assistant.greeting);
   }
 
   /** Append a chat bubble (`.fl-msg` + `.fl-bubble`) to the log and scroll to it. */
   function appendBubble(who: "user" | "ai", text: string, warn?: string): HTMLElement {
     const msg = el("div", `fl-msg ${who}`);
     const label = el("div", "who");
-    label.textContent = who === "user" ? "you" : "assistant";
+    label.textContent = who === "user" ? m.assistant.youLabel : m.assistant.assistantLabel;
     const bubble = el("div", "fl-bubble");
     bubble.textContent = text;
     if (warn) {
@@ -2935,7 +2924,7 @@ export function mountEditor(root: HTMLElement): void {
     | { ok: false; reason: string }
   > {
     if (!state.source || !state.dims) {
-      return { ok: false, reason: "Load a source first, then I can read its frames and propose framing." };
+      return { ok: false, reason: m.assistant.needSource };
     }
     // First keychain touch happens here (lazily), not at launch — so a user who
     // never opens the assistant never sees an OS keychain prompt. Reads fresh so
@@ -2944,8 +2933,7 @@ export function mountEditor(root: HTMLElement): void {
     if (!apiKey.trim()) {
       return {
         ok: false,
-        reason:
-          "I need a Gemini API key to read frames. Add one in Settings → AI & models (it's stored in your OS keychain, never in project files), then ask me again.",
+        reason: m.assistant.needKey,
       };
     }
     const region = currentRegion();
@@ -3002,9 +2990,9 @@ export function mountEditor(root: HTMLElement): void {
       assistantHistory.push({ role: "assistant", text: reply.text });
     } catch (err) {
       dispose();
-      const m = `Sorry — that turn failed: ${errMsg(err)}`;
-      appendBubble("ai", m);
-      assistantHistory.push({ role: "assistant", text: m });
+      const failMsg = `${m.assistant.turnFailedPrefix}${errMsg(err)}`;
+      appendBubble("ai", failMsg);
+      assistantHistory.push({ role: "assistant", text: failMsg });
     }
   }
 
@@ -3033,7 +3021,7 @@ export function mountEditor(root: HTMLElement): void {
   function groundingRow(grounding: Grounding[]): HTMLElement {
     const row = el("div", "fl-ground");
     const lab = el("span", "gl");
-    lab.textContent = "grounded in";
+    lab.textContent = m.assistant.grounded;
     row.append(lab);
     for (const g of grounding) {
       const chip = el("span", "gchip");
@@ -3052,16 +3040,16 @@ export function mountEditor(root: HTMLElement): void {
   function proposalCard(actions: ProposedAction[]): HTMLElement {
     const card = el("div", "fl-prop");
     const h = el("div", "fl-prop-h");
-    h.append(document.createTextNode("Proposed"));
+    h.append(document.createTextNode(m.assistant.proposed));
     const n = el("span", "n");
-    n.textContent = `${actions.length} action${actions.length === 1 ? "" : "s"}`;
+    n.textContent = `${actions.length} ${actions.length === 1 ? m.assistant.actionSingular : m.assistant.actionPlural}`;
     h.append(n);
 
     const list = el("div", "fl-prop-list");
     const rows: HTMLElement[] = actions.map((a) => {
       const row = el("div", "fl-act");
       const arrow = el("span", "arrow");
-      arrow.textContent = "→";
+      arrow.textContent = m.assistant.arrow;
       const fn = el("span", "fn");
       fn.textContent = a.display.fn;
       const detail = el("span", "detail");
@@ -3074,10 +3062,10 @@ export function mountEditor(root: HTMLElement): void {
     });
 
     const bar = el("div", "fl-prop-bar");
-    const acceptBtn = button("Accept all", "fl-btn primary sm");
+    const acceptBtn = button(m.assistant.acceptAll, "fl-btn primary sm");
     const stepLab = el("span", "step");
-    const stepBtn = button("Step", "fl-btn sm");
-    const discardBtn = button("Discard", "fl-btn sm ghost");
+    const stepBtn = button(m.assistant.step, "fl-btn sm");
+    const discardBtn = button(m.assistant.discard, "fl-btn sm ghost");
 
     const markActiveStep = () => {
       rows.forEach((r, i) => r.classList.toggle("active", i === stepIndex && stepIndex < actions.length));
@@ -3110,8 +3098,8 @@ export function mountEditor(root: HTMLElement): void {
       setGhosts([]); // committed — drop the previews
       finish(
         staged
-          ? `Applied ${applied} — render staged. Use the Render button when you're ready.`
-          : `Applied ${applied} proposal${applied === 1 ? "" : "s"}.`,
+          ? `${m.assistant.appliedStagedPrefix}${applied}${m.assistant.appliedStagedSuffix}`
+          : `${m.assistant.appliedPrefix}${applied}${applied === 1 ? m.assistant.appliedSuffixSingular : m.assistant.appliedSuffixPlural}`,
       );
     });
 
@@ -3127,7 +3115,7 @@ export function mountEditor(root: HTMLElement): void {
       setGhosts(ghostsFrom(actions, stepIndex));
       if (stepIndex >= actions.length) {
         pendingActions = [];
-        finish("Stepped through every proposal.");
+        finish(m.assistant.steppedThrough);
       }
     });
 
@@ -3136,7 +3124,7 @@ export function mountEditor(root: HTMLElement): void {
       pendingActions = [];
       stepIndex = actions.length;
       setGhosts([]); // nothing committed, but the previews go away
-      finish("Discarded — your state is untouched.", "");
+      finish(m.assistant.discarded, "");
     });
 
     bar.append(acceptBtn, stepLab, stepBtn, discardBtn);
@@ -3211,7 +3199,7 @@ export function mountEditor(root: HTMLElement): void {
       case "trackSubject": {
         // Same engine as the Track-subject tab: adopt the eased crop path.
         state.cropPath = commit.cropPath.map((k) => ({ t: k.t, x: k.x }));
-        trackStatus.textContent = `track: ON · ${state.cropPath.length} keyframe(s) (from the assistant). Clear track to revert.`;
+        trackStatus.textContent = `${m.assistant.trackFromAssistantPrefix}${state.cropPath.length}${m.assistant.trackFromAssistantSuffix}`;
         drawOverlay();
         refreshIO();
         return { applied: true, staged: false };
@@ -3219,9 +3207,7 @@ export function mountEditor(root: HTMLElement): void {
       case "render": {
         // STAGE only — never auto-fire. Surface a hint; the manual Render button
         // owns the encode.
-        setOutput(
-          "Assistant staged the queue for render. Press Render when you're ready — I never encode automatically.",
-        );
+        setOutput(m.activity.stagedForRender);
         return { applied: true, staged: true };
       }
       default: {
@@ -3235,10 +3221,10 @@ export function mountEditor(root: HTMLElement): void {
 
   function addClip(): void {
     clipErr.textContent = "";
-    if (!state.source || !state.dims) return flashErr("Load a source first.");
+    if (!state.source || !state.dims) return flashErr(m.errors.loadSourceFirst);
     if (state.inPoint == null || state.outPoint == null)
-      return flashErr("Set both In and Out points.");
-    if (state.outPoint <= state.inPoint) return flashErr("Out must be after In.");
+      return flashErr(m.errors.setInOut);
+    if (state.outPoint <= state.inPoint) return flashErr(m.errors.outAfterIn);
 
     const spec: ClipSpec = {
       source_file: state.source,
@@ -3307,7 +3293,7 @@ export function mountEditor(root: HTMLElement): void {
       // don't trigger the card's edit click.
       const card = el("div", "fl-strip-card edit") as HTMLDivElement;
       card.draggable = true;
-      card.title = "Click to re-open this clip for editing · drag to reorder";
+      card.title = m.queue.cardEditTitle;
       const thumb = el("div", "fl-thumb");
       void setThumb(thumb, spec.source_file, safeParse(spec.in_point));
       const meta = el("div", "fl-clip-meta");
@@ -3317,16 +3303,16 @@ export function mountEditor(root: HTMLElement): void {
       const d = clipDur(spec);
       const dur = d > 0 ? `${d.toFixed(1)}s` : `${spec.in_point}→${spec.out_point}`;
       const framing = spec.cropPath?.length
-        ? "track"
+        ? m.framing.modeTrack
         : spec.cropWindow
-          ? "punch-in"
-          : (spec.crop_offset ?? "center");
+          ? m.framing.modePunchIn
+          : (spec.crop_offset ?? m.framing.defaultOffset);
       sub.innerHTML = `${dur} · <span style="color:var(--accent-2)">${escapeHtml(framing)}</span>`;
       meta.append(name, sub);
 
       const dup = el("button", "fl-clip-x") as HTMLButtonElement;
       dup.innerHTML = ICON_COPY;
-      dup.title = "Duplicate (e.g. a second framing of this moment)";
+      dup.title = m.queue.duplicateTitle;
       dup.addEventListener("click", (ev) => {
         ev.stopPropagation();
         state.clips.splice(i + 1, 0, structuredClone(spec));
@@ -3334,7 +3320,7 @@ export function mountEditor(root: HTMLElement): void {
       });
       const del = el("button", "fl-clip-x") as HTMLButtonElement;
       del.textContent = "✕";
-      del.title = "Remove from queue";
+      del.title = m.queue.removeTitle;
       del.addEventListener("click", (ev) => {
         ev.stopPropagation();
         state.clips.splice(i, 1);
@@ -3365,9 +3351,9 @@ export function mountEditor(root: HTMLElement): void {
     });
     const total = state.clips.reduce((s, c) => s + clipDur(c), 0);
     queueLabel.innerHTML = state.clips.length
-      ? `Queue <span class="n">${state.clips.length}</span> · <span class="n">${fmtClock(total, false)}</span>`
-      : 'Queue <span class="n">0</span>';
-    renderBtn.textContent = state.clips.length ? `Render ${state.clips.length}` : "Render";
+      ? `${escapeHtml(m.queue.queueLabel)} <span class="n">${state.clips.length}</span> · <span class="n">${fmtClock(total, false)}</span>`
+      : `${escapeHtml(m.queue.queueLabel)} <span class="n">0</span>`;
+    renderBtn.textContent = state.clips.length ? `${m.queue.renderN} ${state.clips.length}` : m.topbar.render;
     renderBtn.disabled = state.clips.length === 0;
     void saveSessionSoon();
   }
@@ -3397,7 +3383,7 @@ export function mountEditor(root: HTMLElement): void {
     }
     outDirLine.textContent = "";
     if (dir) {
-      outDirLine.append(document.createTextNode("Clips written to "));
+      outDirLine.append(document.createTextNode(m.activity.clipsWrittenTo));
       const s = el("span", "stat");
       s.textContent = dir;
       outDirLine.append(s);
@@ -3405,7 +3391,7 @@ export function mountEditor(root: HTMLElement): void {
   }
 
   async function doRender(): Promise<void> {
-    if (!state.clips.length) return flashErr("Add at least one clip to the queue.");
+    if (!state.clips.length) return flashErr(m.errors.addAtLeastOne);
     const outdir = outdirInput.value.trim() || (await platform.defaultOutdir());
     saveOutdir(outdir);
     // Pre-flight the output folder so a stale/unwritable path gives a clear
@@ -3415,7 +3401,7 @@ export function mountEditor(root: HTMLElement): void {
       const check = await platform.checkOutdir(outdir);
       if (!check.ok) {
         setOutput(
-          `Can't write to ${check.resolved || outdir} — ${check.error || "pick another folder"}.`,
+          `${m.activity.cantWritePrefix}${check.resolved || outdir} — ${check.error || m.activity.cantWriteFallbackReason}.`,
           "err",
         );
         outdirInput.focus();
@@ -3430,18 +3416,19 @@ export function mountEditor(root: HTMLElement): void {
       /* checkOutdir itself failed (backend down) — let the render attempt report it. */
     }
     const manifestJson = serializeManifestJSON(state.clips);
-    setOutput("Rendering… (this runs ffmpeg per clip; may take a while)");
+    setOutput(m.activity.rendering);
     try {
       const result = await platform.render(manifestJson, renderOptions(outdir));
       setOutput(
-        result.log || (result.ok ? "OK (no output)" : "Render failed."),
+        result.log || (result.ok ? m.activity.okNoOutput : m.activity.renderFailed),
         result.ok ? "ok" : "err",
       );
       // Surface the resolved output directory so the clips are findable. The
       // backend echoes the (absolute) outdir it used in the log header.
-      const m = /--outdir ([^\n]*)/.exec(result.log || "");
-      const resolvedOutdir = result.ok && m && m[1]?.trim() ? m[1].trim() : outdir;
-      if (result.ok && m && m[1]?.trim()) setOutDir(resolvedOutdir);
+      const outdirMatch = /--outdir ([^\n]*)/.exec(result.log || "");
+      const resolvedOutdir =
+        result.ok && outdirMatch && outdirMatch[1]?.trim() ? outdirMatch[1].trim() : outdir;
+      if (result.ok && outdirMatch && outdirMatch[1]?.trim()) setOutDir(resolvedOutdir);
       // On success, record each rendered clip to history so it can be re-opened
       // and tweaked later (a render is the meaningful checkpoint).
       if (result.ok) void recordHistory(state.clips, resolvedOutdir);
@@ -3465,9 +3452,9 @@ export function mountEditor(root: HTMLElement): void {
   /** Copy `text` to the clipboard, flashing brief confirmation on `btn`. */
   async function copyToClipboard(text: string, btn: HTMLButtonElement): Promise<void> {
     if (!text.trim()) return;
-    const idle = btn.textContent || "⧉ Copy";
+    const idle = btn.textContent || m.activity.copyIdle;
     const done = (ok: boolean) => {
-      btn.textContent = ok ? "✓ Copied" : "Copy failed";
+      btn.textContent = ok ? m.activity.copied : m.activity.copyFailed;
       window.setTimeout(() => {
         btn.textContent = idle;
       }, 1200);
@@ -3496,21 +3483,21 @@ export function mountEditor(root: HTMLElement): void {
   /** Copy the Output panel log. */
   function copyLog(): void {
     const text = logPre.textContent ?? "";
-    if (text === "(output appears here)") return;
+    if (text === m.activity.placeholder) return;
     void copyToClipboard(text, copyLogBtn);
   }
 
   async function doScenes(): Promise<void> {
-    if (!state.source) return flashErr("Load a source first.");
-    setOutput("Detecting scenes…");
+    if (!state.source) return flashErr(m.errors.loadSourceFirst);
+    setOutput(m.activity.detectingScenes);
     try {
       const cuts = await platform.scenes(state.source);
       state.sceneCuts = cuts;
       renderCuts();
       setOutput(
         cuts.length
-          ? `Scene cuts (s): ${cuts.join(", ")}  (auto-track will force a fresh sample just after each cut inside the In/Out range)`
-          : "No scene cuts detected (threshold 0.4).",
+          ? `${m.activity.sceneCutsPrefix}${cuts.join(", ")}${m.activity.sceneCutsSuffix}`
+          : m.activity.noScenes,
       );
     } catch (err) {
       setOutput(errMsg(err), "err");
@@ -3605,7 +3592,7 @@ export function mountEditor(root: HTMLElement): void {
     const backdrop = el("div", "fl-modal-backdrop");
     const modal = el("div", "fl-modal");
     modal.setAttribute("role", "dialog");
-    modal.setAttribute("aria-label", "Render history");
+    modal.setAttribute("aria-label", m.history.ariaLabel);
 
     // header: title + N renders · spacer · Clear all · close
     const head = el("div", "fl-modal-h");
@@ -3613,17 +3600,17 @@ export function mountEditor(root: HTMLElement): void {
     titleWrap.style.cssText = "display:flex; align-items:center; gap:11px;";
     const title = el("span", "fl-label");
     title.style.fontSize = "13px";
-    title.textContent = "Render history";
+    title.textContent = m.history.title;
     const countPill = el("span", "fl-pill ghost");
     titleWrap.append(title, countPill);
-    const clearBtn = button("Clear all", "fl-btn sm ghost danger", () => {
+    const clearBtn = button(m.history.clearAll, "fl-btn sm ghost danger", () => {
       entries = [];
       void save();
       draw();
     });
     const closeBtn = button("", "fl-iconbtn");
     closeBtn.innerHTML = ICON_X;
-    closeBtn.title = "Close";
+    closeBtn.title = m.common.close;
     head.append(titleWrap, el("span", "fl-spacer"), clearBtn, closeBtn);
 
     // tools: filter field + "stored · local" chip
@@ -3631,23 +3618,22 @@ export function mountEditor(root: HTMLElement): void {
     const filterField = el("div", "fl-field");
     filterField.style.flex = "1";
     filterField.innerHTML = `<span class="ic">${ICON_SEARCH}</span>`;
-    const filterInput = input("text", "Filter by source or clip name…");
+    const filterInput = input("text", m.history.filterPlaceholder);
     filterField.append(filterInput);
     const storedChip = el("span", "fl-rdchip");
-    storedChip.innerHTML = '<span class="lab">stored</span><span class="val">local</span>';
+    storedChip.innerHTML = `<span class="lab">${escapeHtml(m.history.storedLabel)}</span><span class="val">${escapeHtml(m.history.storedValue)}</span>`;
     tools.append(filterField, storedChip);
     filterInput.addEventListener("input", () => draw());
 
     const body = el("div", "fl-modal-body");
     const empty = el("div", "hint");
     empty.style.padding = "24px 8px";
-    empty.textContent = "No renders yet — render a clip and it lands here.";
+    empty.textContent = m.history.emptyHint;
 
     const foot = el("div", "fl-modal-foot");
     foot.innerHTML =
       '<span class="idot in" style="background:var(--accent)"></span>' +
-      "<span><b>Open</b> loads the source and re-frames the editor to that render. " +
-      "Your current queue isn’t touched.</span>";
+      m.history.footHtmlBody;
 
     modal.append(head, tools, body, empty, foot);
     backdrop.append(modal);
@@ -3685,7 +3671,7 @@ export function mountEditor(root: HTMLElement): void {
       read.innerHTML =
         `<span class="idot in"></span><span class="v">${inT}</span><span class="arrow">→</span>` +
         `<span class="idot out"></span><span class="v">${outT}</span>` +
-        `<span class="sep">·</span><span class="k">dur</span><span class="v accent">${dur}</span>` +
+        `<span class="sep">·</span><span class="k">${escapeHtml(m.clip.durKey)}</span><span class="v accent">${dur}</span>` +
         (kf > 0 ? `<span class="sep">·</span><span class="k">kf</span><span class="v">${kf}</span>` : "") +
         `<span class="sep">·</span><span class="path">${escapeHtml(entry.outdir)}</span>`;
       meta.append(top, src, read);
@@ -3694,13 +3680,13 @@ export function mountEditor(root: HTMLElement): void {
       const time = el("span", "fl-hist-time");
       time.textContent = fmtClockTime(entry.ts);
       const actions = el("div", "fl-hist-actions");
-      const openBtn = button("Open", "fl-btn sm primary", () => {
+      const openBtn = button(m.history.open, "fl-btn sm primary", () => {
         dismiss();
         void openSpec(entry.spec, entry.outdir);
       });
       const rm = button("", "fl-iconbtn sm rm");
       rm.innerHTML = ICON_TRASH;
-      rm.title = "Remove from history";
+      rm.title = m.history.removeTitle;
       rm.addEventListener("click", () => {
         entries = entries.filter((e) => e.id !== entry.id);
         void save();
@@ -3725,7 +3711,7 @@ export function mountEditor(root: HTMLElement): void {
           )
         : entries;
       body.innerHTML = "";
-      countPill.textContent = `${entries.length} render${entries.length === 1 ? "" : "s"}`;
+      countPill.textContent = `${entries.length} ${entries.length === 1 ? m.history.renderSingular : m.history.renderPlural}`;
       clearBtn.style.display = entries.length ? "" : "none";
       empty.style.display = entries.length ? "none" : "block";
       let lastDay = "";
@@ -3743,7 +3729,7 @@ export function mountEditor(root: HTMLElement): void {
       if (q && shown.length === 0 && entries.length) {
         const none = el("div", "hint");
         none.style.padding = "16px 8px";
-        none.textContent = "No matches.";
+        none.textContent = m.history.noMatches;
         body.append(none);
       }
     }
@@ -3951,17 +3937,17 @@ function dayLabel(ts: number): string {
   const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const day = new Date(ts);
   const diff = Math.round((startOfDay(new Date()) - startOfDay(day)) / 86400000);
-  if (diff <= 0) return "Today";
-  if (diff === 1) return "Yesterday";
+  if (diff <= 0) return m.history.today;
+  if (diff === 1) return m.history.yesterday;
   return day.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 /** The clip's framing mode as a pill: track / punch-in / keyframes / fixed offset. */
 function offsetMode(spec: ClipSpec): { label: string; ghost: boolean } {
-  if (spec.cropPath?.length) return { label: "track", ghost: false };
-  if (spec.cropWindow) return { label: "punch-in", ghost: false };
-  const off = spec.crop_offset ?? "center";
-  if (off.includes(";") || off.includes("=")) return { label: "keyframes", ghost: false };
+  if (spec.cropPath?.length) return { label: m.history.modeTrack, ghost: false };
+  if (spec.cropWindow) return { label: m.history.modePunchIn, ghost: false };
+  const off = spec.crop_offset ?? m.framing.defaultOffset;
+  if (off.includes(";") || off.includes("=")) return { label: m.history.modeKeyframes, ghost: false };
   return { label: off, ghost: true };
 }
 
