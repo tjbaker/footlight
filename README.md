@@ -40,24 +40,22 @@ See **[Running Footlight](#running-footlight)** below.
 
 ## Requirements
 
-- **`ffmpeg`** and **`ffprobe`** — e.g. `brew install ffmpeg`. Footlight invokes
-  these to do all cut/crop/scale/encode work. **Burned captions** additionally
-  need an ffmpeg built with **libass** (the `subtitles` filter); minimal
-  builds omit it — `make doctor` reports whether yours has it, and on macOS
-  `brew install homebrew-ffmpeg/ffmpeg/ffmpeg` provides a build that does
-  (verify with `ffmpeg -filters | grep -E 'ass|subtitles'`).
+- **`ffmpeg`** and **`ffprobe`** — Footlight invokes these to do all
+  cut/crop/scale/encode work. **Burned captions** need an ffmpeg built with
+  **libass** (the `subtitles` filter), which Homebrew's *core* `ffmpeg` does
+  **not** include — on macOS install
+  `brew install homebrew-ffmpeg/ffmpeg/ffmpeg`, which does. `make doctor` reports
+  whether yours has it (verify with `ffmpeg -filters | grep -E 'ass|subtitles'`).
 - **Node 26+**
-- **`yt-dlp`** (optional) — for downloading source footage, e.g.
-  `brew install yt-dlp`.
 - **Rust toolchain** (optional) — only for the *native* desktop window
   (`make tauri-dev`). Install via <https://rustup.rs>. The browser GUI and the
   CLI do not need it.
 
 Footlight does **not** bundle ffmpeg/ffprobe/Node — it invokes whatever is on
 your `PATH`. Run **`make doctor`** to verify your environment in one shot. On
-**macOS**, **`make setup-system`** installs the system tools (ffmpeg, yt-dlp) via
-Homebrew; on other platforms, `make doctor` prints the exact install command for
-anything missing.
+**macOS**, **`make setup-system`** installs a libass-enabled ffmpeg (the
+`homebrew-ffmpeg` tap, so burned captions work) via Homebrew; on other platforms,
+`make doctor` prints the exact install command for anything missing.
 
 ## Getting started
 
@@ -65,7 +63,7 @@ From zero to your first vertical clip:
 
 1. **Install the prerequisites** — `ffmpeg`, `ffprobe`, and Node 26+
    (see [Requirements](#requirements)). On **macOS**, `make setup-system`
-   installs ffmpeg + yt-dlp via Homebrew.
+   installs a libass-enabled ffmpeg via Homebrew.
 2. **Set up and verify your environment:**
    ```bash
    make setup     # install all dependencies (root engine + GUI)

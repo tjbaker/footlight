@@ -26,8 +26,11 @@ if ! command -v brew >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Installing system tools via Homebrew: ffmpeg (required) + yt-dlp (optional)…"
-brew install ffmpeg yt-dlp
+# Burned captions need an ffmpeg built with libass; Homebrew's core `ffmpeg`
+# omits it, so install the homebrew-ffmpeg tap build (which includes libass).
+echo "Installing ffmpeg with libass (for burned captions) via the homebrew-ffmpeg tap…"
+echo "  Heads up: this can take a while — it may build from source."
+brew install homebrew-ffmpeg/ffmpeg/ffmpeg
 
 echo
 echo "Not installed here (manage these yourself):"
