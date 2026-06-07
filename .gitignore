@@ -21,6 +21,7 @@ downloads/
 # Environment / secrets
 .env
 .env.*
+!.env.example
 
 # Editor / OS cruft
 .DS_Store
