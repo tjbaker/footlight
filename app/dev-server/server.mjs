@@ -274,6 +274,11 @@ async function handleRender(body, opts, res) {
   if (opts.dryRun) args.push("--dry-run");
   if (opts.burnCaptions) args.push("--burn-captions");
   if (opts.captionFont) args.push("--caption-font", opts.captionFont);
+  if (opts.captionColor) args.push("--caption-color", opts.captionColor);
+  if (opts.captionOutlineColor) args.push("--caption-outline-color", opts.captionOutlineColor);
+  if (opts.captionBold) args.push("--caption-bold");
+  if (opts.captionItalic) args.push("--caption-italic");
+  if (opts.captionUnderline) args.push("--caption-underline");
   args.push("--outdir", outDir);
   const result = await run("node", args);
   const log = `$ node ${args.join(" ")}\n\n${result.stdout}${result.stderr}`;
@@ -481,6 +486,11 @@ const server = createServer(async (req, res) => {
         dryRun: url.searchParams.get("dryRun") === "1",
         burnCaptions: url.searchParams.get("burnCaptions") === "1",
         captionFont: url.searchParams.get("captionFont") || undefined,
+        captionColor: url.searchParams.get("captionColor") || undefined,
+        captionOutlineColor: url.searchParams.get("captionOutlineColor") || undefined,
+        captionBold: url.searchParams.get("captionBold") === "1",
+        captionItalic: url.searchParams.get("captionItalic") === "1",
+        captionUnderline: url.searchParams.get("captionUnderline") === "1",
       };
       return await handleRender(body, opts, res);
     }

@@ -87,6 +87,11 @@ export const webPlatform: FootlightPlatform = {
     if (opts?.dryRun) q.set("dryRun", "1");
     if (opts?.burnCaptions) q.set("burnCaptions", "1");
     if (opts?.captionFont) q.set("captionFont", opts.captionFont);
+    if (opts?.captionColor) q.set("captionColor", opts.captionColor);
+    if (opts?.captionOutlineColor) q.set("captionOutlineColor", opts.captionOutlineColor);
+    if (opts?.captionBold) q.set("captionBold", "1");
+    if (opts?.captionItalic) q.set("captionItalic", "1");
+    if (opts?.captionUnderline) q.set("captionUnderline", "1");
     const qs = q.toString();
     const url = qs ? `${BASE}/render?${qs}` : `${BASE}/render`;
     const res = await fetch(url, {
