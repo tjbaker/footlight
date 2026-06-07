@@ -485,10 +485,22 @@ fn secret_entry(key: &str) -> Result<keyring::Entry, String> {
     keyring::Entry::new(KEYRING_SERVICE, key).map_err(|e| format!("keyring entry: {e}"))
 }
 
-/// Read a secret from the OS keychain. Returns `None` when the entry is absent
-/// (a missing key is not an error); other keyring failures surface as `Err`.
+/// Read a secret. For the Gemini BYOK key, an environment variable
+/// (`GEMINI_API_KEY` / `FOOTLIGHT_GEMINI_API_KEY`) takes precedence and is
+/// returned WITHOUT touching the OS keychain — so launching from a shell with
+/// the var set both overrides a stored key and avoids the keychain prompt.
+/// Otherwise read from the keychain; a missing entry is `None`, not an error.
 #[tauri::command]
 async fn get_secret(key: String) -> Result<Option<String>, String> {
+    if key == "footlight.apiKey.gemini" {
+        for var in ["GEMINI_API_KEY", "FOOTLIGHT_GEMINI_API_KEY"] {
+            if let Ok(v) = std::env::var(var) {
+                if !v.trim().is_empty() {
+                    return Ok(Some(v));
+                }
+            }
+        }
+    }
     let entry = secret_entry(&key)?;
     match entry.get_password() {
         Ok(value) => Ok(Some(value)),

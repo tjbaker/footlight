@@ -334,6 +334,14 @@ const server = createServer(async (req, res) => {
       return await handleFrame(source, t, res);
     }
 
+    // GET /env-key — the BYOK Gemini key from THIS server's environment
+    // (GEMINI_API_KEY / FOOTLIGHT_GEMINI_API_KEY), or "" if unset. Lets `make gui`
+    // pick up a key from your shell without pasting it into the GUI. Dev-only.
+    if (req.method === "GET" && url.pathname === "/env-key") {
+      const key = (process.env.GEMINI_API_KEY || process.env.FOOTLIGHT_GEMINI_API_KEY || "").trim();
+      return sendText(res, 200, key);
+    }
+
     if (req.method === "GET" && url.pathname === "/probe") {
       const source = url.searchParams.get("source");
       if (!source) return sendText(res, 400, "missing source");

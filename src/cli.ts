@@ -503,6 +503,16 @@ async function cmdTrack(argv: string[]): Promise<number> {
   const useMock = req.mock === true || process.env["FOOTLIGHT_TRACK_MOCK"] === "1";
   const startSec = Number.isFinite(req.startSec) ? Number(req.startSec) : 0;
 
+  // BYOK key resolution: an env var (GEMINI_API_KEY, or FOOTLIGHT_GEMINI_API_KEY)
+  // takes precedence so scripts/`.env` needn't embed the key in request.json;
+  // the request's own apiKey is the fallback.
+  const envKey = (
+    process.env["GEMINI_API_KEY"] ||
+    process.env["FOOTLIGHT_GEMINI_API_KEY"] ||
+    ""
+  ).trim();
+  const apiKey = envKey || (req.apiKey ?? "").trim();
+
   let tracker: VisionTracker;
   let frames: TrackFrame[] | undefined;
   if (useMock) {
@@ -512,10 +522,11 @@ async function cmdTrack(argv: string[]): Promise<number> {
       console.error(`track: unsupported provider ${JSON.stringify(req.provider)}`);
       return 1;
     }
-    if (!req.apiKey || !req.apiKey.trim()) {
+    if (!apiKey) {
       console.error(
         "track: apiKey is required for the gemini provider (BYOK). " +
-          "Set request.mock=true (or FOOTLIGHT_TRACK_MOCK=1) to run the offline MockTracker.",
+          "Set GEMINI_API_KEY in the environment, put it in request.apiKey, or set " +
+          "request.mock=true (or FOOTLIGHT_TRACK_MOCK=1) to run the offline MockTracker.",
       );
       return 1;
     }
@@ -541,7 +552,7 @@ async function cmdTrack(argv: string[]): Promise<number> {
       sampleTimes: req.sampleTimes,
       subjectHint: req.subjectHint,
       // MockTracker ignores apiKey; GeminiTracker requires it (checked above).
-      apiKey: req.apiKey ?? "",
+      apiKey,
       startSec,
       contentCrop: req.contentCrop,
       frames,
