@@ -3,7 +3,6 @@
 /** App entry: mount the editor (which builds its own top bar). */
 
 import "./style.css";
-import { openAbout } from "./menu.js";
 import { openGuide } from "./help.js";
 import { openSettings } from "./settings.js";
 import { mountEditor } from "./editor.js";
@@ -14,13 +13,14 @@ if (!app) throw new Error("missing #app root");
 
 mountEditor(app);
 
-// Under Tauri, native menu items emit events; open the same in-app modals so the
-// native menu and the in-app controls share one source of truth.
+// Under Tauri, native menu items emit events; route them to the same in-app
+// surfaces so the native menu and the in-app controls share one source of truth.
+// "About" is the Settings → About panel (no separate About modal).
 if (platformName === "tauri") {
   void (async () => {
     try {
       const { listen } = await import("@tauri-apps/api/event");
-      await listen("show-about", () => openAbout());
+      await listen("show-about", () => openSettings("about"));
       await listen("show-guide", () => openGuide());
       await listen("show-settings", () => openSettings());
     } catch {
