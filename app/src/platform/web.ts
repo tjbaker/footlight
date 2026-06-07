@@ -92,6 +92,10 @@ export const webPlatform: FootlightPlatform = {
     if (opts?.captionBold) q.set("captionBold", "1");
     if (opts?.captionItalic) q.set("captionItalic", "1");
     if (opts?.captionUnderline) q.set("captionUnderline", "1");
+    if (opts?.captionShadow) q.set("captionShadow", "1");
+    if (opts?.captionBox) q.set("captionBox", "1");
+    if (opts?.captionBoxColor) q.set("captionBoxColor", opts.captionBoxColor);
+    if (opts?.captionAngle != null) q.set("captionAngle", String(opts.captionAngle));
     const qs = q.toString();
     const url = qs ? `${BASE}/render?${qs}` : `${BASE}/render`;
     const res = await fetch(url, {
