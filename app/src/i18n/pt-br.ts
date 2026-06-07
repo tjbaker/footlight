@@ -235,6 +235,32 @@ export const ptBR: Messages = {
         ],
       },
       {
+        id: "captions",
+        title: "Legendas (opcional)",
+        blocks: [
+          {
+            kind: "p",
+            text: "Cada clipe pode carregar um gancho (a linha grande) e um título (a segunda linha) — sua lista de legendas, que viaja junto com o manifesto. Os clipes são exportados limpos por padrão; as legendas só são gravadas no vídeo quando a gravação está ligada (Configurações → Renderização → Legendas, ou --burn-captions na CLI).",
+          },
+          {
+            kind: "p",
+            text: "O estilo é por clipe, definido no grupo de Legendas do editor ao lado do texto e da pré-visualização ao vivo: fonte, cor de preenchimento e de contorno, negrito / itálico / sublinhado, uma sombra, uma caixa opaca, rotação e posicionamento em uma grade de 9 zonas.",
+          },
+          {
+            kind: "list",
+            items: [
+              "Fonte — escolha entre suas fontes do sistema instaladas, uma pasta de fontes personalizada que você define em Configurações, ou um caminho de arquivo avulso. O Footlight não inclui nenhuma fonte nem baixa nenhuma.",
+              "Posição — nove zonas: top / center / bottom, opcionalmente com o sufixo -left / -center / -right.",
+              "A pré-visualização é um guia; o resultado gravado é a autoridade — e ele não consegue ver o pillarbox colorido ou borrado, então verifique os pixels.",
+            ],
+          },
+          {
+            kind: "tip",
+            text: "Mantenha o texto da manchete nativo quando puder — digitado direto no Reels / TikTok / Shorts — para que continue editável e evite a penalidade de ranqueamento por texto não nativo. Grave legendas apenas quando precisar delas nos pixels (um download, uma publicação cruzada, uma plataforma sem ferramenta de texto).",
+          },
+        ],
+      },
+      {
         id: "queue",
         title: "A fila de clipes",
         blocks: [
@@ -247,7 +273,8 @@ export const ptBR: Messages = {
             items: [
               "Clique em um cartão para reabrir aquele clipe para edição; arraste os cartões para reordenar.",
               "Duplique um cartão para um segundo enquadramento do mesmo momento; ✕ o remove.",
-              "Copiar JSON copia a fila como um manifesto que você pode salvar ou usar na CLI.",
+              "Exportar JSON salva a fila como um manifesto que você pode guardar ou usar na CLI (footlight render).",
+              "Limpar redefine o espaço de trabalho — origem, fila e enquadramento — para começar do zero; exporte primeiro se quiser manter a fila.",
             ],
           },
         ],
@@ -298,8 +325,9 @@ export const ptBR: Messages = {
           {
             kind: "list",
             items: [
-              "Space reproduz / pausa · ← / → avança um quadro · Shift+← / → ajusta ±0,1s.",
-              "I / O define Entrada / Saída · S adiciona o clipe à fila · [ / ] pula para o corte anterior / próximo.",
+              "Space reproduz / pausa · J / K / L shuttle voltar / pausar / avançar (toque J ou L de novo para acelerar) · ← / → avança um quadro · Shift+← / → ajusta ±0,1s.",
+              "I / O define Entrada / Saída · Shift+I / O (ou Q / W) pula para o ponto de Entrada / Saída · S adiciona o clipe à fila.",
+              "↑ / ↓ (ou [ / ]) pula para o corte de cena anterior / próximo · Home / End pula para o início / fim.",
               "Alt+setas ajustam a caixa de recorte · duplo-clique na caixa redefine o enquadramento.",
             ],
           },
