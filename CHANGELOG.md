@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.5.0](https://github.com/tjbaker/footlight/compare/footlight-v0.4.0...footlight-v0.5.0) (2026-06-07)
+
+
+### Features
+
+* **app:** export the queue + Clear everything ([#108](https://github.com/tjbaker/footlight/issues/108)) ([4469bd6](https://github.com/tjbaker/footlight/commit/4469bd62b52eb7ff1f6c574d728886c679687e0b))
+* **app:** first-launch empty-state onboarding ([#46](https://github.com/tjbaker/footlight/issues/46)) ([#109](https://github.com/tjbaker/footlight/issues/109)) ([0d6254c](https://github.com/tjbaker/footlight/commit/0d6254ca3c38364e2e85e6ad1461f3f18f039e47))
+* **app:** NLE transport shortcuts (J/K/L, go-to In/Out, scene-cut nav) ([#106](https://github.com/tjbaker/footlight/issues/106)) ([5c3ccfd](https://github.com/tjbaker/footlight/commit/5c3ccfd93be3e5425f2be200f15e43ba6fc83800))
+* **app:** preview each caption font in its own typeface ([#107](https://github.com/tjbaker/footlight/issues/107)) ([2ded9b1](https://github.com/tjbaker/footlight/commit/2ded9b1ba095745d6ecf891e4584ca9524b232c2))
+* **assistant:** attach a sparse still strip to the chat turn ([#40](https://github.com/tjbaker/footlight/issues/40)) ([#113](https://github.com/tjbaker/footlight/issues/113)) ([392b987](https://github.com/tjbaker/footlight/commit/392b98730ada219f862cc0fe8893487a8b6a044d))
+
+
+### Internationalization
+
+* **editor:** move editor UI strings into the catalog ([#101](https://github.com/tjbaker/footlight/issues/101)) ([01a07ad](https://github.com/tjbaker/footlight/commit/01a07aded0b3c949a19658605219cd58d632a310))
+* **locale:** add Brazilian Portuguese (pt-BR) translation ([#104](https://github.com/tjbaker/footlight/issues/104)) ([43a61f8](https://github.com/tjbaker/footlight/commit/43a61f8a5293cbbbd33c4136085dfaa46b84bc54))
+* **locale:** add Spanish (es) translation ([#103](https://github.com/tjbaker/footlight/issues/103)) ([0ab18b1](https://github.com/tjbaker/footlight/commit/0ab18b1d0a997f29f112f88c40cf6d3583ae809f))
+* **shortcuts:** single-source the keyboard-shortcuts reference ([#99](https://github.com/tjbaker/footlight/issues/99)) ([3d86461](https://github.com/tjbaker/footlight/commit/3d86461bf6db3361fd96aa58eccc7de5ebb27528))
+
+
+### Documentation
+
+* **contributing:** document squash-only merge policy ([#98](https://github.com/tjbaker/footlight/issues/98)) ([3451bee](https://github.com/tjbaker/footlight/commit/3451bee9b2581e487278ba84c8ffb513c4d60bb5))
+* **help:** add Captions guide section; refresh shortcuts & queue ([#111](https://github.com/tjbaker/footlight/issues/111)) ([f04510d](https://github.com/tjbaker/footlight/commit/f04510dbd5fd3595f678761fe9f1233746f73c09))
+* **readme:** quality sweep — drop 'thin wrapper', refresh feature list ([#110](https://github.com/tjbaker/footlight/issues/110)) ([9b54387](https://github.com/tjbaker/footlight/commit/9b54387bc6d11181bf0c37993c1ad24a7e1c43f0))
+
 ## [0.4.0](https://github.com/tjbaker/footlight/compare/footlight-v0.3.0...footlight-v0.4.0) (2026-06-07)
 
 **The captions release.** Burn a styled hook + title into each clip, using your own fonts. Plus a public landing page at [footlight.dev](https://footlight.dev), a sturdier render-output folder, and a tidied-up About. Captions are **off by default** — a clean export stays the default.
