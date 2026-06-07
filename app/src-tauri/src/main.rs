@@ -352,6 +352,11 @@ async fn render(
     dry_run: Option<bool>,
     burn_captions: Option<bool>,
     caption_font: Option<String>,
+    caption_color: Option<String>,
+    caption_outline_color: Option<String>,
+    caption_bold: Option<bool>,
+    caption_italic: Option<bool>,
+    caption_underline: Option<bool>,
 ) -> Result<RenderResult, String> {
     let mut manifest_path = std::env::temp_dir();
     manifest_path.push(format!("footlight_manifest_{}.json", std::process::id()));
@@ -389,6 +394,27 @@ async fn render(
     if let Some(f) = caption_font {
         args.push("--caption-font".into());
         args.push(f);
+    }
+    if let Some(c) = caption_color {
+        if !c.is_empty() {
+            args.push("--caption-color".into());
+            args.push(c);
+        }
+    }
+    if let Some(c) = caption_outline_color {
+        if !c.is_empty() {
+            args.push("--caption-outline-color".into());
+            args.push(c);
+        }
+    }
+    if caption_bold == Some(true) {
+        args.push("--caption-bold".into());
+    }
+    if caption_italic == Some(true) {
+        args.push("--caption-italic".into());
+    }
+    if caption_underline == Some(true) {
+        args.push("--caption-underline".into());
     }
     args.push("--outdir".into());
     args.push(out_dir.clone());

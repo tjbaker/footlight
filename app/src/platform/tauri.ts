@@ -73,6 +73,11 @@ export const tauriPlatform: FootlightPlatform = {
       dryRun: opts?.dryRun ?? false,
       burnCaptions: opts?.burnCaptions ?? false,
       captionFont: opts?.captionFont ?? null,
+      captionColor: opts?.captionColor ?? null,
+      captionOutlineColor: opts?.captionOutlineColor ?? null,
+      captionBold: opts?.captionBold ?? false,
+      captionItalic: opts?.captionItalic ?? false,
+      captionUnderline: opts?.captionUnderline ?? false,
     });
   },
 
