@@ -736,6 +736,13 @@ function buildRenderingPanel(): HTMLElement {
     }),
   );
 
+  // --- Caption font: a custom dropdown (per-row live preview) over the free-
+  // text field. The picker SETS prefs.captionFont (a family name); "Custom
+  // path…" reveals the free-text field for a .ttf/.otf path. If font
+  // enumeration is unavailable we show only the free-text field (today's UX).
+
+  // The free-text path field (always built; hidden behind "Custom path…" once
+  // the dropdown is in play, shown on its own as the no-enumeration fallback).
   const fontField = el("div", "fl-field path");
   fontField.style.flex = "1";
   const fontInput = document.createElement("input");
@@ -750,6 +757,79 @@ function buildRenderingPanel(): HTMLElement {
   fontField.append(fontInput);
   const fontRow = labeledRow(s.captionFont, fontField);
 
+  // Sentinels for the two non-family rows (leading space keeps them out of any
+  // real family namespace).
+  const SENTINEL_DEFAULT = " default";
+  const SENTINEL_CUSTOM = " custom";
+
+  // The dropdown trigger (a .fl-field-styled button) + its popup. Built up
+  // front but only inserted once listFonts() yields families.
+  const pickerField = el("div", "fl-field");
+  pickerField.style.cssText = "flex:1; position:relative; cursor:pointer; gap:0;";
+  const trigger = button("", undefined);
+  trigger.type = "button";
+  trigger.setAttribute("aria-haspopup", "listbox");
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.style.cssText =
+    "flex:1; min-width:0; display:flex; align-items:center; justify-content:space-between; gap:9px; background:none; border:none; outline:none; color:var(--text); font:inherit; font-size:13px; padding:0; text-align:left; cursor:pointer;";
+  const triggerLabel = el("span");
+  triggerLabel.style.cssText = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  const caret = el("span");
+  caret.textContent = "▾"; // ▾
+  caret.style.cssText = "flex:none; color:var(--faint); font-size:11px;";
+  trigger.append(triggerLabel, caret);
+  pickerField.append(trigger);
+
+  const popup = el("ul");
+  popup.setAttribute("role", "listbox");
+  popup.setAttribute("aria-label", s.captionFont);
+  popup.style.cssText =
+    "position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:40; margin:0; padding:5px; list-style:none; max-height:260px; overflow-y:auto; background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); display:none;";
+  pickerField.append(popup);
+  const pickerRow = labeledRow(s.captionFont, pickerField);
+
+  const closePopup = () => {
+    popup.style.display = "none";
+    trigger.setAttribute("aria-expanded", "false");
+  };
+  const openPopup = () => {
+    popup.style.display = "block";
+    trigger.setAttribute("aria-expanded", "true");
+    popup.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+  };
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (popup.style.display === "block") closePopup();
+    else openPopup();
+  });
+  // Click-away + Esc anywhere close the popup.
+  const onDocClick = (e: MouseEvent) => {
+    if (!pickerField.contains(e.target as Node)) closePopup();
+  };
+  const onDocKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") closePopup();
+  };
+  document.addEventListener("click", onDocClick);
+  document.addEventListener("keydown", onDocKey);
+
+  // Reflect a selection onto the trigger label (in its own face) + free-text
+  // visibility. Single-quotes are stripped so the inline family value can't
+  // break out of its quoting.
+  const syncPickerUi = (value: string) => {
+    const custom = value === SENTINEL_CUSTOM;
+    fontRow.style.display = custom ? "" : "none";
+    if (custom) {
+      triggerLabel.textContent = s.captionFontCustom;
+      triggerLabel.style.fontFamily = "";
+    } else if (value === SENTINEL_DEFAULT || value === "") {
+      triggerLabel.textContent = s.captionFontSystemDefault;
+      triggerLabel.style.fontFamily = "";
+    } else {
+      triggerLabel.textContent = value;
+      triggerLabel.style.fontFamily = `'${value.replace(/'/g, "")}'`;
+    }
+  };
+
   const fontHint = el("div", "fl-set-secsub");
   fontHint.style.marginTop = "8px";
   fontHint.textContent = s.captionFontHint;
@@ -758,8 +838,92 @@ function buildRenderingPanel(): HTMLElement {
   styleNote.style.marginTop = "8px";
   styleNote.textContent = s.captionStyleNote;
 
+  // Default layout = free-text only (the fallback). Async: if families come
+  // back, swap in the dropdown and put the free-text field behind "Custom path…".
   capBlock.body.append(capToggle, fontRow, fontHint, styleNote);
   root.append(capBlock.root);
+
+  void (async () => {
+    let fonts: { family: string; path?: string }[] = [];
+    try {
+      fonts = await platform.listFonts();
+    } catch {
+      fonts = [];
+    }
+    if (fonts.length === 0) return; // keep the free-text-only fallback
+
+    // De-dupe + sort families (case-insensitive) for a tidy list.
+    const families = Array.from(new Set(fonts.map((f) => f.family).filter((f) => f.trim())));
+    families.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    if (families.length === 0) return;
+
+    type Opt = { value: string; label: string; face?: string };
+    const options: Opt[] = [
+      { value: SENTINEL_DEFAULT, label: s.captionFontSystemDefault },
+      ...families.map((f) => ({ value: f, label: f, face: f })),
+      { value: SENTINEL_CUSTOM, label: s.captionFontCustom },
+    ];
+
+    // The persisted pref decides the initial selection: "" → default; a value
+    // that matches an enumerated family → that family; anything else (a path or
+    // an unlisted name) → Custom path… (the free-text field shows the value).
+    const cur = prefs.captionFont.trim();
+    let selected: string;
+    if (cur === "") selected = SENTINEL_DEFAULT;
+    else if (families.includes(cur)) selected = cur;
+    else selected = SENTINEL_CUSTOM;
+
+    const markSelected = (value: string) => {
+      for (const li of Array.from(popup.children) as HTMLElement[]) {
+        const on = li.dataset.value === value;
+        li.setAttribute("aria-selected", String(on));
+        li.style.background = on ? "var(--panel-3)" : "";
+      }
+    };
+
+    for (const opt of options) {
+      const li = el("li");
+      li.dataset.value = opt.value;
+      li.setAttribute("role", "option");
+      li.textContent = opt.label;
+      li.style.cssText =
+        "padding:7px 10px; border-radius:7px; cursor:pointer; font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+      // Each family row renders in its own face (system fonts resolve by name).
+      if (opt.face) li.style.fontFamily = `'${opt.face.replace(/'/g, "")}'`;
+      li.addEventListener("mouseenter", () => {
+        if (li.getAttribute("aria-selected") !== "true") li.style.background = "var(--panel-2)";
+      });
+      li.addEventListener("mouseleave", () => {
+        if (li.getAttribute("aria-selected") !== "true") li.style.background = "";
+      });
+      li.addEventListener("click", (e) => {
+        e.stopPropagation();
+        selected = opt.value;
+        markSelected(selected);
+        if (opt.value === SENTINEL_DEFAULT) {
+          prefs.captionFont = "";
+          fontInput.value = "";
+          save();
+        } else if (opt.value === SENTINEL_CUSTOM) {
+          // Reveal the free-text field; keep whatever path is already there.
+          prefs.captionFont = fontInput.value.trim();
+          save();
+        } else {
+          prefs.captionFont = opt.value;
+          save();
+        }
+        syncPickerUi(selected);
+        closePopup();
+        if (opt.value === SENTINEL_CUSTOM) fontInput.focus();
+      });
+      popup.append(li);
+    }
+
+    // Swap the free-text-only layout for the dropdown (free-text now behind it).
+    markSelected(selected);
+    syncPickerUi(selected);
+    capBlock.body.insertBefore(pickerRow, fontRow);
+  })();
 
   return root;
 }
