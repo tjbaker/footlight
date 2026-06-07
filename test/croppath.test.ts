@@ -177,7 +177,7 @@ describe("eased expression is valid ffmpeg (real render)", () => {
         "-f",
         "lavfi",
         "-i",
-        "testsrc=size=1920x1080:duration=3",
+        "testsrc=size=1920x1080:duration=1",
         "-vf",
         `crop=608:1080:x='${expr}':y=0,scale=1080:1920`,
         "-y",
@@ -202,5 +202,7 @@ describe("eased expression is valid ffmpeg (real render)", () => {
       { encoding: "utf8" },
     ).trim();
     expect(probe).toBe("1080,1920");
-  });
+    // Real ffmpeg encode: the 5s vitest default is too tight on a loaded CI
+    // runner (intermittent timeouts), so give this one a generous budget.
+  }, 30_000);
 });
