@@ -7,9 +7,10 @@
  */
 
 import { en } from "./en.js";
+import { es } from "./es.js";
 import type { Messages } from "./types.js";
 
-const locales: Record<string, Messages> = { en };
+export const locales: Record<string, Messages> = { en, es };
 
 function pickLocale(): Messages {
   const nav = typeof navigator !== "undefined" ? navigator.language : "en";
