@@ -587,10 +587,12 @@ function filterQuote(value: string): string {
   return `'${value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
 }
 
-/** Directory portion of a path (`.` when there is none). Pure string op. */
+/** Directory portion of a path (`.` when there is none). Index-based (no
+ * backtracking regex) so library-supplied paths can't trigger ReDoS. */
 function dirname(p: string): string {
-  const m = p.replace(/[\\/]+$/, "").match(/^(.*)[\\/][^\\/]+$/);
-  return m ? m[1]! : ".";
+  const t = trimTrailingSeparators(p);
+  const slash = Math.max(t.lastIndexOf("/"), t.lastIndexOf("\\"));
+  return slash > 0 ? t.slice(0, slash) : ".";
 }
 
 /**
