@@ -99,8 +99,22 @@ sources and only varies **x** (horizontal framing).
 
 `render` reads CSV (`parseCsv` in `csv.ts`) **or** JSON (`.json` → array of
 `ClipSpec`). CSV is the documented source of truth (one row per clip); JSON adds the
-eased `cropPath`. Reserved CSV columns `hook`/`title`/`text_position` are for a
-**not-yet-implemented** caption feature and are ignored by the engine.
+eased `cropPath` and a per-clip `caption` style object. CSV columns
+`hook`/`title`/`text_position` carry caption **text + position** (burned only with
+`--burn-captions`); per-clip caption **style** (the `caption` object) is JSON-only.
+
+### Captions: render-wide defaults + per-clip style
+
+Captions burn via `libass`. `--burn-captions` is the render-wide on/off switch and
+the `--caption-*` flags (`--caption-font/-color/-outline-color/-bold/-italic/`
+`-underline/-shadow/-box/-box-color/-angle`) are render-wide **defaults**. A JSON
+clip's optional `caption` object (`font`, `color`, `outlineColor`, `bold`, `italic`,
+`underline`, `shadow`, `box`, `boxColor`, `angle`) overrides those defaults per clip:
+a clip's field wins, falling back to the flag, then the engine default. A per-clip
+`font` is resolved on its own (a path → its real family via fc-scan, used as a
+`libass` `fontsdir`; a bare name → a fontconfig family) and fully replaces the
+render-wide font. In the GUI, style controls live in the editor per-clip; only the
+custom fonts folder and the burn-captions toggle remain in Settings.
 
 ### Subject tracking (AI-assisted, opt-in, BYOK)
 

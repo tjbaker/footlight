@@ -221,11 +221,20 @@ a deliberate differentiator from cloud auto-clippers that upload source video.
   ranking penalty platforms apply to non-native on-screen text.
 - The manifest carries **`hook`**, **`title`**, **`text_position`** fields as a
   self-contained shot-list regardless of rendering.
-- A global **"burn captions"** toggle feeds `hook`/`title` into `ffmpeg drawtext`
-  at `text_position` when explicitly enabled. Default style: bundled bold sans;
-  white fill with black outline (`borderw=4:bordercolor=black@0.8`) for legibility
-  over busy stage footage; size scaled to frame (`hook ≈ h/18`, `title ≈ h/26`);
-  ~12% safe margins top/bottom; `hook` above `title`. All overridable.
+- A render-wide **"burn captions"** toggle feeds `hook`/`title` into the `libass`
+  renderer at `text_position` when explicitly enabled. Default style: system sans;
+  white fill with black outline for legibility over busy stage footage; size scaled
+  to frame (`hook ≈ h/18`, `title ≈ h/26`); ~12% safe margins top/bottom; `hook`
+  above `title`.
+- **Style is per-clip.** A JSON clip carries an optional **`caption`** object
+  (`font`, `color`, `outlineColor`, `bold`, `italic`, `underline`, `shadow`, `box`,
+  `boxColor`, `angle` — all optional) that styles that one clip. The render-wide
+  `--caption-*` CLI flags / GUI settings act as **defaults**: a clip's own field
+  wins, falling back to the flag, then the engine default. A per-clip `font` is
+  resolved on its own (a `.ttf`/`.otf`/`.ttc` path → its real family via `fc-scan`,
+  loaded as a `libass` `fontsdir`; a bare name → a fontconfig family) and fully
+  replaces the render-wide font. Per-clip *style* is JSON-only; CSV carries caption
+  text + position only.
 
 ### 6.6 Batch & queue
 - Multiple clips per project; render the queue with progress per clip and a
@@ -378,8 +387,11 @@ One row per clip. Columns:
 | `out_name` | no | Output filename; auto-generated from source + timestamps if blank. |
 | `notes` | no | Free-text editor notes. |
 
-Render-wide settings (CRF, preset, audio policy, outdir, burn-captions) are CLI
-flags / GUI settings, not per-row, in the current design.
+Render-wide settings (CRF, preset, audio policy, outdir, burn-captions, and the
+`--caption-*` style defaults) are CLI flags / GUI settings, not CSV columns. A JSON
+manifest can additionally carry a per-clip **`caption`** style object (§6.5) that
+overrides the render-wide `--caption-*` defaults for that clip; CSV carries caption
+text + position only.
 
 ### 8.2 Session & history (GUI) — implemented
 The GUI **autosaves the working session** (source, the clip queue, destination) to
@@ -406,8 +418,10 @@ footlight scenes SOURCE          # detected cut timestamps (to seed schedule key
 footlight track  REQUEST.json    # subject track → eased crop-path keyframes (§6.9)
 ```
 The manifest contract is identical between GUI and CLI. CSV is canonical; JSON
-additionally carries the eased `cropPath` / explicit `cropWindow` the CSV can't
-express. (A `--burn-captions` flag is reserved — captions are not yet built, §6.5.)
+additionally carries the eased `cropPath` / explicit `cropWindow` / per-clip
+`caption` style object the CSV can't express. Captions burn-in is gated by the
+render-wide `--burn-captions` flag, with `--caption-*` style defaults that a clip's
+`caption` object overrides (§6.5).
 
 ---
 
