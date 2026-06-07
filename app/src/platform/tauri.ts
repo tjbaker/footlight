@@ -97,6 +97,19 @@ export const tauriPlatform: FootlightPlatform = {
     return invoke<OutdirCheck>("check_outdir", { outdir: dir || null });
   },
 
+  // Native Save dialog → write the file via the Rust side (no fs plugin wired).
+  // Returns false when the user cancels the dialog.
+  async exportTextFile(suggestedName: string, content: string): Promise<boolean> {
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const path = await save({
+      defaultPath: suggestedName,
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (typeof path !== "string") return false; // cancelled
+    await invoke<void>("write_text_file", { path, content });
+    return true;
+  },
+
   async openExternal(url: string): Promise<void> {
     const { openUrl } = await import("@tauri-apps/plugin-opener");
     await openUrl(url);

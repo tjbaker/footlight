@@ -178,6 +178,8 @@ export interface EditorMessages {
     themeToLight: string;
     themeToDark: string;
     settingsTitle: string;
+    clear: string;
+    clearTitle: string;
   };
   /** The stage (frame viewer): empty-state hero, tags and tooltips. */
   stage: {
@@ -387,8 +389,8 @@ export interface EditorMessages {
   queue: {
     queueLabel: string;
     addClip: string;
-    copyJson: string;
-    copyJsonTitle: string;
+    exportJson: string;
+    exportJsonTitle: string;
     /** `Render {n}` — composed in code. */
     renderN: string;
     cardEditTitle: string;
@@ -453,6 +455,13 @@ export interface EditorMessages {
   common: {
     close: string;
     dash: string;
+  };
+  /** "Clear everything" confirm dialog. */
+  clear: {
+    title: string;
+    body: string;
+    cancel: string;
+    confirm: string;
   };
 }
 

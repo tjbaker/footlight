@@ -185,6 +185,13 @@ export interface FootlightPlatform {
    * mid-render. Both backends implement it (issue #58).
    */
   checkOutdir(dir: string): Promise<OutdirCheck>;
+  /**
+   * Save `content` to a user-chosen text file (e.g. the queue exported as a JSON
+   * manifest, which re-imports via `footlight render`). Web: downloads
+   * `suggestedName`. Native: opens a Save dialog seeded with `suggestedName`, then
+   * writes the file. Resolves `true` if a file was written, `false` if cancelled.
+   */
+  exportTextFile(suggestedName: string, content: string): Promise<boolean>;
   /** Open a URL in the user's default browser. */
   openExternal(url: string): Promise<void>;
   /**
