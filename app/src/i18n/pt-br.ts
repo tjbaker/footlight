@@ -748,6 +748,9 @@ export const ptBR: Messages = {
         title: "Reprodução",
         items: [
           { keys: ["Space"], desc: "Reproduzir / pausar" },
+          { keys: ["J"], desc: "Retroceder (pressione de novo para acelerar)" },
+          { keys: ["K"], desc: "Pausar" },
+          { keys: ["L"], desc: "Avançar (pressione de novo para acelerar)" },
           { keys: ["←", "→"], desc: "Avançar 1 quadro para trás / frente" },
           { keys: ["Shift", "←"], desc: "Ajustar o tempo em −0,1s" },
           { keys: ["Shift", "→"], desc: "Ajustar o tempo em +0,1s" },
@@ -758,6 +761,8 @@ export const ptBR: Messages = {
         items: [
           { keys: ["I"], desc: "Definir Entrada no cabeçote" },
           { keys: ["O"], desc: "Definir Saída no cabeçote" },
+          { keys: ["Shift", "I"], desc: "Ir para o ponto de Entrada" },
+          { keys: ["Shift", "O"], desc: "Ir para o ponto de Saída" },
           { keys: ["S"], desc: "Adicionar o clipe atual à fila" },
         ],
       },

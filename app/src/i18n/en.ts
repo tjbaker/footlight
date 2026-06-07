@@ -748,6 +748,9 @@ export const en: Messages = {
         title: "Playback",
         items: [
           { keys: ["Space"], desc: "Play / pause" },
+          { keys: ["J"], desc: "Shuttle backward (press again to speed up)" },
+          { keys: ["K"], desc: "Pause" },
+          { keys: ["L"], desc: "Shuttle forward (press again to speed up)" },
           { keys: ["←", "→"], desc: "Step 1 frame back / forward" },
           { keys: ["Shift", "←"], desc: "Nudge time −0.1s" },
           { keys: ["Shift", "→"], desc: "Nudge time +0.1s" },
@@ -758,6 +761,8 @@ export const en: Messages = {
         items: [
           { keys: ["I"], desc: "Set In at the playhead" },
           { keys: ["O"], desc: "Set Out at the playhead" },
+          { keys: ["Shift", "I"], desc: "Go to the In point" },
+          { keys: ["Shift", "O"], desc: "Go to the Out point" },
           { keys: ["S"], desc: "Add the current clip to the queue" },
         ],
       },
