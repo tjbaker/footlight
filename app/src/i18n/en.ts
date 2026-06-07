@@ -457,4 +457,52 @@ export const en: Messages = {
       thanks: "Special thanks to ",
     },
   },
+
+  shortcuts: {
+    modalTitle: "Keyboard shortcuts",
+    close: "Close",
+    groups: [
+      {
+        title: "Playback",
+        items: [
+          { keys: ["Space"], desc: "Play / pause" },
+          { keys: ["←", "→"], desc: "Step 1 frame back / forward" },
+          { keys: ["Shift", "←"], desc: "Nudge time −0.1s" },
+          { keys: ["Shift", "→"], desc: "Nudge time +0.1s" },
+        ],
+      },
+      {
+        title: "Marking",
+        items: [
+          { keys: ["I"], desc: "Set In at the playhead" },
+          { keys: ["O"], desc: "Set Out at the playhead" },
+          { keys: ["S"], desc: "Add the current clip to the queue" },
+        ],
+      },
+      {
+        title: "Navigation",
+        items: [
+          { keys: ["["], desc: "Jump to previous scene cut" },
+          { keys: ["]"], desc: "Jump to next scene cut" },
+        ],
+      },
+      {
+        title: "Framing",
+        items: [
+          { keys: ["Alt", "←"], desc: "Nudge the crop left" },
+          { keys: ["Alt", "→"], desc: "Nudge the crop right" },
+          { keys: ["Alt", "↑"], desc: "Nudge the crop up (punch-in)" },
+          { keys: ["Alt", "↓"], desc: "Nudge the crop down (punch-in)" },
+          { keys: ["Double-click"], desc: "Reset framing to full-height 9:16" },
+        ],
+      },
+      {
+        title: "Help",
+        items: [
+          { keys: ["?"], desc: "Show this shortcuts overlay" },
+          { keys: ["Esc"], desc: "Close any dialog" },
+        ],
+      },
+    ],
+  },
 };
