@@ -16,15 +16,16 @@
  *   GET  /loudness?source=<path>       -> JSON number[]  (normalized 0..1 envelope)
  *   POST /track    (body = track request JSON)     -> JSON TrackSample[]
  *   POST /render   (body = manifest JSON, ?outdir=) -> JSON {ok, log}
- *   GET  /fonts                        -> JSON FontInfo[] (fontconfig families)
+ *   GET  /fonts          (?dir=<path>) -> JSON FontInfo[] (fontconfig families,
+ *                                         or a scanned user fonts folder)
  */
 
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { writeFile, readFile, mkdtemp, stat } from "node:fs/promises";
+import { writeFile, readFile, mkdtemp, stat, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, dirname, resolve, isAbsolute } from "node:path";
+import { join, dirname, resolve, isAbsolute, extname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Shared, pure ffmpeg/ffprobe command builders + parsers — ONE definition used
@@ -317,11 +318,72 @@ async function handleSaveSession(body, res) {
   sendJson(res, 200, { ok: true });
 }
 
+/** Font file extensions we scan for in a user fonts folder. */
+const FONT_EXTS = new Set([".ttf", ".otf", ".ttc"]);
+/** Sensible caps so a pathological directory can't wedge the dev server. */
+const FONT_SCAN_MAX_DEPTH = 8;
+const FONT_SCAN_MAX_FILES = 5000;
+
+/**
+ * Recursively collect font-file paths under `dir`, bounded by depth/count.
+ * Best-effort: unreadable sub-directories are skipped silently.
+ */
+async function collectFontFiles(dir, depth, acc) {
+  if (depth > FONT_SCAN_MAX_DEPTH || acc.length >= FONT_SCAN_MAX_FILES) return;
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return; // unreadable directory — skip.
+  }
+  for (const entry of entries) {
+    if (acc.length >= FONT_SCAN_MAX_FILES) return;
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await collectFontFiles(full, depth + 1, acc);
+    } else if (entry.isFile() && FONT_EXTS.has(extname(entry.name).toLowerCase())) {
+      acc.push(full);
+    }
+  }
+}
+
+/**
+ * Scan a user fonts folder for `*.ttf`/`*.otf`/`*.ttc`, resolving each file's
+ * real family via `fc-scan` (falling back to the filename stem). Returns a
+ * sorted, deduped (by `family+path`) FontInfo[]. A missing/unreadable dir yields
+ * `[]` with HTTP 200. The native Tauri backend uses font-kit instead.
+ */
+async function handleUserFonts(res, dir) {
+  const files = [];
+  await collectFontFiles(dir, 0, files);
+
+  const byKey = new Map();
+  for (const file of files) {
+    let family = "";
+    try {
+      const scan = await run("fc-scan", [`--format=%{family[0]}\n`, file]);
+      if (scan.code === 0) family = scan.stdout.split("\n")[0]?.trim() || "";
+    } catch {
+      // fc-scan not on PATH — fall back to the filename stem below.
+    }
+    if (!family) family = basename(file, extname(file));
+    if (!family) continue;
+    const key = `${family} ${file}`;
+    if (byKey.has(key)) continue;
+    byKey.set(key, { family, path: file });
+  }
+  const fonts = [...byKey.values()].sort((a, b) =>
+    a.family.toLowerCase().localeCompare(b.family.toLowerCase()),
+  );
+  sendJson(res, 200, fonts);
+}
+
 /**
  * GET /fonts — installed font families via `fc-list` (fontconfig), as a sorted,
- * deduped FontInfo[] (`{family, path}`). Best-effort: if `fc-list` is missing or
- * errors we return `[]` with HTTP 200 so the picker falls back to free-text —
- * never a hard failure. The native Tauri backend uses font-kit instead.
+ * deduped FontInfo[] (`{family, path}`). With an optional `?dir=<path>` it scans
+ * that folder instead (see `handleUserFonts`). Best-effort: if `fc-list` is
+ * missing or errors we return `[]` with HTTP 200 so the picker falls back to
+ * free-text — never a hard failure. The native Tauri backend uses font-kit.
  */
 async function handleFonts(res) {
   let result;
@@ -435,6 +497,8 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/fonts") {
+      const dir = url.searchParams.get("dir");
+      if (dir) return await handleUserFonts(res, dir);
       return await handleFonts(res);
     }
 
