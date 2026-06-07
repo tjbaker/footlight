@@ -78,6 +78,14 @@ export interface RenderOptions {
   captionItalic?: boolean;
   /** Underline the burned caption text. */
   captionUnderline?: boolean;
+  /** Draw a drop shadow behind the caption text. */
+  captionShadow?: boolean;
+  /** Draw an opaque box behind the caption (instead of an outline). */
+  captionBox?: boolean;
+  /** Box colour as `#RRGGBB` when `captionBox` is on (default black). */
+  captionBoxColor?: string;
+  /** Rotate the caption block by this many degrees (counter-clockwise). */
+  captionAngle?: number;
 }
 
 export const DEFAULT_RENDER_OPTIONS: RenderOptions = {
@@ -558,14 +566,17 @@ const CAPTION_STYLE = {
   outline: 4,
 } as const;
 
-function parseTextPosition(value: string | undefined): TextPosition {
-  const s = (value || "").trim().toLowerCase();
-  return s === "top" || s === "center" ? s : "bottom";
-}
-
-/** ASS numpad alignment: 8 = top-center, 5 = middle-center, 2 = bottom-center. */
-function assAlignment(pos: TextPosition): number {
-  return pos === "top" ? 8 : pos === "center" ? 5 : 2;
+/**
+ * ASS numpad alignment (1–9) from a `text_position` string: a vertical keyword
+ * (`top`/`center`/`bottom`, default bottom) optionally suffixed with a horizontal
+ * one (`-left`/`-center`/`-right`, default center) — e.g. `"bottom-left"` → 1,
+ * `"center"` → 5, `"top-right"` → 9. Legacy `top`/`center`/`bottom` stay centered.
+ */
+function assAlignment(value: string | undefined): number {
+  const [v, h] = (value || "").trim().toLowerCase().split("-");
+  const base = v === "top" ? 6 : v === "center" || v === "middle" ? 3 : 0;
+  const col = h === "left" ? 1 : h === "right" ? 3 : 2;
+  return base + col;
 }
 
 /**
@@ -631,7 +642,7 @@ export function buildCaptionAss(row: ClipRow, opts: RenderOptions): string | nul
   const title = (row.title || "").trim();
   if (!hook && !title) return null;
 
-  const align = assAlignment(parseTextPosition(row.text_position));
+  const align = assAlignment(row.text_position);
   const family = captionFontFamily(opts);
 
   const lines: string[] = [];
@@ -643,14 +654,24 @@ export function buildCaptionAss(row: ClipRow, opts: RenderOptions): string | nul
   // Bold/Italic/Underline are -1 (on) / 0 (off). Outline scales with PlayRes via
   // ScaledBorderAndShadow.
   const fill = hexToAssColor(opts.captionColor, "&H00FFFFFF");
-  const outlineColor = hexToAssColor(opts.captionOutlineColor, "&H00000000");
   const bold = opts.captionBold ? -1 : 0;
   const italic = opts.captionItalic ? -1 : 0;
   const underline = opts.captionUnderline ? -1 : 0;
+  const angle = Number.isFinite(opts.captionAngle) ? Math.round(opts.captionAngle as number) : 0;
+  // BorderStyle 1 = outline (OutlineColour) + optional drop shadow (BackColour);
+  // BorderStyle 3 = opaque box, drawn in OutlineColour (so the box colour rides
+  // the OutlineColour slot, with Outline as the box padding).
+  const box = !!opts.captionBox;
+  const borderStyle = box ? 3 : 1;
+  const borderColor = box
+    ? hexToAssColor(opts.captionBoxColor, "&H00000000")
+    : hexToAssColor(opts.captionOutlineColor, "&H00000000");
+  const borderW = box ? 10 : CAPTION_STYLE.outline;
+  const shadow = opts.captionShadow ? 4 : 0;
   const style =
     `Style: Caption,${family},${CAPTION_STYLE.titleSize},` +
-    `${fill},&H000000FF,${outlineColor},&H00000000,` +
-    `${bold},${italic},${underline},0,100,100,0,0,1,${CAPTION_STYLE.outline},0,${align},60,60,${CAPTION_STYLE.margin},1`;
+    `${fill},&H000000FF,${borderColor},&H00000000,` +
+    `${bold},${italic},${underline},0,100,100,0,${angle},${borderStyle},${borderW},${shadow},${align},60,60,${CAPTION_STYLE.margin},1`;
 
   return (
     [

@@ -87,7 +87,10 @@ Usage:
                                   [--audio-bitrate copy|256k] [--dry-run]
                                   [--burn-captions [--caption-font <path|name>]
                                    [--caption-color #RRGGBB] [--caption-outline-color #RRGGBB]
-                                   [--caption-bold] [--caption-italic] [--caption-underline]]
+                                   [--caption-bold] [--caption-italic] [--caption-underline]
+                                   [--caption-shadow] [--caption-box [--caption-box-color #RRGGBB]]
+                                   [--caption-angle <deg>]]
+                                   (caption position is per-clip: text_position = top|center|bottom[-left|-center|-right])
   footlight probe  <source>         dims + cropdetect suggestion (black bars only)
   footlight scenes <source>         detected scene-cut timestamps (seconds)
   footlight track  <request.json>   locate a subject; print TrackSample[] JSON to stdout
@@ -144,6 +147,8 @@ async function cmdRender(argv: string[]): Promise<number> {
       "caption-font",
       "caption-color",
       "caption-outline-color",
+      "caption-box-color",
+      "caption-angle",
     ]),
   );
 
@@ -182,6 +187,12 @@ async function cmdRender(argv: string[]): Promise<number> {
   const captionBold = flags.get("caption-bold") === true;
   const captionItalic = flags.get("caption-italic") === true;
   const captionUnderline = flags.get("caption-underline") === true;
+  const captionShadow = flags.get("caption-shadow") === true;
+  const captionBox = flags.get("caption-box") === true;
+  const captionBoxColor = flags.has("caption-box-color")
+    ? String(flags.get("caption-box-color"))
+    : undefined;
+  const captionAngle = flags.has("caption-angle") ? Number(flags.get("caption-angle")) : undefined;
 
   if (Number.isNaN(crf)) {
     console.error("render: --crf must be a number");
@@ -256,6 +267,10 @@ async function cmdRender(argv: string[]): Promise<number> {
         captionBold,
         captionItalic,
         captionUnderline,
+        captionShadow,
+        captionBox,
+        ...(captionBoxColor ? { captionBoxColor } : {}),
+        ...(captionAngle !== undefined && Number.isFinite(captionAngle) ? { captionAngle } : {}),
       });
       if (ass !== null) {
         const path = join(tmpdir(), `footlight_cap_${i}_${process.pid}.ass`);

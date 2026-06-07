@@ -47,6 +47,13 @@ export interface RenderOptions {
   captionBold?: boolean;
   captionItalic?: boolean;
   captionUnderline?: boolean;
+  /** Drop shadow behind the caption (`--caption-shadow`). */
+  captionShadow?: boolean;
+  /** Opaque box behind the caption (`--caption-box`) + its `#RRGGBB` colour. */
+  captionBox?: boolean;
+  captionBoxColor?: string;
+  /** Rotate the caption by N degrees (`--caption-angle`). */
+  captionAngle?: number;
 }
 
 /** A saved working session (project) — restored on next launch. */
