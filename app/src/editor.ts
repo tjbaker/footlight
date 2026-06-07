@@ -44,6 +44,7 @@ import type {
   Grounding,
 } from "@assistant-types";
 import { platform, platformName } from "./platform/index.js";
+import { openGuide } from "./help.js";
 import { messages } from "./i18n/index.js";
 
 /** The editor's localized strings (the `editor` namespace of the catalog). */
@@ -376,11 +377,50 @@ export function mountEditor(root: HTMLElement): void {
   const stageTimeTag = el("span", "fl-stage-tag");
   stageTimeTag.textContent = "t = 0.000s";
   stageMeta.append(stageTag, stageTimeTag);
+  // First-launch onboarding (issue #46): breathing lamp + headline/sub, a 9:16
+  // dashed drop target (which literally previews the output shape), the workflow
+  // ghost row, and a guide link. Static markup is built as innerHTML (the SVGs make
+  // pure-DOM tedious); the interactive bits are queried back out and wired below.
   const emptyMsg = el("div", "fl-stage-center");
+  // On the web build there's no native picker or drag-and-drop — the path field is
+  // the primary affordance there, so soften the "drag" line and lead with paste.
+  const canDrop = platform.supportsFilePicker;
   emptyMsg.innerHTML =
+    `<div class="fl-onboard">` +
+    `<div class="fl-lamp-wrap" aria-hidden="true">` +
+    `<div class="fl-lamp-halo"></div>` +
+    ICON_BRAND +
+    `</div>` +
     `<div class="fl-hero-h">${escapeHtml(m.stage.heroH)}</div>` +
     `<div class="fl-hero-sub">${escapeHtml(m.stage.heroSub)}</div>` +
-    `<div class="fl-hero-cta">${escapeHtml(m.stage.heroCta)}</div>`;
+    `<div class="fl-drop">` +
+    `<span class="fl-drop-ratio mono">${escapeHtml(m.stage.dropRatio)}</span>` +
+    `<span class="fl-drop-glyph" aria-hidden="true">${ICON_DOWN}</span>` +
+    (canDrop
+      ? `<div class="fl-drop-cta fl-drop-cta-rest">${escapeHtml(m.stage.dropTitle)}</div>` +
+        `<div class="fl-drop-cta fl-drop-cta-drag">${escapeHtml(m.stage.dropTitleActive)}</div>`
+      : "") +
+    `<button type="button" class="fl-drop-browse">${escapeHtml(m.source.browse)}</button>` +
+    `<button type="button" class="fl-drop-paste mono">${escapeHtml(m.stage.pasteHint)}</button>` +
+    `</div>` +
+    `<div class="fl-flow">` +
+    `<div class="fl-flow-step"><span class="fl-flow-n mono">01</span><span class="fl-flow-lbl">${escapeHtml(m.stage.flowMark)}</span></div>` +
+    `<div class="fl-flow-step"><span class="fl-flow-n mono">02</span><span class="fl-flow-lbl">${escapeHtml(m.stage.flowFrame)}</span></div>` +
+    `<div class="fl-flow-step"><span class="fl-flow-n mono">03</span><span class="fl-flow-lbl">${escapeHtml(m.stage.flowQueue)}</span></div>` +
+    `<div class="fl-flow-step"><span class="fl-flow-n mono">04</span><span class="fl-flow-lbl">${escapeHtml(m.stage.flowRender)}</span></div>` +
+    `</div>` +
+    `<div class="fl-guide"><a href="#" class="fl-guide-link">${escapeHtml(m.stage.guide)}</a></div>` +
+    `</div>`;
+  // Wire the interactive bits to the existing handlers (reuse, don't rebuild).
+  emptyMsg.querySelector(".fl-drop-browse")?.addEventListener("click", () => void browse());
+  emptyMsg.querySelector(".fl-drop-paste")?.addEventListener("click", () => {
+    srcInput.focus();
+    srcInput.scrollIntoView({ block: "nearest" });
+  });
+  emptyMsg.querySelector(".fl-guide-link")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    openGuide();
+  });
   const img = document.createElement("img");
   img.id = "frame";
   img.alt = m.stage.frameAlt;
