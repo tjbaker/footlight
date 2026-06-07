@@ -1,14 +1,14 @@
 // Copyright 2026 Trevor Baker, all rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Unit tests for burned captions (SPEC §6.5): the pure `buildCaptionFilters`
- * drawtext builder and its integration into `buildFfmpegArgs`. Dimensions are
- * passed in so nothing touches the filesystem.
+ * Unit tests for burned captions (SPEC §6.5): the pure `buildCaptionAss` libass
+ * document generator, its `buildFfmpegArgs` integration (the `subtitles` filter),
+ * and the `ffmpegListHasFilter` preflight parser. No filesystem, no subprocess.
  */
 
 import { describe, it, expect } from "vitest";
 import {
-  buildCaptionFilters,
+  buildCaptionAss,
   buildFfmpegArgs,
   ffmpegListHasFilter,
   DEFAULT_RENDER_OPTIONS,
@@ -24,141 +24,138 @@ const ROW: ClipRow = {
   crop_offset: "center",
 };
 
+const HOOK_SIZE = Math.round(TARGET_H / 18); // 107
+const TITLE_SIZE = Math.round(TARGET_H / 26); // 74
+
 /** Render options with captions on; spread overrides on top. */
 function opts(over: Partial<RenderOptions> = {}): RenderOptions {
   return { ...DEFAULT_RENDER_OPTIONS, burnCaptions: true, ...over };
 }
 
-/** Pull the numeric `y=` from a drawtext filter string. */
-function yOf(filter: string): number {
-  const m = filter.match(/:y=(\d+)$/);
-  if (!m) throw new Error(`no y= in ${filter}`);
-  return Number(m[1]);
+/** The single `Style:` line from an ASS document. */
+function styleLine(ass: string): string {
+  return ass.split("\n").find((l) => l.startsWith("Style: Caption,")) ?? "";
 }
 
-describe("buildCaptionFilters (pure, SPEC §6.5)", () => {
-  it("returns nothing when captions are disabled", () => {
-    expect(buildCaptionFilters({ ...ROW, hook: "Hi" }, DEFAULT_RENDER_OPTIONS)).toEqual([]);
-    expect(buildCaptionFilters({ ...ROW, hook: "Hi" }, opts({ burnCaptions: false }))).toEqual([]);
+/** The single `Dialogue:` line from an ASS document. */
+function dialogueLine(ass: string): string {
+  return ass.split("\n").find((l) => l.startsWith("Dialogue:")) ?? "";
+}
+
+describe("buildCaptionAss (pure, libass — SPEC §6.5)", () => {
+  it("returns null when captions are disabled", () => {
+    expect(buildCaptionAss({ ...ROW, hook: "Hi" }, DEFAULT_RENDER_OPTIONS)).toBeNull();
+    expect(buildCaptionAss({ ...ROW, hook: "Hi" }, opts({ burnCaptions: false }))).toBeNull();
   });
 
-  it("returns nothing when enabled but the row has no text", () => {
-    expect(buildCaptionFilters(ROW, opts())).toEqual([]);
-    expect(buildCaptionFilters({ ...ROW, hook: "   ", title: "" }, opts())).toEqual([]);
+  it("returns null when enabled but the row has no text", () => {
+    expect(buildCaptionAss(ROW, opts())).toBeNull();
+    expect(buildCaptionAss({ ...ROW, hook: "  ", title: "" }, opts())).toBeNull();
   });
 
-  it("hook only -> one drawtext, hook size, centered, white w/ black outline", () => {
-    const f = buildCaptionFilters({ ...ROW, hook: "Big moment" }, opts());
-    expect(f).toHaveLength(1);
-    const d = f[0]!;
-    expect(d).toContain("text='Big moment'");
-    expect(d).toContain(`fontsize=${Math.round(TARGET_H / 18)}`);
-    expect(d).toContain("fontcolor=white");
-    expect(d).toContain("borderw=4");
-    expect(d).toContain("bordercolor=black@0.8");
-    expect(d).toContain("x=(w-text_w)/2");
+  it("emits a valid ASS skeleton at the output resolution", () => {
+    const ass = buildCaptionAss({ ...ROW, hook: "Hi" }, opts())!;
+    expect(ass).toContain("[Script Info]");
+    expect(ass).toContain(`PlayResX: 1080`);
+    expect(ass).toContain(`PlayResY: ${TARGET_H}`);
+    expect(ass).toContain("[V4+ Styles]");
+    expect(ass).toContain("[Events]");
+    expect(dialogueLine(ass)).toMatch(/^Dialogue: 0,0:00:00\.00,\d/);
   });
 
-  it("hook + title -> two drawtexts, hook above title, correct sizes", () => {
-    const f = buildCaptionFilters({ ...ROW, hook: "HOOK", title: "title" }, opts());
-    expect(f).toHaveLength(2);
-    expect(f[0]).toContain("text='HOOK'");
-    expect(f[0]).toContain(`fontsize=${Math.round(TARGET_H / 18)}`);
-    expect(f[1]).toContain("text='title'");
-    expect(f[1]).toContain(`fontsize=${Math.round(TARGET_H / 26)}`);
-    expect(yOf(f[0]!)).toBeLessThan(yOf(f[1]!)); // hook sits above title
+  it("hook only -> one sized line", () => {
+    const d = dialogueLine(buildCaptionAss({ ...ROW, hook: "Big moment" }, opts())!);
+    expect(d).toContain(`{\\fs${HOOK_SIZE}}Big moment`);
+    expect(d).not.toContain("\\N");
   });
 
-  it("text_position places the block top / center / bottom", () => {
-    const top = buildCaptionFilters({ ...ROW, hook: "H", text_position: "top" }, opts());
-    const center = buildCaptionFilters({ ...ROW, hook: "H", text_position: "center" }, opts());
-    const bottom = buildCaptionFilters({ ...ROW, hook: "H", text_position: "bottom" }, opts());
-    expect(yOf(top[0]!)).toBeLessThan(yOf(center[0]!));
-    expect(yOf(center[0]!)).toBeLessThan(yOf(bottom[0]!));
-    // unknown / missing -> bottom
-    const dflt = buildCaptionFilters({ ...ROW, hook: "H", text_position: "weird" }, opts());
-    expect(yOf(dflt[0]!)).toBe(yOf(bottom[0]!));
+  it("hook + title -> hook (bigger) above title, stacked with \\N", () => {
+    const d = dialogueLine(buildCaptionAss({ ...ROW, hook: "HOOK", title: "sub" }, opts())!);
+    expect(d).toContain(`{\\fs${HOOK_SIZE}}HOOK\\N{\\fs${TITLE_SIZE}}sub`);
   });
 
-  it("escapes special characters and quotes the text so the filtergraph is safe", () => {
-    const f = buildCaptionFilters(
-      { ...ROW, hook: "a:b, c '90% off' \\x" },
-      opts(),
+  it("text_position maps to ASS alignment (top=8, center=5, bottom=2)", () => {
+    const at = (p?: string) => styleLine(buildCaptionAss({ ...ROW, hook: "H", text_position: p }, opts())!);
+    expect(at("top")).toMatch(/,1,4,0,8,60,60,/);
+    expect(at("center")).toMatch(/,1,4,0,5,60,60,/);
+    expect(at("bottom")).toMatch(/,1,4,0,2,60,60,/);
+    expect(at("weird")).toMatch(/,1,4,0,2,60,60,/); // unknown -> bottom
+    expect(at(undefined)).toMatch(/,1,4,0,2,60,60,/);
+  });
+
+  it("white fill + black outline, opaque (&HAABBGGRR)", () => {
+    const s = styleLine(buildCaptionAss({ ...ROW, hook: "H" }, opts())!);
+    // PrimaryColour white, OutlineColour black
+    expect(s).toContain("&H00FFFFFF,&H000000FF,&H00000000,");
+  });
+
+  it("font resolution: name -> Fontname, file -> stem, neither -> Sans", () => {
+    expect(styleLine(buildCaptionAss({ ...ROW, hook: "H" }, opts({ captionFontName: "Impact" }))!))
+      .toContain("Style: Caption,Impact,");
+    expect(styleLine(buildCaptionAss({ ...ROW, hook: "H" }, opts({ captionFontFile: "/f/My Font.ttf" }))!))
+      .toContain("Style: Caption,My Font,");
+    expect(styleLine(buildCaptionAss({ ...ROW, hook: "H" }, opts())!))
+      .toContain("Style: Caption,Sans,");
+  });
+
+  it("neutralizes ASS override braces and strips backslashes/newlines from text", () => {
+    const d = dialogueLine(
+      buildCaptionAss({ ...ROW, hook: "a{\\b1}b\nc" }, opts())!,
     );
-    const d = f[0]!;
-    // single-quoted, with ' \\ and % escaped; : and , protected by the quotes
-    expect(d).toContain("text='a:b, c \\'90\\% off\\' \\\\x'");
-  });
-
-  it("font resolution: file -> fontfile=, name -> font=, neither -> system Sans", () => {
-    const file = buildCaptionFilters({ ...ROW, hook: "H" }, opts({ captionFontFile: "/f/My Font.ttf" }));
-    expect(file[0]).toContain("fontfile='/f/My Font.ttf'");
-    const name = buildCaptionFilters({ ...ROW, hook: "H" }, opts({ captionFontName: "Impact" }));
-    expect(name[0]).toContain("font='Impact'");
-    const dflt = buildCaptionFilters({ ...ROW, hook: "H" }, opts());
-    expect(dflt[0]).toContain("font='Sans'");
-    // file wins over name
-    const both = buildCaptionFilters(
-      { ...ROW, hook: "H" },
-      opts({ captionFontFile: "/f/a.otf", captionFontName: "Impact" }),
-    );
-    expect(both[0]).toContain("fontfile='/f/a.otf'");
-    expect(both[0]).not.toContain("font='Impact'");
+    // the inline \fs tag we add is intact, but the user's braces/backslash/newline are gone
+    expect(d).toContain(`{\\fs${HOOK_SIZE}}a(b1)b c`);
+    expect(d).not.toContain("{\\b1}");
   });
 });
 
-describe("ffmpegListHasFilter (drawtext preflight)", () => {
-  // Representative `ffmpeg -filters` lines: <flags> <name> <in>-><out> <desc>.
-  const WITH_DRAWTEXT = [
+describe("ffmpegListHasFilter (libass preflight)", () => {
+  const WITH = [
     "Filters:",
-    "  T.. = Timeline support",
-    " ... cropdetect        V->V       Auto-detect the crop size.",
-    " ..C drawtext          V->V       Draw text on top of video frames using libfreetype.",
+    " ... subtitles         V->V       Render text subtitles onto input video using libass.",
     " ... scale             V->V       Scale the input video size.",
   ].join("\n");
-  const WITHOUT_DRAWTEXT = [
+  const WITHOUT = [
     "Filters:",
-    " ... cropdetect        V->V       Auto-detect the crop size.",
     " ... scale             V->V       Scale the input video size.",
     " ... ebur128           A->N       EBU R128 scanner.",
   ].join("\n");
 
   it("detects an advertised filter", () => {
-    expect(ffmpegListHasFilter(WITH_DRAWTEXT, "drawtext")).toBe(true);
-    expect(ffmpegListHasFilter(WITH_DRAWTEXT, "cropdetect")).toBe(true);
+    expect(ffmpegListHasFilter(WITH, "subtitles")).toBe(true);
   });
-
-  it("reports a missing filter (minimal build without libfreetype)", () => {
-    expect(ffmpegListHasFilter(WITHOUT_DRAWTEXT, "drawtext")).toBe(false);
+  it("reports a missing filter (build without libass)", () => {
+    expect(ffmpegListHasFilter(WITHOUT, "subtitles")).toBe(false);
   });
-
-  it("does not match a name only mentioned in a description", () => {
-    // "libfreetype" appears in drawtext's description but isn't a filter.
-    expect(ffmpegListHasFilter(WITH_DRAWTEXT, "libfreetype")).toBe(false);
+  it("does not match a name only in a description", () => {
+    expect(ffmpegListHasFilter(WITH, "libass")).toBe(false);
   });
 });
 
 describe("buildFfmpegArgs caption integration", () => {
   const dims: [number, number] = [1920, 1080];
 
-  it("appends drawtext after setsar when captions are on", () => {
+  it("appends the subtitles filter after setsar when an ASS path is given", () => {
     const { args } = buildFfmpegArgs(
       { ...ROW, hook: "Yo" },
-      { ...opts(), dims, outdir: "out" },
+      { ...opts(), dims, outdir: "out", captionAssPath: "/tmp/c.ass" },
     );
     const vf = args[args.indexOf("-vf") + 1]!;
-    expect(vf).toContain("setsar=1");
-    expect(vf).toContain("drawtext=");
-    // drawtext comes after setsar (drawn on the final frame)
-    expect(vf.indexOf("setsar=1")).toBeLessThan(vf.indexOf("drawtext="));
+    expect(vf).toContain("subtitles=filename='/tmp/c.ass'");
+    expect(vf.indexOf("setsar=1")).toBeLessThan(vf.indexOf("subtitles="));
   });
 
-  it("emits no drawtext when captions are off (clean export by default)", () => {
+  it("adds fontsdir when a caption font file is set", () => {
     const { args } = buildFfmpegArgs(
       { ...ROW, hook: "Yo" },
-      { ...DEFAULT_RENDER_OPTIONS, dims, outdir: "out" },
+      { ...opts(), dims, outdir: "out", captionAssPath: "/tmp/c.ass", captionFontFile: "/f/My Font.ttf" },
     );
     const vf = args[args.indexOf("-vf") + 1]!;
-    expect(vf).not.toContain("drawtext");
+    expect(vf).toContain("subtitles=filename='/tmp/c.ass':fontsdir='/f'");
+  });
+
+  it("emits no subtitles filter without an ASS path (clean export)", () => {
+    const { args } = buildFfmpegArgs({ ...ROW, hook: "Yo" }, { ...opts(), dims, outdir: "out" });
+    const vf = args[args.indexOf("-vf") + 1]!;
+    expect(vf).not.toContain("subtitles");
   });
 });
