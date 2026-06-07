@@ -216,9 +216,17 @@ export const webPlatform: FootlightPlatform = {
     }
   },
 
-  // Stub — real impl (dev-server /fonts?dir=, scanning the folder via fc-scan)
-  // lands in the fonts-folder backends slice.
-  async listUserFonts(_dir: string): Promise<FontInfo[]> {
-    return [];
+  // Ask the dev server to scan a user fonts folder (`/fonts?dir=`), resolving
+  // each file's family via `fc-scan`. Best-effort like `listFonts`: an empty
+  // `dir` or any failure yields `[]` so the picker falls back to free-text.
+  async listUserFonts(dir: string): Promise<FontInfo[]> {
+    if (!dir) return [];
+    try {
+      const res = await fetch(`${BASE}/fonts?dir=${encodeURIComponent(dir)}`);
+      if (!res.ok) return [];
+      return (await res.json()) as FontInfo[];
+    } catch {
+      return [];
+    }
   },
 };
