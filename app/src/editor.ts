@@ -84,6 +84,10 @@ function renderOptions(outdir: string): RenderOptions {
         captionBold?: unknown;
         captionItalic?: unknown;
         captionUnderline?: unknown;
+        captionShadow?: unknown;
+        captionBox?: unknown;
+        captionBoxColor?: unknown;
+        captionAngle?: unknown;
       };
       if (typeof p.crf === "number") opts.crf = p.crf;
       if (typeof p.preset === "string") opts.preset = p.preset;
@@ -99,6 +103,12 @@ function renderOptions(outdir: string): RenderOptions {
       if (p.captionBold === true) opts.captionBold = true;
       if (p.captionItalic === true) opts.captionItalic = true;
       if (p.captionUnderline === true) opts.captionUnderline = true;
+      if (p.captionShadow === true) opts.captionShadow = true;
+      if (p.captionBox === true) opts.captionBox = true;
+      if (typeof p.captionBoxColor === "string" && p.captionBoxColor.trim())
+        opts.captionBoxColor = p.captionBoxColor.trim();
+      if (typeof p.captionAngle === "number" && Number.isFinite(p.captionAngle))
+        opts.captionAngle = p.captionAngle;
     }
   } catch {
     /* fall back to the engine's own defaults */
