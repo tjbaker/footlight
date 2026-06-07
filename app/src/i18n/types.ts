@@ -94,6 +94,8 @@ export interface SettingsMessages {
     burnCaptions: string;
     burnCaptionsHint: string;
     captionFont: string;
+    captionFontSystemDefault: string;
+    captionFontCustom: string;
     captionFontPlaceholder: string;
     captionFontHint: string;
     captionStyleNote: string;
