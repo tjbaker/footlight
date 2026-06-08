@@ -1,6 +1,8 @@
 // Copyright 2026 Trevor Baker, all rights reserved.
 // SPDX-License-Identifier: Apache-2.0
-import { defineConfig } from "vite";
+// `vitest/config` extends Vite's defineConfig with the `test` block, so this one
+// file drives both the build/dev server AND the test runner (sharing the aliases).
+import { defineConfig } from "vitest/config";
 import { fileURLToPath, URL } from "node:url";
 
 // `@core` / `@manifest` alias the existing browser-safe pure modules in the
@@ -36,6 +38,19 @@ export default defineConfig({
     fs: {
       // Allow serving files from the parent repo (where src/core.ts lives).
       allow: [repoRoot],
+    },
+  },
+  test: {
+    include: ["test/**/*.test.ts"],
+    coverage: {
+      provider: "v8",
+      // The app's own frontend source. Most of it is DOM/UI wiring that isn't
+      // unit-tested yet, so this is an honest (currently low) picture; the pure
+      // engine in ../src is measured by the root package's coverage instead.
+      include: ["src/**/*.ts"],
+      exclude: ["src/**/*.d.ts", "src/i18n/types.ts"],
+      reporter: ["text", "text-summary", "html", "json-summary"],
+      reportsDirectory: "coverage",
     },
   },
   // Tauri expects a relative base so the bundled assets resolve under the
