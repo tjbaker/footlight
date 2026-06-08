@@ -144,7 +144,13 @@ import {
   trackedBoxXAt,
 } from "./editor-offset.js";
 import { planChatStillTimes } from "./editor-chat.js";
-import { createInitialEditorState, hasActiveTrack } from "./editor-store.js";
+import {
+  createInitialEditorState,
+  hasActiveTrack,
+  clampInOut,
+  clampTrimOut,
+  keyframeFromCommit,
+} from "./editor-store.js";
 
 export function mountEditor(root: HTMLElement): void {
   const state = createInitialEditorState();
@@ -3395,15 +3401,16 @@ export function mountEditor(root: HTMLElement): void {
   function applyCommit(commit: CommitOp): { applied: boolean; staged: boolean } {
     switch (commit.kind) {
       case "setInOut": {
-        state.inPoint = round3(clamp(commit.inSec, 0, state.duration || commit.inSec));
-        state.outPoint = round3(clamp(commit.outSec, state.inPoint, state.duration || commit.outSec));
+        const { inPoint, outPoint } = clampInOut(commit.inSec, commit.outSec, state.duration);
+        state.inPoint = inPoint;
+        state.outPoint = outPoint;
         refreshIO();
         void setT(state.inPoint, true);
         return { applied: true, staged: false };
       }
       case "trim": {
         if (state.inPoint == null) return { applied: false, staged: false };
-        state.outPoint = round3(clamp(commit.outSec, state.inPoint, state.duration || commit.outSec));
+        state.outPoint = clampTrimOut(commit.outSec, state.inPoint, state.duration);
         refreshIO();
         return { applied: true, staged: false };
       }
@@ -3430,7 +3437,7 @@ export function mountEditor(root: HTMLElement): void {
         // The commit's x is in working-region px; an integer x-pixel offset is a
         // valid `crop_offset` form (clamped into frame by the engine), so store it
         // straight as the keyframe offset.
-        state.keyframes.push({ t: round3(commit.t), offset: String(Math.round(commit.x)) });
+        state.keyframes.push(keyframeFromCommit(commit.t, commit.x));
         refreshKeyframes();
         return { applied: true, staged: false };
       }

@@ -14,6 +14,9 @@ import {
   isCropInteractive,
   hasClipWindow,
   clipLength,
+  clampInOut,
+  clampTrimOut,
+  keyframeFromCommit,
   DEFAULT_FPS,
   type EditorState,
 } from "../src/editor-store.js";
@@ -79,5 +82,40 @@ describe("hasClipWindow / clipLength", () => {
     expect(clipLength(withState({ inPoint: 4, outPoint: 8 }))).toBe(4);
     expect(clipLength(withState({ inPoint: 8, outPoint: 4 }))).toBe(0);
     expect(clipLength(withState({ inPoint: null, outPoint: 8 }))).toBe(0);
+  });
+});
+
+describe("clampInOut (setInOut commit math)", () => {
+  it("passes a valid window through", () => {
+    expect(clampInOut(10, 20, 100)).toEqual({ inPoint: 10, outPoint: 20 });
+  });
+  it("clamps In to >= 0 and Out to <= duration", () => {
+    expect(clampInOut(-5, 20, 100)).toEqual({ inPoint: 0, outPoint: 20 });
+    expect(clampInOut(10, 200, 100)).toEqual({ inPoint: 10, outPoint: 100 });
+  });
+  it("orders the window: Out is pulled up to In when inverted", () => {
+    expect(clampInOut(50, 30, 100)).toEqual({ inPoint: 50, outPoint: 50 });
+  });
+  it("treats duration 0 as unknown (no upper clamp)", () => {
+    expect(clampInOut(10, 20, 0)).toEqual({ inPoint: 10, outPoint: 20 });
+  });
+  it("rounds to milliseconds", () => {
+    expect(clampInOut(1.23456, 2.34567, 100)).toEqual({ inPoint: 1.235, outPoint: 2.346 });
+  });
+});
+
+describe("clampTrimOut (trim commit math)", () => {
+  it("clamps Out to [inPoint, duration], ms-rounded", () => {
+    expect(clampTrimOut(20, 5, 100)).toBe(20);
+    expect(clampTrimOut(200, 5, 100)).toBe(100); // to duration
+    expect(clampTrimOut(3, 5, 100)).toBe(5); // up to inPoint
+    expect(clampTrimOut(7.6543, 5, 100)).toBe(7.654);
+  });
+});
+
+describe("keyframeFromCommit (addCropKeyframe math)", () => {
+  it("ms-rounds the time and stores x as an integer offset string", () => {
+    expect(keyframeFromCommit(1.23456, 440.7)).toEqual({ t: 1.235, offset: "441" });
+    expect(keyframeFromCommit(2, -3.4)).toEqual({ t: 2, offset: "-3" });
   });
 });
