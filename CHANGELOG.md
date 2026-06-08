@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.1](https://github.com/tjbaker/footlight/compare/footlight-v0.7.0...footlight-v0.7.1) (2026-06-08)
+
+
+### Refactors
+
+* **app:** extract editor.ts pure helpers into editor-util and test them ([#124](https://github.com/tjbaker/footlight/issues/124)) ([72dc82b](https://github.com/tjbaker/footlight/commit/72dc82b687d61c5c7f18133b5c5ccf0c351c1813))
+* **app:** extract EditorState + factory + selectors into editor-store ([#135](https://github.com/tjbaker/footlight/issues/135)) ([8b37bb1](https://github.com/tjbaker/footlight/commit/8b37bb1e21f2a1006fe77e548752bbf2c77b55cf))
+* **app:** extract pure crop-interaction geometry into editor-crop ([#126](https://github.com/tjbaker/footlight/issues/126)) ([163b74e](https://github.com/tjbaker/footlight/commit/163b74ebae6c119b0b3983d6d154ba2dd7c8847e))
+* **app:** extract pure crop-offset/region math into editor-offset (tested) ([#133](https://github.com/tjbaker/footlight/issues/133)) ([fa5aee6](https://github.com/tjbaker/footlight/commit/fa5aee62151f7d032b351dff0e098049f49009d4))
+* **app:** extract pure settings cost/theme/budget helpers (tested) ([#134](https://github.com/tjbaker/footlight/issues/134)) ([d01a5c0](https://github.com/tjbaker/footlight/commit/d01a5c0ec69401f8e892ba0c5e5bd789aa6b271b))
+* **app:** move commit transition math into the store (tested) ([#136](https://github.com/tjbaker/footlight/issues/136)) ([1cf77d2](https://github.com/tjbaker/footlight/commit/1cf77d2d9190d751f547d9c1e346b38c1e175028))
+
+
+### Documentation
+
+* **readme:** add the Codecov graph token to the coverage badges ([#130](https://github.com/tjbaker/footlight/issues/130)) ([8c7d1b9](https://github.com/tjbaker/footlight/commit/8c7d1b9f4b6aa79d1d8a179440ce854ad853b879))
+
 ## [0.7.0](https://github.com/tjbaker/footlight/compare/footlight-v0.6.0...footlight-v0.7.0) (2026-06-08)
 
 
