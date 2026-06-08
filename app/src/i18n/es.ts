@@ -702,6 +702,10 @@ export const es: Messages = {
         "El asistente preparó la cola para renderizar. Pulsa Renderizar cuando estés listo — nunca codifico automáticamente.",
       trackFromAssistantPrefix: "seguimiento: ACTIVADO · ",
       trackFromAssistantSuffix: " fotograma(s) clave (del asistente). Borrar seguimiento para revertir.",
+      usageTokens: "tokens",
+      usageInLabel: "entrada",
+      usageOutLabel: "salida",
+      usageEstNote: "coste estimado (tokens × tarifa de lista); la facturación real puede variar",
     },
     timeline: {
       prevCutTitle: "Saltar al corte anterior",

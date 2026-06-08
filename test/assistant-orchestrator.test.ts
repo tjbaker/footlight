@@ -66,6 +66,24 @@ describe("orchestrator + MockAssistant (deterministic intents)", () => {
     expect(r.actions).toHaveLength(0);
     expect(r.text.length).toBeGreaterThan(0);
   });
+
+  it("threads token usage through and attaches an estimated cost", async () => {
+    const r = await run("set in and out");
+    expect(r.usage).toBeDefined();
+    expect(r.usage!.totalTokens).toBe(r.usage!.promptTokens + r.usage!.outputTokens);
+    // gemini-2.5-flash is a known model, so a positive dollar estimate is attached.
+    expect(r.costUsd).toBeGreaterThan(0);
+  });
+
+  it("omits the dollar estimate when the assistant model price is unknown", async () => {
+    const unknown: AssistantContext = {
+      ...ctx,
+      models: { ...ctx.models, assistant: { provider: "gemini", model: "mystery-9000" } },
+    };
+    const r = await runAssistantTurn(mock, vision, { message: "set in and out", context: unknown });
+    expect(r.usage).toBeDefined(); // tokens still surface
+    expect(r.costUsd).toBeUndefined(); // but no invented dollar figure
+  });
 });
 
 describe("orchestrator robustness", () => {

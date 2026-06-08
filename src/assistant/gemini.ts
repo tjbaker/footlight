@@ -34,7 +34,7 @@ import type {
   AssistantContext,
   ConversationMessage,
 } from "./orchestrator.js";
-import type { ToolName } from "./types.js";
+import type { ToolName, Usage } from "./types.js";
 
 /** Configurable model/endpoint — defaults target a current Gemini text model. */
 export interface GeminiAssistantOpts {
@@ -129,7 +129,10 @@ export class GeminiAssistant implements AssistantModel {
       }
     }
 
-    return { text: texts.join("\n").trim(), toolCalls };
+    const usage = parseUsage(geminiResponse);
+    const turn: ModelTurn = { text: texts.join("\n").trim(), toolCalls };
+    if (usage) turn.usage = usage;
+    return turn;
   }
 }
 
@@ -297,6 +300,34 @@ function systemPreamble(ctx: AssistantContext): string {
 function fmt(n: number | undefined): string {
   if (n === undefined || !Number.isFinite(n)) return "?";
   return String(Math.round(n * 1000) / 1000);
+}
+
+/**
+ * Pull token usage out of a `generateContent` response's `usageMetadata` (exact
+ * counts — there is no dollar figure; cost is estimated downstream). `prompt` is
+ * input billing; `output` is taken as `total - prompt` so it includes any
+ * "thinking" tokens (which bill as output and aren't in `candidatesTokenCount`),
+ * falling back to `candidatesTokenCount` when total is absent. Returns null when
+ * no usable counts are present so the turn simply carries no usage.
+ */
+function parseUsage(json: unknown): Usage | undefined {
+  const meta = (json as { usageMetadata?: Record<string, unknown> })?.usageMetadata;
+  if (!meta || typeof meta !== "object") return undefined;
+  const prompt = numOr(meta["promptTokenCount"], NaN);
+  const candidates = numOr(meta["candidatesTokenCount"], 0);
+  const total = numOr(meta["totalTokenCount"], NaN);
+  if (!Number.isFinite(prompt) && !Number.isFinite(total)) return undefined;
+  const promptTokens = Number.isFinite(prompt) ? prompt : 0;
+  const totalTokens = Number.isFinite(total) ? total : promptTokens + candidates;
+  // total - prompt captures candidate + thinking tokens; guard against a total
+  // that excludes thoughts by never going below the reported candidate count.
+  const outputTokens = Math.max(candidates, totalTokens - promptTokens);
+  return { promptTokens, outputTokens, totalTokens };
+}
+
+/** Coerce a JSON value to a finite number, else a fallback. */
+function numOr(v: unknown, fallback: number): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
 }
 
 /** Pull the first candidate's content parts out of a `generateContent` response. */

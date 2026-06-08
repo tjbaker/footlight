@@ -97,6 +97,31 @@ describe("GeminiAssistant.parseModelTurn (pure, no network)", () => {
     ]);
   });
 
+  it("extracts usageMetadata into usage (output = total - prompt, captures thinking)", () => {
+    const turn = GeminiAssistant.parseModelTurn({
+      candidates: [{ content: { parts: [{ text: "ok" }] } }],
+      usageMetadata: {
+        promptTokenCount: 1200,
+        candidatesTokenCount: 40,
+        totalTokenCount: 1290, // 50 thinking tokens beyond the 40 candidate tokens
+      },
+    });
+    expect(turn.usage).toEqual({ promptTokens: 1200, outputTokens: 90, totalTokens: 1290 });
+  });
+
+  it("usage falls back to prompt+candidates when total is absent", () => {
+    const turn = GeminiAssistant.parseModelTurn({
+      candidates: [{ content: { parts: [] } }],
+      usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 20 },
+    });
+    expect(turn.usage).toEqual({ promptTokens: 100, outputTokens: 20, totalTokens: 120 });
+  });
+
+  it("no usageMetadata -> usage is undefined", () => {
+    const turn = GeminiAssistant.parseModelTurn(response([{ text: "hi" }]));
+    expect(turn.usage).toBeUndefined();
+  });
+
   it("malformed / empty candidate -> empty turn, no throw", () => {
     expect(GeminiAssistant.parseModelTurn({})).toEqual({ text: "", toolCalls: [] });
     expect(GeminiAssistant.parseModelTurn({ candidates: [] })).toEqual({

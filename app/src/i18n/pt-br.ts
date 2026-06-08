@@ -702,6 +702,10 @@ export const ptBR: Messages = {
         "O assistente preparou a fila para renderização. Pressione Renderizar quando estiver pronto — eu nunca codifico automaticamente.",
       trackFromAssistantPrefix: "rastreamento: LIGADO · ",
       trackFromAssistantSuffix: " keyframe(s) (do assistente). Limpe o rastreamento para reverter.",
+      usageTokens: "tokens",
+      usageInLabel: "entrada",
+      usageOutLabel: "saída",
+      usageEstNote: "custo estimado (tokens × tarifa de tabela); a cobrança real pode variar",
     },
     timeline: {
       prevCutTitle: "Pular para o corte anterior",

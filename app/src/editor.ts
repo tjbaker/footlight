@@ -42,6 +42,7 @@ import type {
   GhostPreview,
   CommitOp,
   Grounding,
+  Usage,
 } from "@assistant-types";
 import { platform, platformName } from "./platform/index.js";
 import { openGuide } from "./help.js";
@@ -3458,11 +3459,41 @@ export function mountEditor(root: HTMLElement): void {
     const bubble = msg.querySelector(".fl-bubble");
     if (bubble && reply.grounding.length) bubble.append(groundingRow(reply.grounding));
 
+    if (bubble && reply.usage) bubble.append(usageRow(reply.usage, reply.costUsd));
+
     pendingActions = reply.actions.slice();
     stepIndex = 0;
     setGhosts(ghostsFrom(pendingActions, 0));
     if (pendingActions.length) dock.log.append(proposalCard(pendingActions));
     dock.log.scrollTop = dock.log.scrollHeight;
+  }
+
+  /**
+   * The per-turn usage/cost footer under an AI bubble: exact total tokens plus an
+   * estimated USD cost (tokens × a maintained rate table — `assistant/cost.ts`).
+   * The dollar figure is omitted when the model's price is unknown; the tooltip
+   * breaks down in/out tokens and flags that the cost is an estimate.
+   */
+  function usageRow(usage: Usage, costUsd?: number): HTMLElement {
+    const row = el("div", "fl-usage");
+    const tok = el("span", "tok");
+    tok.textContent = `${usage.totalTokens.toLocaleString()} ${m.assistant.usageTokens}`;
+    row.append(tok);
+    if (costUsd != null) {
+      const cost = el("span", "cost");
+      cost.textContent = `~${fmtUsd(costUsd)}`;
+      row.append(cost);
+    }
+    row.title =
+      `${usage.promptTokens.toLocaleString()} ${m.assistant.usageInLabel} + ` +
+      `${usage.outputTokens.toLocaleString()} ${m.assistant.usageOutLabel} · ` +
+      m.assistant.usageEstNote;
+    return row;
+  }
+
+  /** Format a tiny USD cost: 4 decimals under a dollar (fractions of a cent), 2 above. */
+  function fmtUsd(v: number): string {
+    return v >= 1 ? `$${v.toFixed(2)}` : `$${v.toFixed(4)}`;
   }
 
   /** The ghost previews for the not-yet-committed actions (index `from` onward). */

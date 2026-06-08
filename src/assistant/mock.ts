@@ -15,7 +15,7 @@ import { MockTracker } from "../providers/mock.js";
 import { planSampleTimes } from "../track.js";
 import type { Box } from "../manifest.js";
 import type { TrackSample } from "../providers/types.js";
-import type { Grounding } from "./types.js";
+import type { Grounding, Usage } from "./types.js";
 import type {
   AssistantContext,
   AssistantModel,
@@ -99,7 +99,16 @@ export class MockAssistant implements AssistantModel {
       text = "Tell me a moment or a framing and I'll propose it — e.g. \"track the guitarist\" or \"trim the tail.\"";
     }
 
-    return warn !== undefined ? { text, toolCalls, grounding, warn } : { text, toolCalls, grounding };
+    // A deterministic, plausible usage so the cost/usage UI is exercisable offline
+    // (~4 chars/token; each still bills ~258 input tokens, mirroring Gemini images).
+    const promptTokens =
+      700 + Math.ceil(req.message.length / 4) + (ctx.stills?.length ?? 0) * 258;
+    const outputTokens = 16 + Math.ceil(text.length / 4);
+    const usage: Usage = { promptTokens, outputTokens, totalTokens: promptTokens + outputTokens };
+
+    return warn !== undefined
+      ? { text, toolCalls, grounding, warn, usage }
+      : { text, toolCalls, grounding, usage };
   }
 }
 

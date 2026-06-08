@@ -90,6 +90,20 @@ export interface ProposedAction {
   commit: CommitOp;
 }
 
+/**
+ * Token usage for one assistant turn, lifted straight from the model's
+ * `usageMetadata` (exact, not estimated). `outputTokens` includes any "thinking"
+ * tokens, since those bill as output. Absent when the model didn't report usage.
+ */
+export interface Usage {
+  /** Input tokens billed: prompt + system + attached stills + history. */
+  promptTokens: number;
+  /** Output tokens billed: the reply (and thinking tokens, if any). */
+  outputTokens: number;
+  /** Total billed tokens the model reported. */
+  totalTokens: number;
+}
+
 /** One assistant turn: prose + grounded citations + proposed (preview-only) actions. */
 export interface AssistantReply {
   /** Short natural-language explanation. */
@@ -100,4 +114,12 @@ export interface AssistantReply {
   warn?: string;
   /** Proposed actions — preview-only until the human Accepts / Steps / Discards. */
   actions: ProposedAction[];
+  /** Token usage the model reported for this turn (exact); absent if not reported. */
+  usage?: Usage;
+  /**
+   * Estimated USD cost for this turn = tokens × a maintained per-model rate table
+   * (`assistant/cost.ts`). An ESTIMATE, not a billed figure — absent when the
+   * model's price is unknown. The authoritative spend is the provider dashboard.
+   */
+  costUsd?: number;
 }
