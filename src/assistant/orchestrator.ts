@@ -17,7 +17,8 @@
 import type { Box, Dims } from "../manifest.js";
 import type { ResolvedModels } from "../model.js";
 import type { TrackSample } from "../providers/types.js";
-import type { AssistantReply, Grounding, ProposedAction, ToolName } from "./types.js";
+import type { AssistantReply, Grounding, ProposedAction, ToolName, Usage } from "./types.js";
+import { estimateCostUsd } from "./cost.js";
 import {
   TOOLS,
   DETERMINISTIC_TOOLS,
@@ -41,6 +42,8 @@ export interface ModelTurn {
   grounding?: Grounding[];
   /** Optional caveat the model surfaced (inferring; can't see colored-banner pillarbox). */
   warn?: string;
+  /** Token usage the model reported (exact); the orchestrator estimates cost from it. */
+  usage?: Usage;
 }
 
 /**
@@ -162,10 +165,20 @@ export async function runAssistantTurn(
     warn = warn ? `${warn} ${note}` : note;
   }
 
-  const grounding: Grounding[] = turn.grounding ?? [];
-  return warn !== undefined
-    ? { text: turn.text, grounding, warn, actions }
-    : { text: turn.text, grounding, actions };
+  const reply: AssistantReply = {
+    text: turn.text,
+    grounding: turn.grounding ?? [],
+    actions,
+  };
+  if (warn !== undefined) reply.warn = warn;
+  if (turn.usage) {
+    reply.usage = turn.usage;
+    // Cost is an ESTIMATE (tokens × a maintained rate table); the assistant model
+    // is what billed this turn. Unknown model price → omit the dollar figure.
+    const costUsd = estimateCostUsd(turn.usage, req.context.models.assistant.model);
+    if (costUsd != null) reply.costUsd = costUsd;
+  }
+  return reply;
 }
 
 /** Turn one proposed tool call into a `ProposedAction` (deterministic or vision). */

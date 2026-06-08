@@ -383,6 +383,11 @@ export interface EditorMessages {
     renderStaged: string;
     trackFromAssistantPrefix: string;
     trackFromAssistantSuffix: string;
+    /** Per-turn usage/cost footer: unit word, in/out labels, and the estimate caveat. */
+    usageTokens: string;
+    usageInLabel: string;
+    usageOutLabel: string;
+    usageEstNote: string;
   };
   /** Timeline (loudness track). */
   timeline: {

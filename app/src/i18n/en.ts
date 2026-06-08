@@ -702,6 +702,10 @@ export const en: Messages = {
         "Assistant staged the queue for render. Press Render when you're ready — I never encode automatically.",
       trackFromAssistantPrefix: "track: ON · ",
       trackFromAssistantSuffix: " keyframe(s) (from the assistant). Clear track to revert.",
+      usageTokens: "tokens",
+      usageInLabel: "in",
+      usageOutLabel: "out",
+      usageEstNote: "estimated cost (tokens × list rate); actual billing may differ",
     },
     timeline: {
       prevCutTitle: "Jump to previous cut",

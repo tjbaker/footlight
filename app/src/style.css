@@ -659,6 +659,8 @@ pre.log { max-height: 240px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .fl-ground { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-top: 9px; padding-top: 9px; border-top: 1px dashed var(--line); }
 .fl-ground .gl { font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); margin-right: 1px; }
 .fl-ground .gchip { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--accent-2); background: var(--field-bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; }
+.fl-usage { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 7px; font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--faint); cursor: default; }
+.fl-usage .cost { color: var(--accent-2); }
 
 /* thinking dots */
 .fl-think { display: inline-flex; gap: 4px; align-items: center; padding: 4px 2px; }
