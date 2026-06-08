@@ -108,7 +108,6 @@ import {
   loadAutoTrackSettings,
   saveAutoTrackSettings,
   migrateLegacyApiKey,
-  easedCropXAt,
   GEMINI_API_KEY_SECRET,
   type AutoTrackSettings,
 } from "./autotrack.js";
@@ -142,6 +141,11 @@ import {
   cropRegionRect as regionRectPure,
   cropWindowSpec as cropWindowSpecPure,
 } from "./editor-crop.js";
+import {
+  currentRegion as currentRegionPure,
+  offsetForBox,
+  trackedBoxXAt,
+} from "./editor-offset.js";
 import { planChatStillTimes } from "./editor-chat.js";
 
 interface EditorState {
@@ -2780,12 +2784,12 @@ export function mountEditor(root: HTMLElement): void {
   });
 
 
+  /**
+   * The working region a `crop_offset` is computed against. Thin wrapper over the
+   * pure `editor-offset` math, reading the editor's live state.
+   */
   function currentRegion(): Dims {
-    // crop_offset is computed relative to the content region if one is set.
-    if (state.contentMode && state.contentBox && state.contentBox.w > 0) {
-      return { width: state.contentBox.w, height: state.contentBox.h };
-    }
-    return state.dims!;
+    return currentRegionPure(state.contentMode, state.contentBox, state.dims!);
   }
 
   function refreshCropReadout(): void {
@@ -2850,22 +2854,20 @@ export function mountEditor(root: HTMLElement): void {
     if (!state.cropPath || !state.cropBox || !state.dims || state.inPoint == null) {
       return state.cropBox?.x ?? 0;
     }
-    const rel = clamp(state.t - state.inPoint, 0, Number.POSITIVE_INFINITY);
-    let x = easedCropXAt(state.cropPath, rel);
-    if (state.contentMode && state.contentBox) {
-      x += state.contentBox.x;
-    }
-    const maxX = state.dims.width - state.cropBox.w;
-    return clamp(x, 0, Math.max(0, maxX));
+    return trackedBoxXAt(
+      state.cropPath,
+      state.cropBox,
+      state.dims,
+      state.t,
+      state.inPoint,
+      state.contentMode,
+      state.contentBox,
+    );
   }
 
   function currentOffset(): string {
     if (!state.cropBox || !state.dims) return "center";
-    let box = state.cropBox;
-    if (state.contentMode && state.contentBox) {
-      box = { ...state.cropBox, x: state.cropBox.x - state.contentBox.x };
-    }
-    return cropBoxToOffset(box, currentRegion());
+    return offsetForBox(state.cropBox, state.contentMode, state.contentBox, currentRegion());
   }
 
   function addKeyframe(): void {
