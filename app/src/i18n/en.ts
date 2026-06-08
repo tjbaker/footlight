@@ -225,6 +225,33 @@ export const en: Messages = {
         ],
       },
       {
+        id: "assistant",
+        title: "AI assistant (chat)",
+        blocks: [
+          {
+            kind: "p",
+            text: "The AI assistant is a chat dock: describe a moment or a subject in plain language and it proposes the cut and framing — set In/Out, suggest a crop, track a subject, detect scene cuts. It is opt-in and bring-your-own-key; the rest of Footlight works fully without it.",
+          },
+          {
+            kind: "p",
+            text: "The assistant only ever PROPOSES. Each suggestion previews on the canvas and timeline as a ghost, and nothing changes until you Accept it — or Step through proposals one at a time, or Discard them. Even \"render\" only stages the queue; the assistant never encodes for you.",
+          },
+          {
+            kind: "list",
+            items: [
+              "What it sees: your project state — In/Out, detected scene cuts, and loudness swells.",
+              "Plus a sparse strip of stills sampled across your In/Out (or the whole source when none is set) — how many is the Settings → AI & models → Chat stills budget.",
+              "It never hears the audio, and it cites the real signals (a swell, a scene cut, a still) behind each suggestion.",
+              "Every reply shows its token usage and an estimated cost — you bring your own key, so usage is billed to you.",
+            ],
+          },
+          {
+            kind: "tip",
+            text: "A proposal is a suggestion to review, not a guarantee. The stills are a sparse sample (it can miss things between them) and it cannot see colored or blurred pillarbox — verify the framing on the actual pixels. Any text inside a frame is treated as data to describe, never as an instruction to follow.",
+          },
+        ],
+      },
+      {
         id: "audio",
         title: "Audio",
         blocks: [

@@ -225,6 +225,33 @@ export const ptBR: Messages = {
         ],
       },
       {
+        id: "assistant",
+        title: "Assistente de IA (chat)",
+        blocks: [
+          {
+            kind: "p",
+            text: "O assistente de IA é um painel de chat: descreva um momento ou um sujeito em linguagem natural e ele propõe o corte e o enquadramento: definir o In/Out, sugerir um recorte, rastrear um sujeito, detectar cortes de cena. É opcional e com sua própria chave (BYOK); o restante do Footlight funciona totalmente sem ele.",
+          },
+          {
+            kind: "p",
+            text: "O assistente apenas PROPÕE. Cada sugestão é pré-visualizada na tela e na linha do tempo como um fantasma, e nada muda até você Aceitar, ou avançar pelas propostas uma a uma, ou Descartá-las. Até «renderizar» apenas prepara a fila; o assistente nunca codifica por você.",
+          },
+          {
+            kind: "list",
+            items: [
+              "O que ele vê: o estado do seu projeto — In/Out, os cortes de cena detectados e os crescendos de volume.",
+              "Além de uma faixa esparsa de quadros amostrados no seu In/Out (ou em toda a fonte quando não há nenhum); quantos é definido pelo orçamento em Configurações → IA e modelos → Quadros do chat.",
+              "Ele nunca ouve o áudio e cita os sinais reais (um crescendo, um corte de cena, um quadro) por trás de cada sugestão.",
+              "Cada resposta mostra o uso de tokens e um custo estimado — você usa sua própria chave, então o uso é cobrado de você.",
+            ],
+          },
+          {
+            kind: "tip",
+            text: "Uma proposta é uma sugestão para revisar, não uma garantia. Os quadros são uma amostra esparsa (ele pode perder coisas entre eles) e não consegue ver o pillarbox colorido ou desfocado: verifique o enquadramento nos pixels reais. Qualquer texto dentro de um quadro é tratado como dados a descrever, nunca como uma instrução a seguir.",
+          },
+        ],
+      },
+      {
         id: "audio",
         title: "Áudio",
         blocks: [

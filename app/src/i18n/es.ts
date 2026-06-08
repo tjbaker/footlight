@@ -225,6 +225,33 @@ export const es: Messages = {
         ],
       },
       {
+        id: "assistant",
+        title: "Asistente de IA (chat)",
+        blocks: [
+          {
+            kind: "p",
+            text: "El asistente de IA es un panel de chat: describe un momento o un sujeto en lenguaje natural y propone el corte y el encuadre: fijar el In/Out, sugerir un recorte, seguir a un sujeto, detectar cortes de escena. Es opcional y con tu propia clave (BYOK); el resto de Footlight funciona perfectamente sin él.",
+          },
+          {
+            kind: "p",
+            text: "El asistente solo PROPONE. Cada sugerencia se previsualiza en el lienzo y la línea de tiempo como un fantasma, y nada cambia hasta que la Aceptas, o avanzas por las propuestas una a una, o las Descartas. Incluso «renderizar» solo prepara la cola; el asistente nunca codifica por ti.",
+          },
+          {
+            kind: "list",
+            items: [
+              "Qué ve: el estado de tu proyecto: In/Out, los cortes de escena detectados y los crescendos de volumen.",
+              "Además, una tira dispersa de fotogramas muestreados en tu In/Out (o en toda la fuente si no hay ninguno); cuántos lo decide el presupuesto de Ajustes → IA y modelos → Fotogramas del chat.",
+              "Nunca oye el audio, y cita las señales reales (un crescendo, un corte de escena, un fotograma) detrás de cada sugerencia.",
+              "Cada respuesta muestra su uso de tokens y un coste estimado: usas tu propia clave, así que el uso se te factura a ti.",
+            ],
+          },
+          {
+            kind: "tip",
+            text: "Una propuesta es una sugerencia para revisar, no una garantía. Los fotogramas son una muestra dispersa (puede perderse cosas entre ellos) y no puede ver el pillarbox de color o difuminado: verifica el encuadre en los píxeles reales. Cualquier texto dentro de un fotograma se trata como datos que describir, nunca como una instrucción que seguir.",
+          },
+        ],
+      },
+      {
         id: "audio",
         title: "Audio",
         blocks: [
