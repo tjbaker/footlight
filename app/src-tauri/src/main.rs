@@ -70,29 +70,34 @@ async fn extract_frame(source: String, t: f64) -> Result<String, String> {
     path.push(format!("footlight_frame_{}.jpg", std::process::id()));
     let out = path.to_string_lossy().to_string();
 
+    // Primary: accurate INPUT-seek to t. If t lands at/after the source's end
+    // (seeking to the clip end, or the final sampled still), this decodes no
+    // frame and the mjpeg encoder fails with no packets — fall back to grabbing
+    // the last available frame by seeking relative to EOF, mirroring the shared
+    // frameExtractArgs / frameExtractTailArgs pair the web backend uses.
+    let t_str = t.to_string();
+    if run_frame_extract(&["-ss", &t_str], &source, &out)? {
+        return Ok(out);
+    }
+    if run_frame_extract(&["-sseof", "-0.2"], &source, &out)? {
+        return Ok(out);
+    }
+    Err("ffmpeg frame extraction failed".into())
+}
+
+/// Run one single-frame ffmpeg extraction with the given seek args, writing a
+/// JPEG to `out`. Returns Ok(true) only when ffmpeg succeeded AND wrote a
+/// non-empty file (a seek past EOF exits non-zero / writes nothing).
+fn run_frame_extract(seek: &[&str], source: &str, out: &str) -> Result<bool, String> {
+    let mut args: Vec<&str> = vec!["-hide_banner", "-loglevel", "error", "-y"];
+    args.extend_from_slice(seek);
+    args.extend_from_slice(&["-i", source, "-frames:v", "1", "-q:v", "3", out]);
     let status = Command::new("ffmpeg")
-        .args([
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
-            "-ss",
-            &t.to_string(),
-            "-i",
-            &source,
-            "-frames:v",
-            "1",
-            "-q:v",
-            "3",
-            &out,
-        ])
+        .args(&args)
         .status()
         .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
-
-    if !status.success() {
-        return Err("ffmpeg frame extraction failed".into());
-    }
-    Ok(out)
+    let wrote = std::fs::metadata(out).map(|m| m.len() > 0).unwrap_or(false);
+    Ok(status.success() && wrote)
 }
 
 /// Probe width, height, duration via ffprobe + a cropdetect (black-bar) hint.

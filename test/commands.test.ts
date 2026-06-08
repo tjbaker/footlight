@@ -8,6 +8,7 @@ import {
   ffprobeStreamArgs,
   parseProbe,
   frameExtractArgs,
+  frameExtractTailArgs,
   cropdetectArgs,
   parseCropdetect,
   scenesArgs,
@@ -50,6 +51,31 @@ describe("frameExtractArgs", () => {
   it("clamps a non-finite time to 0", () => {
     const a = frameExtractArgs("in.mp4", Number.NaN);
     expect(a[a.indexOf("-ss") + 1]).toBe("0");
+  });
+
+  it("carries contentCrop + maxWidth into the filter chain", () => {
+    const a = frameExtractArgs("in.mp4", 1, { contentCrop: "100:100:0:0", maxWidth: 640 });
+    const vf = a[a.indexOf("-vf") + 1];
+    expect(vf).toContain("crop=100:100:0:0");
+    expect(vf).toContain("scale='min(640,iw)':-2");
+  });
+});
+
+describe("frameExtractTailArgs (EOF fallback — last decodable frame)", () => {
+  it("seeks relative to EOF (-sseof, negative) instead of an absolute -ss", () => {
+    const a = frameExtractTailArgs("in.mp4");
+    const sseof = a.indexOf("-sseof");
+    expect(sseof).toBeGreaterThanOrEqual(0);
+    expect(sseof).toBeLessThan(a.indexOf("-i")); // before -i (an input option)
+    expect(Number(a[sseof + 1])).toBeLessThan(0); // negative = before the end
+    expect(a).not.toContain("-ss"); // not an absolute-time seek
+  });
+
+  it("otherwise matches frameExtractArgs (one mjpeg frame to stdout, same opts)", () => {
+    const a = frameExtractTailArgs("in.mp4", { contentCrop: "10:10:0:0" });
+    expect(a).toContain("mjpeg");
+    expect(a[a.length - 1]).toBe("-");
+    expect(a[a.indexOf("-vf") + 1]).toContain("crop=10:10:0:0");
   });
 });
 

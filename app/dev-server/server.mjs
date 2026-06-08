@@ -34,6 +34,7 @@ import { fileURLToPath } from "node:url";
 // build`). Keeps the two backends from drifting apart.
 import {
   frameExtractArgs,
+  frameExtractTailArgs,
   ffprobeStreamArgs,
   parseProbe,
   cropdetectArgs,
@@ -109,9 +110,17 @@ function sendText(res, status, text) {
  * the prototype demonstrates (accuracy comes from seeking per displayed frame).
  */
 async function handleFrame(source, t, res) {
-  const result = await run("ffmpeg", frameExtractArgs(source, Number(t)), {
+  let result = await run("ffmpeg", frameExtractArgs(source, Number(t)), {
     collectStdoutBinary: true,
   });
+  // An exact-time seek at/after EOF (seek to the clip end, or the final sampled
+  // still) decodes no frame, so the mjpeg encoder fails with no packets. Fall
+  // back to the last available frame instead of surfacing a failure.
+  if (result.code !== 0 || result.stdout.length === 0) {
+    result = await run("ffmpeg", frameExtractTailArgs(source), {
+      collectStdoutBinary: true,
+    });
+  }
   if (result.code !== 0 || result.stdout.length === 0) {
     sendText(res, 500, `frame extraction failed: ${result.stderr || "no output"}`);
     return;
