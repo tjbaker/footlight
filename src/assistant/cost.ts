@@ -28,11 +28,19 @@ export interface ModelPrice {
 
 /**
  * Published Gemini developer-API list rates (USD / 1M tokens). Keyed by the base
- * model id; a versioned/preview id (e.g. `gemini-2.5-flash-preview-05-20`) matches
+ * model id; a versioned/preview id (e.g. `gemini-3.5-flash-preview-05-20`) matches
  * by longest id prefix, so `-lite` wins over the plain `-flash` entry. ESTIMATE
  * only — keep in sync with https://ai.google.dev/gemini-api/docs/pricing.
+ *
+ * The 3.5 line is what the app actually selects (see settings.ts MODEL_CATALOG);
+ * 3.5 Flash is confirmed at $1.50/$9.00. 3.5 Flash-Lite (~$0.25/$1.50) and 3.5 Pro
+ * (current Pro-tier $2/$12, pending a separate 3.5 Pro list price) are best-effort
+ * estimates. Older 2.x rows are kept as fallbacks (e.g. the CLI's vision default).
  */
 export const GEMINI_PRICES: Readonly<Record<string, ModelPrice>> = {
+  "gemini-3.5-pro": { inputPerM: 2.0, outputPerM: 12.0 },
+  "gemini-3.5-flash": { inputPerM: 1.5, outputPerM: 9.0 },
+  "gemini-3.5-flash-lite": { inputPerM: 0.25, outputPerM: 1.5 },
   "gemini-2.5-pro": { inputPerM: 1.25, outputPerM: 10.0 },
   "gemini-2.5-flash": { inputPerM: 0.3, outputPerM: 2.5 },
   "gemini-2.5-flash-lite": { inputPerM: 0.1, outputPerM: 0.4 },

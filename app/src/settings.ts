@@ -26,6 +26,7 @@ import { messages } from "./i18n/index.js";
 import { GEMINI_API_KEY_SECRET, loadAutoTrackSettings, saveAutoTrackSettings } from "./autotrack.js";
 import { platform } from "./platform/index.js";
 import { BASE_PROMPT } from "./assistant/base-prompt.js";
+import { priceForModel } from "@assistant-cost";
 import {
   APP_NAME,
   APP_VERSION,
@@ -327,7 +328,7 @@ const ICON_LINK =
 // Shortcut bindings are single-sourced in the i18n catalog (messages.shortcuts),
 // shared with the Help overlay (shortcuts.ts) — see buildShortcutsPanel.
 
-// ---- AI model catalog (illustrative pricing; wire to real pricing later) ----
+// ---- AI model catalog ----
 
 interface ModelOpt {
   id: string;
@@ -335,27 +336,26 @@ interface ModelOpt {
   recommended?: boolean;
   cap: string;
   speed: string;
-  /** Illustrative cost in USD per sampled still frame. */
-  perFrame: number;
 }
 /**
- * Model catalog, keyed by provider. Pricing is illustrative. Only Gemini is
- * wired today (the vision/assistant adapters); the Anthropic/OpenAI lists are
- * shown for the provider-agnostic picker and should be confirmed before those
- * providers are implemented.
+ * Model catalog, keyed by provider. Cost estimates are NOT stored here — they are
+ * derived from the SAME per-1M-token rate table the live chat usage readout uses
+ * (`assistant/cost.ts`), so Settings and the in-chat cost can never drift. Only
+ * Gemini is wired today (the vision/assistant adapters); the Anthropic/OpenAI
+ * lists are shown for the provider-agnostic picker and should be confirmed before
+ * those providers are implemented.
  */
 const MODEL_CATALOG = {
   gemini: [
-    { id: "gemini-3.5-pro", name: "Gemini 3.5 Pro", cap: "Highest-quality reasoning + vision.", speed: "slower", perFrame: 0.0015 },
+    { id: "gemini-3.5-pro", name: "Gemini 3.5 Pro", cap: "Highest-quality reasoning + vision.", speed: "slower" },
     {
       id: "gemini-3.5-flash",
       name: "Gemini 3.5 Flash",
       recommended: true,
       cap: "Fast, capable multimodal — the sweet spot for tracking.",
       speed: "fast",
-      perFrame: 0.0004,
     },
-    { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", cap: "Cheapest; good for dense sampling.", speed: "fastest", perFrame: 0.00015 },
+    { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", cap: "Cheapest; good for dense sampling.", speed: "fastest" },
   ],
   // Anthropic / OpenAI have no adapter yet (see IMPLEMENTED_PROVIDERS) — no models listed.
 } satisfies Record<string, ModelOpt[]>;
@@ -373,8 +373,22 @@ function defaultModelFor(provider: string): string {
   return (ms.find((m) => m.recommended) ?? ms[0])?.id ?? DEFAULT_AI.model;
 }
 
-/** Per-request flat cost the assistant adds on top of per-frame vision (illustrative). */
-const ASSISTANT_PER_REQUEST = 0.004;
+// Token assumptions behind the Settings cost estimates. Rates come from
+// `priceForModel` (assistant/cost.ts) — the same table the live chat readout uses.
+const FRAME_INPUT_TOKENS = 258; // ≈ one Gemini image tile per sampled still (input only)
+const REQ_INPUT_TOKENS = 2500; // a typical assistant turn: system + message + a few stills
+const REQ_OUTPUT_TOKENS = 1500; // ...and its reply (output bills higher than input)
+
+/** Estimated USD to send one sampled still frame to `modelId` (input tokens only). */
+function perFrameUsd(modelId: string): number {
+  const p = priceForModel(modelId);
+  return p ? (FRAME_INPUT_TOKENS * p.inputPerM) / 1e6 : 0;
+}
+/** Estimated USD for one assistant chat turn with `modelId` (input + output). */
+function perRequestUsd(modelId: string): number {
+  const p = priceForModel(modelId);
+  return p ? (REQ_INPUT_TOKENS * p.inputPerM + REQ_OUTPUT_TOKENS * p.outputPerM) / 1e6 : 0;
+}
 
 function fmtUsd(n: number): string {
   return "$" + n.toFixed(4);
@@ -885,7 +899,7 @@ function buildAiPanel(): HTMLElement {
     const speed = el("span", "fl-tag-speed");
     speed.textContent = m.speed;
     const cost = el("span", "fl-tag-cost");
-    cost.innerHTML = `${fmtUsd(m.perFrame)}/frame <span class="tier">· ~${fmtUsd(m.perFrame * 27 + ASSISTANT_PER_REQUEST)}/req</span>`;
+    cost.innerHTML = `${fmtUsd(perFrameUsd(m.id))}/frame <span class="tier">· ~${fmtUsd(perRequestUsd(m.id))}/req</span>`;
     meta.append(speed, cost);
     body.append(top, cap, meta);
     card.append(radio, body);
@@ -937,8 +951,8 @@ function buildAiPanel(): HTMLElement {
     const interval = loadAutoTrackSettings().intervalSec || 0.75;
     const frames = Math.max(1, Math.round(20 / interval));
     const model = models.find((m) => m.id === prefs.model) ?? models.find((m) => m.recommended) ?? models[0]!;
-    const trackCost = frames * model.perFrame;
-    noteText.innerHTML = `${s.costNote} ${interval.toFixed(2)}s ≈ <b>${frames} frames</b> ≈ <b>${fmtUsd(trackCost)}</b> with ${model.name}. The assistant adds only ~<b>${fmtUsd(ASSISTANT_PER_REQUEST)}</b> per request.`;
+    const trackCost = frames * perFrameUsd(model.id);
+    noteText.innerHTML = `${s.costNote} ${interval.toFixed(2)}s ≈ <b>${frames} frames</b> ≈ <b>${fmtUsd(trackCost)}</b> with ${model.name}. The assistant adds about ~<b>${fmtUsd(perRequestUsd(model.id))}</b> per request.`;
   }
   paintCost();
   modelBlock.body.append(note);
