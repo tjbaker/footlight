@@ -138,9 +138,11 @@ import {
   insideBox,
   resizeCrop,
   fullHeightCropBox,
+  parseContentCropPx,
   cropRegionRect as regionRectPure,
   cropWindowSpec as cropWindowSpecPure,
 } from "./editor-crop.js";
+import { planChatStillTimes } from "./editor-chat.js";
 
 interface EditorState {
   source: string;
@@ -2439,13 +2441,6 @@ export function mountEditor(root: HTMLElement): void {
   }
 
   /** Parse a `W:H:X:Y` content-crop string into a source-px box (null if malformed). */
-  function parseContentCropPx(str: string): Box | null {
-    const parts = str.split(":").map((n) => Number(n));
-    if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
-    const [w, h, x, y] = parts as [number, number, number, number];
-    return { x, y, w, h };
-  }
-
   /**
    * Render the live 9:16 output preview: draw the current frame cropped to the
    * exact box that would render (the crop box, with the tracked x at the current
@@ -3219,34 +3214,14 @@ export function mountEditor(root: HTMLElement): void {
   async function sampleChatStills(): Promise<
     Array<{ t: number; mimeType: string; dataBase64: string }>
   > {
-    const budget = loadChatStillsBudget();
-    if (budget <= 0 || !state.source || !(state.duration > 0)) return [];
-    let a = 0;
-    let b = state.duration;
-    if (state.inPoint != null && state.outPoint != null && state.outPoint > state.inPoint) {
-      a = state.inPoint;
-      b = state.outPoint;
-    }
-    if (!(b > a)) return [];
-    let times: number[];
-    try {
-      times = planSampleTimes({
-        shotStart: a,
-        shotEnd: b,
-        intervalSec: (b - a) / budget,
-        sceneCuts: state.sceneCuts,
-      });
-    } catch {
-      return [];
-    }
-    if (times.length > budget) {
-      const denom = Math.max(1, budget - 1);
-      const picked: number[] = [];
-      for (let i = 0; i < budget; i++) {
-        picked.push(times[Math.round((i * (times.length - 1)) / denom)]!);
-      }
-      times = [...new Set(picked)];
-    }
+    if (!state.source) return [];
+    const times = planChatStillTimes({
+      budget: loadChatStillsBudget(),
+      inPoint: state.inPoint,
+      outPoint: state.outPoint,
+      duration: state.duration,
+      sceneCuts: state.sceneCuts,
+    });
     const out: Array<{ t: number; mimeType: string; dataBase64: string }> = [];
     for (const t of times) {
       try {

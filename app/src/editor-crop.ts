@@ -49,6 +49,14 @@ export function insideBox(px: number, py: number, b: Box, m = 0): boolean {
   return px >= b.x - m && px <= b.x + b.w + m && py >= b.y - m && py <= b.y + b.h + m;
 }
 
+/** Parse a `W:H:X:Y` content-crop string (source px) into a Box, or null if malformed. */
+export function parseContentCropPx(str: string): Box | null {
+  const parts = str.split(":").map((n) => Number(n));
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
+  const [w, h, x, y] = parts as [number, number, number, number];
+  return { x, y, w, h };
+}
+
 /**
  * The working region the crop box lives in, in SOURCE-pixel coordinates: the
  * content box when content-crop mode is active (and drawn), else the full frame.

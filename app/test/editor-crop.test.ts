@@ -18,6 +18,7 @@ import {
   resizeCrop,
   fullHeightCropBox,
   cropWindowSpec,
+  parseContentCropPx,
   MIN_CROP_H,
   type RegionRect,
 } from "../src/editor-crop.js";
@@ -138,5 +139,17 @@ describe("cropWindowSpec", () => {
   });
   it("returns a window for a punch-in (shorter-than-frame) box", () => {
     expect(cropWindowSpec(box(700, 200, 304, 540), region)).not.toBeNull();
+  });
+});
+
+describe("parseContentCropPx", () => {
+  it("parses a valid W:H:X:Y string into a Box", () => {
+    expect(parseContentCropPx("1000:800:200:50")).toEqual({ x: 200, y: 50, w: 1000, h: 800 });
+  });
+  it("returns null for the wrong arity or non-numeric parts", () => {
+    expect(parseContentCropPx("1000:800:200")).toBeNull();
+    expect(parseContentCropPx("1000:800:200:50:0")).toBeNull();
+    expect(parseContentCropPx("a:b:c:d")).toBeNull();
+    expect(parseContentCropPx("")).toBeNull();
   });
 });
