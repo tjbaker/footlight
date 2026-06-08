@@ -11,6 +11,11 @@ clips for Reels / TikTok / YouTube Shorts. <strong>Control-first</strong>: you p
 framing; Footlight nails the frame-accurate cut, crop, and export.
 </p>
 
+<p align="center">
+  <a href="https://codecov.io/gh/tjbaker/footlight"><img alt="engine coverage" src="https://img.shields.io/codecov/c/github/tjbaker/footlight?flag=engine&amp;label=engine%20coverage"></a>
+  <a href="https://codecov.io/gh/tjbaker/footlight"><img alt="app coverage" src="https://img.shields.io/codecov/c/github/tjbaker/footlight?flag=app&amp;label=app%20coverage"></a>
+</p>
+
 ## Philosophy — control-first, not auto-magic
 
 Footlight automates the *mechanical* part of vertical clipping — **cut → crop →

@@ -49,7 +49,8 @@ export default defineConfig({
       // engine in ../src is measured by the root package's coverage instead.
       include: ["src/**/*.ts"],
       exclude: ["src/**/*.d.ts", "src/i18n/types.ts"],
-      reporter: ["text", "text-summary", "html", "json-summary"],
+      // `cobertura` writes coverage/cobertura-coverage.xml for the Codecov upload in CI.
+      reporter: ["text", "text-summary", "html", "json-summary", "cobertura"],
       reportsDirectory: "coverage",
     },
   },
