@@ -28,6 +28,13 @@ import { platform } from "./platform/index.js";
 import { BASE_PROMPT } from "./assistant/base-prompt.js";
 import { priceForModel } from "@assistant-cost";
 import {
+  type ThemeMode,
+  clampChatStillsBudget,
+  perFrameUsd,
+  perRequestUsd,
+  resolveThemeMode,
+} from "./settings-util.js";
+import {
   APP_NAME,
   APP_VERSION,
   LICENSE,
@@ -124,7 +131,6 @@ function labeledRow(label: string, ...controls: HTMLElement[]): HTMLElement {
 
 // ---- persisted preferences (localStorage; key reuse noted above) ----
 
-type ThemeMode = "light" | "dark" | "system";
 type Timecode = "smpte" | "frames";
 type AudioMode = "copy" | "reencode";
 
@@ -190,16 +196,10 @@ interface AiPrefs {
 
 const DEFAULT_AI: AiPrefs = { provider: "gemini", model: "gemini-3.5-flash" };
 
-/** Default + ceiling for the per-turn chat-stills budget (cost is per frame). */
-const DEFAULT_CHAT_STILLS = 4;
-const CHAT_STILLS_MAX = 12;
-
 /** The per-turn chat-stills budget (0 = off), clamped to a sane range. */
 export function loadChatStillsBudget(): number {
   const prefs = readJson<AiPrefs>(AI_KEY, DEFAULT_AI);
-  const n = prefs.chatStills;
-  if (typeof n !== "number" || !Number.isFinite(n)) return DEFAULT_CHAT_STILLS;
-  return Math.max(0, Math.min(CHAT_STILLS_MAX, Math.round(n)));
+  return clampChatStillsBudget(prefs.chatStills);
 }
 
 /**
@@ -264,8 +264,7 @@ function osPrefersDark(): boolean {
 }
 
 function loadThemeMode(): ThemeMode {
-  const v = readStr(THEME_KEY, "light");
-  return v === "dark" || v === "system" ? v : "light";
+  return resolveThemeMode(readStr(THEME_KEY, "light"));
 }
 
 /** Resolve a mode to a concrete light|dark, write `data-theme`, and (for System)
@@ -375,22 +374,8 @@ function defaultModelFor(provider: string): string {
   return (ms.find((m) => m.recommended) ?? ms[0])?.id ?? DEFAULT_AI.model;
 }
 
-// Token assumptions behind the Settings cost estimates. Rates come from
-// `priceForModel` (assistant/cost.ts) — the same table the live chat readout uses.
-const FRAME_INPUT_TOKENS = 258; // ≈ one Gemini image tile per sampled still (input only)
-const REQ_INPUT_TOKENS = 2500; // a typical assistant turn: system + message + a few stills
-const REQ_OUTPUT_TOKENS = 1500; // ...and its reply (output bills higher than input)
-
-/** Estimated USD to send one sampled still frame to `modelId` (input tokens only). */
-function perFrameUsd(modelId: string): number {
-  const p = priceForModel(modelId);
-  return p ? (FRAME_INPUT_TOKENS * p.inputPerM) / 1e6 : 0;
-}
-/** Estimated USD for one assistant chat turn with `modelId` (input + output). */
-function perRequestUsd(modelId: string): number {
-  const p = priceForModel(modelId);
-  return p ? (REQ_INPUT_TOKENS * p.inputPerM + REQ_OUTPUT_TOKENS * p.outputPerM) / 1e6 : 0;
-}
+// perFrameUsd / perRequestUsd live in settings-util.ts (pure; same `priceForModel`
+// rate table the live chat readout uses, so Settings and in-chat cost never drift).
 
 function fmtUsd(n: number): string {
   return "$" + n.toFixed(4);
