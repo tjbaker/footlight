@@ -347,7 +347,9 @@ interface ModelOpt {
  */
 const MODEL_CATALOG = {
   gemini: [
-    { id: "gemini-3.5-pro", name: "Gemini 3.5 Pro", cap: "Highest-quality reasoning + vision.", speed: "slower" },
+    // Gemini 3.5 Pro is omitted until it ships (not released yet — selecting it
+    // would just fail the API call, and there is no published price). Re-add it
+    // here and in assistant/cost.ts GEMINI_PRICES at launch.
     {
       id: "gemini-3.5-flash",
       name: "Gemini 3.5 Flash",
@@ -899,7 +901,11 @@ function buildAiPanel(): HTMLElement {
     const speed = el("span", "fl-tag-speed");
     speed.textContent = m.speed;
     const cost = el("span", "fl-tag-cost");
-    cost.innerHTML = `${fmtUsd(perFrameUsd(m.id))}/frame <span class="tier">· ~${fmtUsd(perRequestUsd(m.id))}/req</span>`;
+    // Only show a cost tag for a model we have a published rate for — never a
+    // misleading $0.0000 for an unpriced model.
+    if (priceForModel(m.id)) {
+      cost.innerHTML = `${fmtUsd(perFrameUsd(m.id))}/frame <span class="tier">· ~${fmtUsd(perRequestUsd(m.id))}/req</span>`;
+    }
     meta.append(speed, cost);
     body.append(top, cap, meta);
     card.append(radio, body);
