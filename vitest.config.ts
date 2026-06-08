@@ -16,8 +16,9 @@ export default defineConfig({
       include: ["src/**/*.ts"],
       // Entry points / type-only modules with no meaningful branch logic to cover.
       exclude: ["src/cli.ts", "src/**/types.ts", "src/**/index.ts"],
-      // `cobertura` writes coverage/cobertura-coverage.xml for the Codecov upload in CI.
-      reporter: ["text", "text-summary", "html", "json-summary", "cobertura"],
+      // Console (`text`/`text-summary`) + `cobertura` (coverage/cobertura-coverage.xml)
+      // for the Codecov upload in CI. No HTML report — console + Codecov suffice.
+      reporter: ["text", "text-summary", "cobertura"],
       reportsDirectory: "coverage",
     },
   },
