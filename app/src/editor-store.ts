@@ -10,7 +10,7 @@
 
 import type { Box, Dims, ClipSpec, CropKeyframe } from "@manifest";
 import type { CropPathKeyframe } from "@core";
-import { defaultCaptionStyle, type CaptionStyleState } from "./editor-util.js";
+import { defaultCaptionStyle, clamp, round3, type CaptionStyleState } from "./editor-util.js";
 
 /** Default source FPS until a probe reports the real one. */
 export const DEFAULT_FPS = 30;
@@ -117,4 +117,35 @@ export function hasClipWindow(s: EditorState): boolean {
 /** The clip window length (Out − In) in seconds, or 0 when there's no valid window. */
 export function clipLength(s: EditorState): number {
   return hasClipWindow(s) ? (s.outPoint as number) - (s.inPoint as number) : 0;
+}
+
+// ---- commit transitions (pure value math the assistant's applyCommit applies) ----
+
+/**
+ * Clamp a proposed In/Out into a valid, ordered window: In ∈ [0, duration], Out ∈
+ * [In, duration], both rounded to ms. `duration` of 0 means "unknown" (no upper
+ * bound yet), so the proposed value passes through. Mirrors the setInOut commit.
+ */
+export function clampInOut(
+  inSec: number,
+  outSec: number,
+  duration: number,
+): { inPoint: number; outPoint: number } {
+  const inPoint = round3(clamp(inSec, 0, duration || inSec));
+  const outPoint = round3(clamp(outSec, inPoint, duration || outSec));
+  return { inPoint, outPoint };
+}
+
+/** Clamp a proposed trim Out to [inPoint, duration] (ms-rounded). Mirrors the trim commit. */
+export function clampTrimOut(outSec: number, inPoint: number, duration: number): number {
+  return round3(clamp(outSec, inPoint, duration || outSec));
+}
+
+/**
+ * Build a crop keyframe from an addCropKeyframe commit: the working-region x is an
+ * integer x-pixel offset (a valid `crop_offset` form the engine clamps into frame),
+ * and the time is ms-rounded.
+ */
+export function keyframeFromCommit(t: number, x: number): CropKeyframe {
+  return { t: round3(t), offset: String(Math.round(x)) };
 }
