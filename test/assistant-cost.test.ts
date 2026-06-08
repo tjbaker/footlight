@@ -35,6 +35,24 @@ describe("priceForModel", () => {
   it("returns null for an unknown model", () => {
     expect(priceForModel("some-other-model")).toBeNull();
   });
+
+  it("prices the 3.5 Flash models the app selects (settings MODEL_CATALOG)", () => {
+    // Regression guard: the GUI defaults to gemini-3.5-flash, so a real turn must
+    // get a dollar estimate, not a tokens-only fallback.
+    expect(priceForModel("gemini-3.5-flash")).toEqual(GEMINI_PRICES["gemini-3.5-flash"]);
+    expect(priceForModel("gemini-3.5-flash-lite")).toEqual(GEMINI_PRICES["gemini-3.5-flash-lite"]);
+  });
+
+  it("returns null for gemini-3.5-pro (Google publishes no list price)", () => {
+    // Honest gap: no invented dollar figure for a model with no published rate.
+    expect(priceForModel("gemini-3.5-pro")).toBeNull();
+  });
+
+  it("prefers the longer 3.5 -lite prefix over 3.5 -flash", () => {
+    expect(priceForModel("gemini-3.5-flash-lite-preview")).toEqual(
+      GEMINI_PRICES["gemini-3.5-flash-lite"],
+    );
+  });
 });
 
 describe("estimateCostUsd", () => {

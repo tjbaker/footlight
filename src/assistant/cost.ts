@@ -27,12 +27,21 @@ export interface ModelPrice {
 }
 
 /**
- * Published Gemini developer-API list rates (USD / 1M tokens). Keyed by the base
- * model id; a versioned/preview id (e.g. `gemini-2.5-flash-preview-05-20`) matches
- * by longest id prefix, so `-lite` wins over the plain `-flash` entry. ESTIMATE
- * only — keep in sync with https://ai.google.dev/gemini-api/docs/pricing.
+ * Gemini developer-API list rates (USD / 1M tokens), from the official page —
+ * https://ai.google.dev/gemini-api/docs/pricing — paid tier, text/image/video
+ * input (the assistant never sends audio). Keyed by the base model id; a
+ * versioned/preview id (e.g. `gemini-3.5-flash-preview-05-20`) matches by longest
+ * id prefix, so `-lite` wins over the plain `-flash` entry. 2.5 Pro uses the
+ * ≤200k-token tier (our turns are far under 200k). ESTIMATE for cost purposes
+ * (caching / batch / size tiers can shift the real bill) — keep in sync with it.
+ *
+ * NOTE: Gemini 3.5 PRO is intentionally ABSENT — it isn't released yet (no
+ * published list price), so `priceForModel` returns null and any turn on it would
+ * show tokens only, never a guessed dollar figure. Add its row when it ships.
  */
 export const GEMINI_PRICES: Readonly<Record<string, ModelPrice>> = {
+  "gemini-3.5-flash": { inputPerM: 1.5, outputPerM: 9.0 },
+  "gemini-3.5-flash-lite": { inputPerM: 0.25, outputPerM: 1.5 },
   "gemini-2.5-pro": { inputPerM: 1.25, outputPerM: 10.0 },
   "gemini-2.5-flash": { inputPerM: 0.3, outputPerM: 2.5 },
   "gemini-2.5-flash-lite": { inputPerM: 0.1, outputPerM: 0.4 },

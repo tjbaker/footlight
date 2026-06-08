@@ -24,7 +24,8 @@
       "@provider-types": ["../src/providers/types.ts"],
       "@model": ["../src/model.ts"],
       "@assistant-types": ["../src/assistant/types.ts"],
-      "@assistant-tools": ["../src/assistant/tools.ts"]
+      "@assistant-tools": ["../src/assistant/tools.ts"],
+      "@assistant-cost": ["../src/assistant/cost.ts"]
     }
   },
   "include": ["src", "vite.config.ts"]
