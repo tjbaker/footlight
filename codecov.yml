@@ -1,0 +1,25 @@
+# Codecov configuration.
+#
+# carryforward: the two coverage flags (engine, app) are uploaded by separate CI
+# jobs. The CI workflow uses cancel-in-progress concurrency, so when several
+# merges land in quick succession an intermediate run can be cancelled before a
+# flag uploads — which would blank that flag's badge to "unknown" at the new HEAD.
+# carryforward keeps each flag's last known coverage until it reports again, so a
+# flag never flickers to "unknown".
+#
+# informational status: coverage is advisory here, not a merge gate (the app
+# package is an early ~3% while its UI is decomposed for testability) — so
+# Codecov's PR status checks never block a merge.
+
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+flag_management:
+  default_rules:
+    carryforward: true
