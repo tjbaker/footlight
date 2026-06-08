@@ -193,6 +193,13 @@ describe("composeSystemPrompt (pure, no network)", () => {
     );
   });
 
+  it("instructs the model that a concrete edit MUST arrive as a tool call (not prose)", () => {
+    const out = composeSystemPrompt(ctx());
+    expect(out).toContain("the tool call IS the proposal");
+    expect(out).toContain("MUST emit that tool");
+    expect(out).toContain("prose alone does NOTHING");
+  });
+
   it("state-only turn says it does NOT see frames", () => {
     const out = composeSystemPrompt(ctx());
     expect(out).toContain("do NOT see the video frames");
