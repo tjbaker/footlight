@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.7.0](https://github.com/tjbaker/footlight/compare/footlight-v0.6.0...footlight-v0.7.0) (2026-06-08)
+
+
+### Features
+
+* **assistant:** price the Gemini 3.5 models so the cost estimate shows ([#120](https://github.com/tjbaker/footlight/issues/120)) ([da3b363](https://github.com/tjbaker/footlight/commit/da3b363fcdd706d03f5cb044b05e28689cd210c6))
+
+
+### Bug Fixes
+
+* **app:** show the last frame instead of failing when seeking to the clip end ([#118](https://github.com/tjbaker/footlight/issues/118)) ([2f50b99](https://github.com/tjbaker/footlight/commit/2f50b99cb098fe3c2993e6eb905855c8ae68340f))
+* **app:** stamp the saved theme before first paint to stop the dark flash ([#121](https://github.com/tjbaker/footlight/issues/121)) ([d95890a](https://github.com/tjbaker/footlight/commit/d95890a770e7698c8bbec2d36693860fb5a08fdb))
+
+
+### Documentation
+
+* **help:** add an 'AI assistant' guide section ([#122](https://github.com/tjbaker/footlight/issues/122)) ([ec47ef7](https://github.com/tjbaker/footlight/commit/ec47ef7c2338511a2ed156ff38ad4767a5d8fc6f))
+
 ## [0.6.0](https://github.com/tjbaker/footlight/compare/footlight-v0.5.0...footlight-v0.6.0) (2026-06-08)
 
 
