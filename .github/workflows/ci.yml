@@ -26,7 +26,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npm ci
       - run: npm run build
-      - run: npm test
+      - run: npm run coverage
+      - name: Upload coverage to Codecov
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: codecov/codecov-action@v6
+        with:
+          files: coverage/cobertura-coverage.xml
+          flags: engine
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   app:
     name: app (typecheck + test + build)
@@ -42,7 +50,15 @@ jobs:
         working-directory: app
       - run: npx tsc --noEmit
         working-directory: app
-      - run: npm test
+      - run: npm run coverage
         working-directory: app
       - run: npm run build
         working-directory: app
+      - name: Upload coverage to Codecov
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: codecov/codecov-action@v6
+        with:
+          files: app/coverage/cobertura-coverage.xml
+          flags: app
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
