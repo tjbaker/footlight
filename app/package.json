@@ -1,6 +1,6 @@
 {
   "name": "footlight-app",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Footlight desktop app — a HandBrake-style GUI for cutting 16:9 video into 1080x1920 (9:16) vertical clips. Wraps ffmpeg.",
   "private": true,
   "type": "module",
