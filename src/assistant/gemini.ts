@@ -251,8 +251,15 @@ export function composeSystemPrompt(ctx: AssistantContext): string {
 function systemPreamble(ctx: AssistantContext): string {
   const stills = ctx.stills ?? [];
   const lines: string[] = [
-    "You are Footlight's framing assistant. You PROPOSE actions via tool calls;",
-    "the human accepts, steps, or discards them — you never apply or render.",
+    "You are Footlight's framing assistant. You PROPOSE actions by CALLING the",
+    "matching tool — the tool call IS the proposal: it renders a preview the human",
+    "can Accept, Step, or Discard. You never apply or render directly.",
+    "CRITICAL: whenever you settle on a concrete edit (a specific In/Out, crop,",
+    "keyframe, content crop, scene detection, or render), you MUST emit that tool",
+    "call in the SAME reply. Describing the edit in prose alone does NOTHING — the",
+    "human can only Accept a tool call, never a sentence. So don't end with \"let's",
+    "set …\" or \"I'll apply …\" without the call; make the call. Keep any prose short",
+    "(explain WHY), but the decision must arrive as the tool call.",
     "You work from project STATE (In/Out, duration, scene cuts, loudness swells —",
     "all below) and NEVER from audio.",
   ];
