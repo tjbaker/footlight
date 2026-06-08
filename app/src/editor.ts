@@ -23,7 +23,6 @@ import { TARGET_AR, parseTimestamp, detectSwells, LOUDNESS_BUCKETS, type CropPat
 import {
   cropBoxToOffset,
   cropBoxToWindow,
-  isFullHeightWindow,
   contentCropFromBox,
   scheduleToString,
   serializeManifestJSON,
@@ -134,6 +133,14 @@ import {
   type TextPosV,
   type TextPosH,
 } from "./editor-util.js";
+import {
+  edgeHits,
+  insideBox,
+  resizeCrop,
+  fullHeightCropBox,
+  cropRegionRect as regionRectPure,
+  cropWindowSpec as cropWindowSpecPure,
+} from "./editor-crop.js";
 
 interface EditorState {
   source: string;
@@ -2590,27 +2597,6 @@ export function mountEditor(root: HTMLElement): void {
   // Hit-test margin (display px) for grabbing a content-box edge/corner.
   const EDGE_MARGIN_PX = 8;
 
-  /** Which edges of `b` the point (px,py) is within `m` source-px of. */
-  function edgeHits(px: number, py: number, b: Box, m: number) {
-    const withinX = px >= b.x - m && px <= b.x + b.w + m;
-    const withinY = py >= b.y - m && py <= b.y + b.h + m;
-    return {
-      l: withinY && Math.abs(px - b.x) <= m,
-      r: withinY && Math.abs(px - (b.x + b.w)) <= m,
-      t: withinX && Math.abs(py - b.y) <= m,
-      b: withinX && Math.abs(py - (b.y + b.h)) <= m,
-    };
-  }
-
-  /** True when (px,py) is inside `b`, expanded by margin `m`. */
-  function insideBox(px: number, py: number, b: Box, m = 0): boolean {
-    return px >= b.x - m && px <= b.x + b.w + m && py >= b.y - m && py <= b.y + b.h + m;
-  }
-
-  // Smallest crop-box height (source px) a punch-in resize allows — keeps the
-  // derived 9:16 width sane and the upscale from going absurd.
-  const MIN_CROP_H = 80;
-
   /**
    * The crop box is directly editable (move/resize) only when no AI track path
    * owns the framing — when a `cropPath` is active the preview box follows it.
@@ -2620,64 +2606,18 @@ export function mountEditor(root: HTMLElement): void {
   }
 
   /**
-   * The working region the crop box lives in, in SOURCE-pixel coordinates:
-   * the content box when content-crop mode is active (and drawn), else the full
-   * frame. Used to clamp moves/resizes and to know what "full height" means.
+   * The working region the crop box lives in (source px): content box when
+   * content-crop mode is active (and drawn), else the full frame. Thin wrapper
+   * over the pure `editor-crop` math, reading the editor's live state.
    */
   function cropRegionRect(): { x0: number; y0: number; x1: number; y1: number } {
-    if (
-      state.contentMode &&
-      state.contentBox &&
-      state.contentBox.w > 2 &&
-      state.contentBox.h > 2
-    ) {
-      const b = state.contentBox;
-      return { x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h };
-    }
-    return { x0: 0, y0: 0, x1: state.dims!.width, y1: state.dims!.height };
-  }
-
-  /**
-   * Aspect-locked (9:16) corner resize of the crop box. `start.edges` says which
-   * corner is grabbed; the diagonally opposite corner is the fixed anchor. Height
-   * drives the lock (`w = even(h * 9/16)`); the box is clamped to MIN_CROP_H and
-   * to the room available inside the working region so it can never leave frame.
-   */
-  function resizeCrop(px: number, py: number, start: NonNullable<typeof drag>): Box {
-    const box = start.box;
-    const ed = start.edges!;
-    const r = cropRegionRect();
-    const anchorX = ed.l ? box.x + box.w : box.x;
-    const anchorY = ed.t ? box.y + box.h : box.y;
-    const dirX = ed.l ? -1 : 1;
-    const dirY = ed.t ? -1 : 1;
-    // Candidate height: satisfy the pointer on whichever axis pulls harder.
-    let h = Math.max(Math.abs(py - anchorY), Math.abs(px - anchorX) / TARGET_AR);
-    const roomY = dirY > 0 ? r.y1 - anchorY : anchorY - r.y0;
-    const roomX = dirX > 0 ? r.x1 - anchorX : anchorX - r.x0;
-    h = Math.min(h, roomY, roomX / TARGET_AR);
-    h = Math.max(h, MIN_CROP_H);
-    h = roundEvenLocal(h);
-    const w = roundEvenLocal(h * TARGET_AR);
-    const x = dirX > 0 ? anchorX : anchorX - w;
-    const y = dirY > 0 ? anchorY : anchorY - h;
-    return { x, y, w, h };
+    return regionRectPure(state.contentMode, state.contentBox, state.dims!);
   }
 
   /** Reset the crop box to the default FULL-HEIGHT, centered 9:16 of the region. */
   function resetCropBoxFullHeight(): void {
     if (!state.dims) return;
-    const r = cropRegionRect();
-    const rw = r.x1 - r.x0;
-    const rh = r.y1 - r.y0;
-    if (rw / rh >= TARGET_AR) {
-      const cw = roundEvenLocal(rh * TARGET_AR);
-      const maxX = rw - cw;
-      state.cropBox = { x: r.x0 + Math.floor(maxX / 2), y: r.y0, w: cw, h: roundEvenLocal(rh) };
-    } else {
-      const ch = roundEvenLocal(rw / TARGET_AR);
-      state.cropBox = { x: r.x0, y: r.y0 + Math.floor((rh - ch) / 2), w: roundEvenLocal(rw), h: ch };
-    }
+    state.cropBox = fullHeightCropBox(cropRegionRect());
     refreshCropReadout();
     drawOverlay();
   }
@@ -2699,8 +2639,7 @@ export function mountEditor(root: HTMLElement): void {
         y: state.cropBox.y - state.contentBox.y,
       };
     }
-    if (isFullHeightWindow(box, region)) return null;
-    return cropBoxToWindow(box, region);
+    return cropWindowSpecPure(box, region);
   }
 
   /** Cursor hinting the move/resize/draw affordance under the pointer. */
@@ -2799,7 +2738,7 @@ export function mountEditor(root: HTMLElement): void {
       }
       refreshCropReadout();
     } else if (drag.mode === "resize-crop" && state.cropBox && drag.edges) {
-      state.cropBox = resizeCrop(px, py, drag);
+      state.cropBox = resizeCrop(px, py, drag.box, drag.edges, cropRegionRect());
       refreshCropReadout();
     } else if (drag.mode === "move-content" && state.contentBox) {
       const { w, h } = drag.box;
