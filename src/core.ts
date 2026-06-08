@@ -762,20 +762,19 @@ export function parseProbe(stdout: string): { width: number; height: number; dur
 }
 
 /**
- * ffmpeg args to extract ONE frame at `t` seconds as MJPEG on stdout. Accuracy
- * comes from INPUT-seek (`-ss` before `-i`): it decodes from the nearest
- * keyframe up to `t` and emits the displayed frame.
- *
- * `opts.contentCrop` (`W:H:X:Y`) crops to the working region first; `opts.maxWidth`
- * downscales the long edge (keeping even dimensions) — both used by image-based
- * subject tracking to keep the frame in working-region space and the payload small.
+ * Seconds before EOF that `frameExtractTailArgs` grabs the last frame from. An
+ * exact-time seek that lands at/after the final frame decodes NOTHING (input-seek
+ * past the last frame drops every frame), so the mjpeg encoder opens with no
+ * packet and the whole command fails — this is the EOF fallback's seek distance.
  */
-export function frameExtractArgs(
+export const FRAME_TAIL_SEEK_SEC = 0.2;
+
+/** Shared tail of a single-frame MJPEG-on-stdout command (everything after seek). */
+function frameExtractArgsWithSeek(
+  seek: string[],
   source: string,
-  t: number,
-  opts: { contentCrop?: string; maxWidth?: number } = {},
+  opts: { contentCrop?: string; maxWidth?: number },
 ): string[] {
-  const seek = Number.isFinite(t) ? t : 0;
   const filters: string[] = [];
   if (opts.contentCrop) filters.push(`crop=${opts.contentCrop}`);
   if (opts.maxWidth && opts.maxWidth > 0) {
@@ -787,8 +786,7 @@ export function frameExtractArgs(
     "-hide_banner",
     "-loglevel",
     "error",
-    "-ss",
-    String(seek),
+    ...seek,
     "-i",
     source,
     ...vf,
@@ -802,6 +800,42 @@ export function frameExtractArgs(
     "3",
     "-",
   ];
+}
+
+/**
+ * ffmpeg args to extract ONE frame at `t` seconds as MJPEG on stdout. Accuracy
+ * comes from INPUT-seek (`-ss` before `-i`): it decodes from the nearest
+ * keyframe up to `t` and emits the displayed frame.
+ *
+ * If `t` is at/after the source's end (e.g. seeking to the very end, or the final
+ * sampled still), this decodes nothing and the command FAILS — callers should
+ * fall back to `frameExtractTailArgs`, which grabs the last available frame.
+ *
+ * `opts.contentCrop` (`W:H:X:Y`) crops to the working region first; `opts.maxWidth`
+ * downscales the long edge (keeping even dimensions) — both used by image-based
+ * subject tracking to keep the frame in working-region space and the payload small.
+ */
+export function frameExtractArgs(
+  source: string,
+  t: number,
+  opts: { contentCrop?: string; maxWidth?: number } = {},
+): string[] {
+  const seek = Number.isFinite(t) ? t : 0;
+  return frameExtractArgsWithSeek(["-ss", String(seek)], source, opts);
+}
+
+/**
+ * Fallback for `frameExtractArgs`: grab the LAST decodable frame by seeking
+ * relative to EOF (`-sseof -FRAME_TAIL_SEEK_SEC`). Use this when an exact-time
+ * extraction yields no frame because the requested time was at/past the end —
+ * seeking from EOF always lands on a real frame, so the preview/still shows the
+ * clip's final frame instead of erroring.
+ */
+export function frameExtractTailArgs(
+  source: string,
+  opts: { contentCrop?: string; maxWidth?: number } = {},
+): string[] {
+  return frameExtractArgsWithSeek(["-sseof", String(-FRAME_TAIL_SEEK_SEC)], source, opts);
 }
 
 /**
