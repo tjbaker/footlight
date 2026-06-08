@@ -29,6 +29,9 @@ export default defineConfig({
       "@assistant-tools": fileURLToPath(
         new URL("../src/assistant/tools.ts", import.meta.url),
       ),
+      "@assistant-cost": fileURLToPath(
+        new URL("../src/assistant/cost.ts", import.meta.url),
+      ),
     },
   },
   server: {
