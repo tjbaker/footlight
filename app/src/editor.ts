@@ -19,7 +19,7 @@
  *    and rendered through `platform.render`.
  */
 
-import { TARGET_AR, parseTimestamp, detectSwells, LOUDNESS_BUCKETS, type CropPathKeyframe } from "@core";
+import { TARGET_AR, parseTimestamp, detectSwells, LOUDNESS_BUCKETS } from "@core";
 import {
   cropBoxToOffset,
   cropBoxToWindow,
@@ -30,7 +30,6 @@ import {
   type Box,
   type Dims,
   type ClipSpec,
-  type CropKeyframe,
 } from "@manifest";
 import { planSampleTimes, samplesToCropPath } from "@track";
 import { resolveModels } from "@model";
@@ -112,7 +111,6 @@ import {
   type AutoTrackSettings,
 } from "./autotrack.js";
 import {
-  defaultCaptionStyle,
   captionStyleToSpec,
   captionStyleFromSpec,
   parseTextPosition,
@@ -128,7 +126,6 @@ import {
   safeParse,
   escapeHtml,
   kfCount,
-  type CaptionStyleState,
   type TextPosV,
   type TextPosH,
 } from "./editor-util.js";
@@ -147,86 +144,10 @@ import {
   trackedBoxXAt,
 } from "./editor-offset.js";
 import { planChatStillTimes } from "./editor-chat.js";
-
-interface EditorState {
-  source: string;
-  dims: Dims | null;
-  duration: number;
-  fps: number;
-  cropdetect: string | null;
-  t: number;
-  inPoint: number | null;
-  outPoint: number | null;
-  /** 9:16 crop box, in source-pixel coordinates. */
-  cropBox: Box | null;
-  /** Optional content-crop box (source pixels) when content mode is on. */
-  contentBox: Box | null;
-  contentMode: boolean;
-  keyframes: CropKeyframe[];
-  clips: ClipSpec[];
-  /** Frame image natural display scale: displayedPx / sourcePx. */
-  displayScale: number;
-  /**
-   * Optional AI subject-tracking crop path (SPEC §6.9). When set, it takes
-   * precedence over the manual `crop_offset`/keyframe schedule: the preview box
-   * follows it, and `addClip` emits a `cropPath` instead of a `crop_offset`.
-   * x values are in working-region pixels (relative to the content box if one
-   * is set), t is clip-relative seconds.
-   */
-  cropPath: CropPathKeyframe[] | null;
-  /** Detected scene cuts (seconds) for the current source, if run. */
-  sceneCuts: number[];
-  /** Normalized loudness envelope (0..1) for the current source, or null. */
-  loudness: number[] | null;
-  /** Suggested quiet→loud "swell" moments (seconds), derived from loudness. */
-  swells: { t: number; label: string }[];
-  /** Caption big line (`hook`) — shot-list data carried in the manifest. */
-  hook: string;
-  /** Caption secondary line (`title`). */
-  title: string;
-  /**
-   * Caption placement on a 9-zone grid: a vertical keyword
-   * (`top` | `center` | `bottom`, default bottom) optionally suffixed with a
-   * horizontal one (`-left` | `-center` | `-right`, default center). Stored as the
-   * bare vertical keyword when horizontal is center (back-compat: `"bottom"`), or
-   * `"<v>-<h>"` otherwise (e.g. `"bottom-left"`, `"top-right"`).
-   */
-  textPosition: string;
-  /**
-   * Per-clip caption styling, edited in situ next to the caption text/preview.
-   * Fields are always populated here (defaults mirror the engine); `captionStyleToSpec`
-   * narrows them to a sparse `CaptionStyle` (omitting defaults) on the saved clip.
-   */
-  caption: CaptionStyleState;
-}
-
-const DEFAULT_FPS = 30;
+import { createInitialEditorState, hasActiveTrack } from "./editor-store.js";
 
 export function mountEditor(root: HTMLElement): void {
-  const state: EditorState = {
-    source: "",
-    dims: null,
-    duration: 0,
-    fps: DEFAULT_FPS,
-    cropdetect: null,
-    t: 0,
-    inPoint: null,
-    outPoint: null,
-    cropBox: null,
-    contentBox: null,
-    contentMode: false,
-    keyframes: [],
-    clips: [],
-    displayScale: 1,
-    cropPath: null,
-    sceneCuts: [],
-    loudness: null,
-    swells: [],
-    hook: "",
-    title: "",
-    textPosition: "bottom",
-    caption: defaultCaptionStyle(),
-  };
+  const state = createInitialEditorState();
 
   const autoTrack: AutoTrackSettings = loadAutoTrackSettings();
   // The BYOK Gemini key lives in the OS keychain (via `secretStore`), not in the
@@ -2374,7 +2295,7 @@ export function mountEditor(root: HTMLElement): void {
     // origin when one is active, matching how the engine evaluates it).
     if (state.cropBox) {
       const b: Box =
-        state.cropPath && state.cropPath.length > 0 && state.inPoint != null
+        hasActiveTrack(state) && state.inPoint != null
           ? { ...state.cropBox, x: trackedBoxX() }
           : state.cropBox;
       const bx = b.x * s;
@@ -2466,7 +2387,7 @@ export function mountEditor(root: HTMLElement): void {
       return;
     }
     const b: Box =
-      state.cropPath && state.cropPath.length > 0 && state.inPoint != null
+      hasActiveTrack(state) && state.inPoint != null
         ? { ...state.cropBox, x: trackedBoxX() }
         : state.cropBox;
     try {
@@ -2601,7 +2522,7 @@ export function mountEditor(root: HTMLElement): void {
    * owns the framing — when a `cropPath` is active the preview box follows it.
    */
   function cropInteractive(): boolean {
-    return !(state.cropPath && state.cropPath.length > 0);
+    return !hasActiveTrack(state);
   }
 
   /**
@@ -2831,7 +2752,7 @@ export function mountEditor(root: HTMLElement): void {
     durVal.textContent = dur;
     // The framing mode this clip would render with (mirrors addClip's precedence).
     offsetVal.textContent =
-      state.cropPath && state.cropPath.length > 0
+      hasActiveTrack(state)
         ? m.framing.modeTrack
         : cropWindowSpec()
           ? m.framing.modePunchIn
@@ -3564,10 +3485,10 @@ export function mountEditor(root: HTMLElement): void {
       out_point: state.outPoint.toFixed(3),
     };
     const win = cropWindowSpec();
-    if (state.cropPath && state.cropPath.length > 0) {
+    if (hasActiveTrack(state)) {
       // AI tracking takes precedence over crop_offset (SPEC §6.9). Keep a
       // "center" fallback so the row is still valid if the path is stripped.
-      spec.cropPath = state.cropPath.map((k) => ({ t: k.t, x: k.x }));
+      spec.cropPath = state.cropPath!.map((k) => ({ t: k.t, x: k.x }));
       spec.crop_offset = "center";
     } else if (win) {
       // Punch-in / zoom: a fixed 9:16 window takes precedence over crop_offset
