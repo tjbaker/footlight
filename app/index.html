@@ -7,6 +7,35 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="alternate icon" href="/favicon.png" type="image/png" />
     <title>Footlight</title>
+    <!-- Stamp the resolved theme on <html> BEFORE first paint to avoid a
+         flash-of-dark (FOUC): style.css makes :root the dark palette and
+         [data-theme="light"] the override, but data-theme is otherwise only set
+         by the deferred module (initTheme → applyThemeMode), which runs after the
+         first paint. This synchronous, render-blocking script mirrors
+         loadThemeMode()/applyThemeMode() in src/settings.ts (same footlight.theme
+         key, light default, system→OS resolution). initTheme() re-applies the same
+         value and installs the live system listener — no conflict, just no flash. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("footlight.theme");
+          if (t === "system") {
+            t =
+              window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+          } else if (t !== "dark") {
+            t = "light";
+          }
+          document.documentElement.setAttribute("data-theme", t);
+          // Match UA surfaces (scrollbars, form controls) before CSS loads too.
+          document.documentElement.style.colorScheme = t;
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>
