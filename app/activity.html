@@ -7,6 +7,30 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="alternate icon" href="/favicon.png" type="image/png" />
     <title>Footlight — Activity</title>
+    <!-- Stamp the resolved theme before first paint to avoid a flash-of-dark
+         (FOUC) — see index.html for the full rationale. Mirrors
+         loadThemeMode()/applyThemeMode() in src/settings.ts; runs BEFORE the
+         module below so the very first paint already carries the right theme. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("footlight.theme");
+          if (t === "system") {
+            t =
+              window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+          } else if (t !== "dark") {
+            t = "light";
+          }
+          document.documentElement.setAttribute("data-theme", t);
+          document.documentElement.style.colorScheme = t;
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      })();
+    </script>
     <script type="module" src="/src/activity.ts"></script>
   </head>
   <body>
