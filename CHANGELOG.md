@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/tjbaker/footlight/compare/footlight-v0.5.0...footlight-v0.6.0) (2026-06-08)
+
+
+### Features
+
+* **assistant:** show per-turn token usage and estimated cost ([#115](https://github.com/tjbaker/footlight/issues/115)) ([ea0a1f6](https://github.com/tjbaker/footlight/commit/ea0a1f6b87b70dff3637f88b8d294e3ffecc4d4a))
+
+
+### Bug Fixes
+
+* **assistant:** emit the tool call for a concrete edit so it can be applied ([#116](https://github.com/tjbaker/footlight/issues/116)) ([fc85de5](https://github.com/tjbaker/footlight/commit/fc85de548f512aff8518f9a4351958839a08116f))
+
 ## [0.5.0](https://github.com/tjbaker/footlight/compare/footlight-v0.4.0...footlight-v0.5.0) (2026-06-07)
 
 
