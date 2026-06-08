@@ -1,6 +1,6 @@
 {
   "name": "footlight",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Turn 16:9 source videos into 1080x1920 (9:16) vertical clips by wrapping ffmpeg.",
   "author": "Trevor Baker",
   "license": "Apache-2.0",
