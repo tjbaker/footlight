@@ -264,6 +264,12 @@ the cut even when nothing is burned:
 | `title` | the secondary line, set below the hook |
 | `text_position` | one of 9 zones — `top` / `center` / `bottom`, optionally `-left` / `-center` / `-right` (default `bottom`, horizontally centered) |
 
+Both text fields are **multiline**: a newline in the field becomes a line break in
+the burned caption, with every line rendered at that field's size. In the GUI just
+press Enter; in a CSV manifest wrap the field in double quotes and break the line
+inside them (standard CSV quoting); in JSON use `\n`. There is no auto-wrap — line
+breaks are yours to place, so check long lines against the 1080 px frame.
+
 To actually burn them into the video, add `--burn-captions` at render time:
 
 ```bash

@@ -267,7 +267,7 @@ export const en: Messages = {
         blocks: [
           {
             kind: "p",
-            text: "Each clip can carry a hook (the big line) and a title (the second line) — your caption shot-list, which travels with the manifest. Clips export clean by default; captions are burned into the video only when burn-in is on (Settings → Rendering → Captions, or --burn-captions on the CLI).",
+            text: "Each clip can carry a hook (the big line) and a title (the second line) — your caption shot-list, which travels with the manifest. Either field can span several lines: press Enter for a line break, and each line is rendered at that field's size. Clips export clean by default; captions are burned into the video only when burn-in is on (Settings → Rendering → Captions, or --burn-captions on the CLI).",
           },
           {
             kind: "p",
@@ -609,9 +609,9 @@ export const en: Messages = {
     captions: {
       header: "Captions",
       hookPlaceholder: "hook (big line, optional)",
-      hookTitle: "The big caption line burned over the clip (when burn-in is on).",
+      hookTitle: "The big caption line burned over the clip (when burn-in is on). Enter adds a line break.",
       titlePlaceholder: "title (secondary line, optional)",
-      titleTitle: "The secondary caption line, shown under the hook.",
+      titleTitle: "The secondary caption line, shown under the hook. Enter adds a line break.",
       posVTitle: "Vertical placement of the caption.",
       posHTitle: "Horizontal placement of the caption.",
       posTop: "Top",

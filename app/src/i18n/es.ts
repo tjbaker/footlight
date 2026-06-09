@@ -267,7 +267,7 @@ export const es: Messages = {
         blocks: [
           {
             kind: "p",
-            text: "Cada clip puede llevar un gancho (la línea grande) y un título (la segunda línea) — tu lista de subtítulos, que viaja con el manifiesto. Los clips se exportan limpios de forma predeterminada; los subtítulos se incrustan en el video solo cuando la incrustación está activada (Ajustes → Renderizado → Subtítulos, o --burn-captions en la CLI).",
+            text: "Cada clip puede llevar un gancho (la línea grande) y un título (la segunda línea) — tu lista de subtítulos, que viaja con el manifiesto. Cada campo puede ocupar varias líneas: pulsa Enter para un salto de línea, y cada línea se renderiza al tamaño de su campo. Los clips se exportan limpios de forma predeterminada; los subtítulos se incrustan en el video solo cuando la incrustación está activada (Ajustes → Renderizado → Subtítulos, o --burn-captions en la CLI).",
           },
           {
             kind: "p",
@@ -609,9 +609,9 @@ export const es: Messages = {
     captions: {
       header: "Subtítulos",
       hookPlaceholder: "gancho (línea grande, opcional)",
-      hookTitle: "La línea grande de subtítulo incrustada sobre el clip (cuando la incrustación está activada).",
+      hookTitle: "La línea grande de subtítulo incrustada sobre el clip (cuando la incrustación está activada). Enter añade un salto de línea.",
       titlePlaceholder: "título (línea secundaria, opcional)",
-      titleTitle: "La línea secundaria de subtítulo, mostrada bajo el gancho.",
+      titleTitle: "La línea secundaria de subtítulo, mostrada bajo el gancho. Enter añade un salto de línea.",
       posVTitle: "Posición vertical del subtítulo.",
       posHTitle: "Posición horizontal del subtítulo.",
       posTop: "Arriba",

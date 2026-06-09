@@ -218,6 +218,9 @@ input[type="text"], input[type="number"], input[type="password"] {
 .fl-field input.mono { font-family: "JetBrains Mono", monospace; font-size: 12.5px; }
 .fl-field input::placeholder { color: var(--faint); }
 .fl-field.path input { color: var(--accent-2); }
+/* Auto-growing caption textareas (Enter = line break); height is set by autosize(). */
+.fl-field textarea { flex: 1; min-width: 0; background: none; border: none; outline: none; color: var(--text); font-family: inherit; font-size: 13px; line-height: 1.45; resize: none; overflow: hidden; padding: 0; }
+.fl-field textarea::placeholder { color: var(--faint); }
 
 /* ----- readouts ----- */
 .fl-readout { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }

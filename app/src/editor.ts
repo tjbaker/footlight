@@ -547,19 +547,21 @@ export function mountEditor(root: HTMLElement): void {
   capSect.append(sectionHeader(m.captions.header));
   const hookField = el("div", "fl-field");
   hookField.style.marginBottom = "8px";
-  const hookInput = input("text", m.captions.hookPlaceholder);
+  const hookInput = textarea(m.captions.hookPlaceholder);
   hookInput.title = m.captions.hookTitle;
   hookInput.addEventListener("input", () => {
     state.hook = hookInput.value;
+    autosize(hookInput);
     drawPreview();
   });
   hookField.append(hookInput);
   const titleCapField = el("div", "fl-field");
   titleCapField.style.marginBottom = "8px";
-  const titleCapInput = input("text", m.captions.titlePlaceholder);
+  const titleCapInput = textarea(m.captions.titlePlaceholder);
   titleCapInput.title = m.captions.titleTitle;
   titleCapInput.addEventListener("input", () => {
     state.title = titleCapInput.value;
+    autosize(titleCapInput);
     drawPreview();
   });
   titleCapField.append(titleCapInput);
@@ -2432,20 +2434,26 @@ export function mountEditor(root: HTMLElement): void {
     cw: number,
     ch: number,
   ): void {
-    const hook = state.hook.trim();
-    const title = state.title.trim();
-    if (!hook && !title) return;
-
+    // Mirror the engine: newlines inside hook/title are line breaks, each line
+    // rendered at its field's size (blank inner lines kept as spacing, like \N\N).
+    const splitLines = (value: string): string[] => {
+      const t = value.trim();
+      return t ? t.split(/\r\n?|\n/).map((s) => s.trim()) : [];
+    };
     const cap = state.caption;
     const hookSize = Math.round(ch * 0.052);
     const titleSize = Math.round(ch * 0.036);
+    const lines = [
+      ...splitLines(state.hook).map((text) => ({ text, size: hookSize })),
+      ...splitLines(state.title).map((text) => ({ text, size: titleSize })),
+    ];
+    if (lines.length === 0) return;
+
     const gap = Math.round(ch * 0.012);
     const pad = Math.round(ch * 0.03);
 
     // Total block height to place per position.
-    const hookH = hook ? hookSize : 0;
-    const titleH = title ? titleSize : 0;
-    const blockH = hookH + titleH + (hook && title ? gap : 0);
+    const blockH = lines.reduce((sum, l) => sum + l.size, 0) + gap * (lines.length - 1);
 
     const { v, h } = parseTextPosition(state.textPosition);
     let top: number;
@@ -2477,13 +2485,9 @@ export function mountEditor(root: HTMLElement): void {
     // Opaque box behind the block, sized to the widest line.
     if (cap.box) {
       let widest = 0;
-      if (hook) {
-        ctx.font = fontFor(hookSize);
-        widest = Math.max(widest, ctx.measureText(hook).width);
-      }
-      if (title) {
-        ctx.font = fontFor(titleSize);
-        widest = Math.max(widest, ctx.measureText(title).width);
+      for (const line of lines) {
+        ctx.font = fontFor(line.size);
+        widest = Math.max(widest, ctx.measureText(line.text).width);
       }
       const bpad = Math.round(hookSize * 0.18);
       const bx = h === "left" ? x - bpad : h === "right" ? x - widest - bpad : x - widest / 2 - bpad;
@@ -2514,8 +2518,7 @@ export function mountEditor(root: HTMLElement): void {
       }
       y += size + gap;
     };
-    if (hook) drawLine(hook, hookSize);
-    if (title) drawLine(title, titleSize);
+    for (const line of lines) drawLine(line.text, line.size);
     ctx.restore();
   }
 
@@ -3832,6 +3835,8 @@ export function mountEditor(root: HTMLElement): void {
     state.textPosition = joinTextPosition(restored.v, restored.h);
     hookInput.value = state.hook;
     titleCapInput.value = state.title;
+    autosize(hookInput);
+    autosize(titleCapInput);
     syncSelectsFromPos();
     state.caption = captionStyleFromSpec(spec.caption);
     syncCaptionControls();
@@ -4164,6 +4169,20 @@ function input(type: string, placeholder: string): HTMLInputElement {
   i.type = type;
   i.placeholder = placeholder;
   return i;
+}
+
+/** A single-row textarea that grows with its content (Enter = line break). */
+function textarea(placeholder: string): HTMLTextAreaElement {
+  const t = document.createElement("textarea");
+  t.placeholder = placeholder;
+  t.rows = 1;
+  return t;
+}
+
+/** Fit an auto-growing textarea's height to its content. */
+function autosize(t: HTMLTextAreaElement): void {
+  t.style.height = "auto";
+  t.style.height = `${t.scrollHeight}px`;
 }
 
 function button(label: string, cls?: string, onClick?: () => void): HTMLButtonElement {

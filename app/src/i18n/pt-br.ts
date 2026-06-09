@@ -267,7 +267,7 @@ export const ptBR: Messages = {
         blocks: [
           {
             kind: "p",
-            text: "Cada clipe pode carregar um gancho (a linha grande) e um título (a segunda linha) — sua lista de legendas, que viaja junto com o manifesto. Os clipes são exportados limpos por padrão; as legendas só são gravadas no vídeo quando a gravação está ligada (Configurações → Renderização → Legendas, ou --burn-captions na CLI).",
+            text: "Cada clipe pode carregar um gancho (a linha grande) e um título (a segunda linha) — sua lista de legendas, que viaja junto com o manifesto. Cada campo pode ocupar várias linhas: pressione Enter para uma quebra de linha, e cada linha é renderizada no tamanho daquele campo. Os clipes são exportados limpos por padrão; as legendas só são gravadas no vídeo quando a gravação está ligada (Configurações → Renderização → Legendas, ou --burn-captions na CLI).",
           },
           {
             kind: "p",
@@ -609,9 +609,9 @@ export const ptBR: Messages = {
     captions: {
       header: "Legendas",
       hookPlaceholder: "gancho (linha grande, opcional)",
-      hookTitle: "A linha grande de legenda gravada sobre o clipe (quando a gravação está ativa).",
+      hookTitle: "A linha grande de legenda gravada sobre o clipe (quando a gravação está ativa). Enter adiciona uma quebra de linha.",
       titlePlaceholder: "título (linha secundária, opcional)",
-      titleTitle: "A linha secundária de legenda, exibida sob o gancho.",
+      titleTitle: "A linha secundária de legenda, exibida sob o gancho. Enter adiciona uma quebra de linha.",
       posVTitle: "Posicionamento vertical da legenda.",
       posHTitle: "Posicionamento horizontal da legenda.",
       posTop: "Topo",
