@@ -618,16 +618,18 @@ function captionFontFamily(opts: RenderOptions): string {
 }
 
 /**
- * Escape user text for an ASS `Dialogue` text field: drop backslashes (so `\N`
- * and override escapes can't be injected), neutralize `{` `}` (ASS override
- * delimiters), and collapse real newlines (we place `\N` ourselves).
+ * Escape user text for an ASS `Dialogue` text field: drop backslashes (so
+ * override escapes can't be injected), neutralize `{` `}` (ASS override
+ * delimiters), then turn the user's real newlines into `\N` line breaks — the
+ * only backslash sequence we emit ourselves. Backslashes are stripped BEFORE
+ * the newline conversion so user text can never smuggle one in.
  */
 function assEscape(value: string): string {
   return value
-    .replace(/[\r\n]+/g, " ")
     .replace(/\\/g, "")
     .replace(/[{}]/g, (m) => (m === "{" ? "(" : ")"))
-    .trim();
+    .trim()
+    .replace(/[ \t]*(?:\r\n?|\n)[ \t]*/g, "\\N");
 }
 
 /** Single-quote a value for a filtergraph option (`\` and `'` escaped; `:`/`,` are literal inside quotes). */
@@ -650,7 +652,9 @@ function dirname(p: string): string {
  * Pure — the caller writes this to a temp `.ass` and passes its path as
  * `BuildOptions.captionAssPath`. The hook (bigger) sits above the title via an
  * inline `\fs`, stacked with `\N`, as one block placed at `text_position`
- * (white fill, black outline). `PlayResX/Y` match the 1080×1920 output.
+ * (white fill, black outline). Newlines INSIDE `hook`/`title` are honored: each
+ * becomes a `\N` line break at that field's size, so either field can span
+ * multiple lines. `PlayResX/Y` match the 1080×1920 output.
  */
 export function buildCaptionAss(row: ClipRow, opts: RenderOptions): string | null {
   if (!opts.burnCaptions) return null;

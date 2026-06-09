@@ -149,7 +149,11 @@ function pressKey(key: string, init: KeyboardEventInit = {}): void {
 }
 
 /** Set an input/select value and fire the event its handler listens for. */
-function setValue(el: HTMLInputElement | HTMLSelectElement, value: string, evt = "input"): void {
+function setValue(
+  el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
+  value: string,
+  evt = "input",
+): void {
   el.value = value;
   el.dispatchEvent(new Event(evt, { bubbles: true }));
 }
@@ -191,15 +195,15 @@ async function mountLoadAndWindow(): Promise<{ root: HTMLElement; capSect: HTMLE
   return { root, capSect: capSect! };
 }
 
-/** The caption text inputs: hook is the input titled "The big caption line…",
- *  title is the one titled "The secondary caption line…". */
+/** The caption text fields (multiline textareas): hook is the one titled
+ *  "The big caption line…", title is the "The secondary caption line…" one. */
 function captionTextInputs(capSect: HTMLElement): {
-  hook: HTMLInputElement;
-  title: HTMLInputElement;
+  hook: HTMLTextAreaElement;
+  title: HTMLTextAreaElement;
 } {
-  const inputs = Array.from(capSect.querySelectorAll<HTMLInputElement>('input[type="text"]'));
-  const hook = inputs.find((i) => i.title.startsWith("The big caption line"));
-  const title = inputs.find((i) => i.title.startsWith("The secondary caption line"));
+  const areas = Array.from(capSect.querySelectorAll<HTMLTextAreaElement>("textarea"));
+  const hook = areas.find((t) => t.title.startsWith("The big caption line"));
+  const title = areas.find((t) => t.title.startsWith("The secondary caption line"));
   expect(hook).toBeTruthy();
   expect(title).toBeTruthy();
   return { hook: hook!, title: title! };
@@ -269,6 +273,30 @@ describe("editor caption controls (jsdom)", () => {
     expect(clips).toHaveLength(1);
     expect(clips[0]!.hook).toBe("MY HOOK");
     expect(clips[0]!.title).toBe("my title");
+  });
+
+  it("multiline hook/title (Enter = line break) survives into the emitted manifest", async () => {
+    const { root, capSect } = await mountLoadAndWindow();
+    const { hook, title } = captionTextInputs(capSect);
+
+    setValue(hook, "BIG\nNIGHT");
+    setValue(title, "live\nat the roxy");
+
+    const addBtn = Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find((b) =>
+      b.title?.startsWith("Add this clip") || /add clip/i.test(b.textContent ?? ""),
+    );
+    addBtn!.click();
+    await flush();
+    const renderBtn = Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find((b) =>
+      /render/i.test(b.textContent ?? ""),
+    );
+    renderBtn!.click();
+    await flush();
+
+    const manifestJson = renderMock.mock.calls[0]![0] as string;
+    const clips = JSON.parse(manifestJson) as Array<Record<string, unknown>>;
+    expect(clips[0]!.hook).toBe("BIG\nNIGHT");
+    expect(clips[0]!.title).toBe("live\nat the roxy");
   });
 
   it("bold / italic / underline / shadow / box toggles flip their active class", async () => {

@@ -98,13 +98,28 @@ describe("buildCaptionAss (pure, libass — SPEC §6.5)", () => {
       .toContain("Style: Caption,Sans,");
   });
 
-  it("neutralizes ASS override braces and strips backslashes/newlines from text", () => {
+  it("neutralizes ASS override braces and strips backslashes from text", () => {
     const d = dialogueLine(
-      buildCaptionAss({ ...ROW, hook: "a{\\b1}b\nc" }, opts())!,
+      buildCaptionAss({ ...ROW, hook: "a{\\b1}b" }, opts())!,
     );
-    // the inline \fs tag we add is intact, but the user's braces/backslash/newline are gone
-    expect(d).toContain(`{\\fs${HOOK_SIZE}}a(b1)b c`);
+    // the inline \fs tag we add is intact, but the user's braces/backslash are gone
+    expect(d).toContain(`{\\fs${HOOK_SIZE}}a(b1)b`);
     expect(d).not.toContain("{\\b1}");
+  });
+
+  it("turns newlines inside hook/title into \\N line breaks", () => {
+    const d = dialogueLine(
+      buildCaptionAss({ ...ROW, hook: "BIG\nNIGHT", title: "live \r\n at the roxy" }, opts())!,
+    );
+    // each field keeps its own size; whitespace around the break is trimmed
+    expect(d).toContain(`{\\fs${HOOK_SIZE}}BIG\\NNIGHT`);
+    expect(d).toContain(`{\\fs${TITLE_SIZE}}live\\Nat the roxy`);
+  });
+
+  it("cannot smuggle ASS codes via a typed backslash-N", () => {
+    const d = dialogueLine(buildCaptionAss({ ...ROW, hook: "a\\Nb" }, opts())!);
+    // the user's backslash is stripped before we emit our own \N breaks
+    expect(d).toContain(`{\\fs${HOOK_SIZE}}aNb`);
   });
 });
 
