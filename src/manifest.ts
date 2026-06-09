@@ -16,6 +16,7 @@ import {
   parseContentCrop,
   parseCropSchedule,
   computeCrop,
+  roundEven,
   type CropWindowSpec,
   type CropPathKeyframe,
 } from "./core.js";
@@ -60,14 +61,7 @@ export interface ClipRow {
 /** Tolerance (px) within which a box x snaps to a named left/center/right offset. */
 const SNAP_TOLERANCE = 2;
 
-/**
- * Round down to the nearest even integer. Mirrors the engine's `even`.
- * (H.264 requires even dimensions; the engine rounds x/y down to even too.)
- */
-export function roundEven(n: number): number {
-  const i = Math.round(n);
-  return i - (i % 2);
-}
+export { roundEven };
 
 /**
  * The fixed 9:16 crop width the engine uses for a landscape working region:

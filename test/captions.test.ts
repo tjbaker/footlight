@@ -218,6 +218,15 @@ describe("buildFfmpegArgs caption integration", () => {
     expect(vf).toContain("subtitles=filename='/tmp/c.ass':fontsdir='/f'");
   });
 
+  it("points fontsdir at the root for a root-level font file", () => {
+    const { args } = buildFfmpegArgs(
+      { ...ROW, hook: "Yo" },
+      { ...opts(), dims, outdir: "out", captionAssPath: "/tmp/c.ass", captionFontFile: "/My Font.ttf" },
+    );
+    const vf = args[args.indexOf("-vf") + 1]!;
+    expect(vf).toContain("subtitles=filename='/tmp/c.ass':fontsdir='/'");
+  });
+
   it("emits no subtitles filter without an ASS path (clean export)", () => {
     const { args } = buildFfmpegArgs({ ...ROW, hook: "Yo" }, { ...opts(), dims, outdir: "out" });
     const vf = args[args.indexOf("-vf") + 1]!;
