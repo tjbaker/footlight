@@ -15,11 +15,9 @@
  *   reusing the keys the editor already reads (`footlight.theme`, `footlight.outdir`)
  *   so the two stay in sync.
  *
- * NOTE (out of slice): the Rendering panel maps 1:1 to `--crf/--preset/
- * --audio-bitrate/--dry-run`, but `platform.render` only threads `{ outdir }`
- * today, so these defaults are persisted + surfaced here and *not yet* passed to
- * the render call. Wiring them through `platform.render` + the editor's render
- * path is a follow-up (those files are outside this PR's slice).
+ * The Rendering panel maps 1:1 to `--crf/--preset/--audio-bitrate/--dry-run`:
+ * the editor's `renderOptions()` (editor-prefs.ts) reads the persisted blob and
+ * threads it through `platform.render` on both backends.
  */
 
 import { messages } from "./i18n/index.js";
@@ -561,12 +559,6 @@ function buildRenderingPanel(): HTMLElement {
 
   const root = el("div");
   root.append(panelHeader(s.title, s.subtitle));
-
-  // gap note (the persistence-only follow-up)
-  const gap = el("div", "fl-set-secsub");
-  gap.style.cssText = "margin-top:8px; color:var(--accent-2);";
-  gap.textContent = s.gapNote;
-  root.append(gap);
 
   // Quality (CRF) range
   const qualityBlock = block(s.quality);

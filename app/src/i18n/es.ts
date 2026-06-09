@@ -440,8 +440,6 @@ export const es: Messages = {
       bitrate: "Tasa de bits",
       dryRun: "Mostrar el comando de ffmpeg antes de renderizar",
       dryRunHint: "Imprime la invocación exacta de ffmpeg para que puedas inspeccionarla o copiarla.",
-      gapNote:
-        "Estos valores predeterminados de renderizado se conservan; pasarlos a la llamada de renderizado es un paso pendiente.",
       captions: "Subtítulos",
       burnCaptions: "Incrustar subtítulos en el video",
       burnCaptionsHint:

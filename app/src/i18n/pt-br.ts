@@ -440,8 +440,6 @@ export const ptBR: Messages = {
       bitrate: "Taxa de bits",
       dryRun: "Mostrar o comando do ffmpeg antes de renderizar",
       dryRunHint: "Imprimir a invocação exata do ffmpeg para que você possa inspecioná-la ou copiá-la.",
-      gapNote:
-        "Esses padrões de renderização são persistidos; encadeá-los até a chamada de renderização é um passo seguinte.",
       captions: "Legendas",
       burnCaptions: "Gravar legendas no vídeo",
       burnCaptionsHint:

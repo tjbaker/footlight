@@ -138,6 +138,30 @@ describe("openSettings — shell + nav", () => {
     expect(mainPanel()!.querySelector("input.fl-range")).not.toBeNull();
   });
 
+  it("persists Rendering panel changes to the footlight.render blob renderOptions() reads", () => {
+    openSettings();
+    const rendering = navItems().find((n) => n.textContent === NAV.rendering)!;
+    rendering.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    // Drag the CRF slider; the pref saves on every input.
+    const range = mainPanel()!.querySelector<HTMLInputElement>("input.fl-range")!;
+    range.value = "23";
+    range.dispatchEvent(new Event("input", { bubbles: true }));
+
+    // Pick a non-default encoder preset chip.
+    const slow = Array.from(mainPanel()!.querySelectorAll<HTMLButtonElement>(".fl-preset")).find(
+      (b) => b.textContent === "slow",
+    )!;
+    slow.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    const blob = JSON.parse(localStorage.getItem("footlight.render")!) as {
+      crf: number;
+      preset: string;
+    };
+    expect(blob.crf).toBe(23);
+    expect(blob.preset).toBe("slow");
+  });
+
   it("renders each panel's heading and key controls when navigated to", () => {
     openSettings();
     const byLabel = (label: string): HTMLElement =>

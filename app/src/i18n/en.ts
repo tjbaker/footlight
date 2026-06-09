@@ -440,8 +440,6 @@ export const en: Messages = {
       bitrate: "Bitrate",
       dryRun: "Show the ffmpeg command before rendering",
       dryRunHint: "Print the exact ffmpeg invocation so you can inspect or copy it.",
-      gapNote:
-        "These render defaults are persisted; threading them through to the render call is a follow-up.",
       captions: "Captions",
       burnCaptions: "Burn captions into the video",
       burnCaptionsHint:
