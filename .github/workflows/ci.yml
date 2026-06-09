@@ -56,10 +56,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri
-      # tauri-build validates that frontendDist (app/dist) exists; an empty dir
-      # satisfies it without paying for a full Vite build here (the app job
-      # already builds the real frontend).
-      - run: mkdir -p app/dist
+      # tauri-build validates that frontendDist (app/dist) and the bundled
+      # engine resource (the root dist/, see tauri.conf.json resources) exist;
+      # empty dirs satisfy it without paying for the Vite/tsc builds here (the
+      # engine and app jobs already do the real builds).
+      - run: mkdir -p app/dist dist
       - run: cargo check --locked
         working-directory: app/src-tauri
 
