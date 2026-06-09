@@ -162,13 +162,13 @@ describe("serializeManifestCSV", () => {
         in_point: "0",
         out_point: "10",
         crop_offset: "center",
-        hook: "Watch this",
+        hook: "Watch this\nright now",
         title: "the solo",
         text_position: "top",
       },
     ];
     const parsed = parseCsv(serializeManifestCSV(rows));
-    expect(parsed[0]!.hook).toBe("Watch this");
+    expect(parsed[0]!.hook).toBe("Watch this\nright now");
     expect(parsed[0]!.title).toBe("the solo");
     expect(parsed[0]!.text_position).toBe("top");
   });
