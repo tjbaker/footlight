@@ -139,6 +139,11 @@ export function parseContentCrop(value: string | undefined | null): ContentCrop 
     }
     return n;
   });
+  if (nums[0]! <= 0 || nums[1]! <= 0 || nums[2]! < 0 || nums[3]! < 0) {
+    throw new Error(
+      `content_crop needs positive W:H and non-negative X:Y, got ${JSON.stringify(value)}`,
+    );
+  }
   return [nums[0]!, nums[1]!, nums[2]!, nums[3]!];
 }
 
@@ -179,6 +184,16 @@ export function parseCropSchedule(value: string | undefined | null): Array<[numb
 /** Round down to the nearest even integer (H.264 requires even dimensions). */
 export function even(n: number): number {
   return n - (n % 2);
+}
+
+/**
+ * Round to the NEAREST integer, then down to even. Unlike `even` (which
+ * truncates), this is for fractional box/track math where 607.9 should land on
+ * 608, not 606. (H.264 requires even dimensions.)
+ */
+export function roundEven(n: number): number {
+  const i = Math.round(n);
+  return i - (i % 2);
 }
 
 /**
@@ -625,6 +640,7 @@ function filterQuote(value: string): string {
 function dirname(p: string): string {
   const t = trimTrailingSeparators(p);
   const slash = Math.max(t.lastIndexOf("/"), t.lastIndexOf("\\"));
+  if (slash === 0) return t.slice(0, 1); // root-level file: "/font.ttf" -> "/"
   return slash > 0 ? t.slice(0, slash) : ".";
 }
 

@@ -22,15 +22,9 @@
  * cut — that is the hard-switch schedule's job, §3.3).
  */
 
-import { TARGET_AR, type CropPathKeyframe } from "./core.js";
+import { TARGET_AR, roundEven, type CropPathKeyframe } from "./core.js";
 import type { Box, Dims } from "./manifest.js";
 import type { TrackSample, VisionTracker } from "./providers/types.js";
-
-/** Round to the nearest even integer (H.264 needs even crop dimensions). */
-function even(n: number): number {
-  const i = Math.round(n);
-  return i - (i % 2);
-}
 
 /** Horizontal center of a box in working-region pixels. */
 function boxCenterX(box: Box): number {
@@ -199,11 +193,11 @@ export class OneEuroFilter {
 /**
  * Desired crop x so the subject's horizontal center sits in the MIDDLE of the
  * 9:16 window. Crop width matches the engine's landscape rule
- * (`cw = even(round(region.height * TARGET_AR))`); x is clamped into
+ * (`cw = roundEven(region.height * TARGET_AR)`); x is clamped into
  * [0, region.width - cw] so the window never leaves the frame.
  */
 export function boxCenterToCropX(box: Box, region: Dims): number {
-  const cw = even(region.height * TARGET_AR);
+  const cw = roundEven(region.height * TARGET_AR);
   const maxX = Math.max(0, region.width - cw);
   const centerX = boxCenterX(box);
   let x = Math.round(centerX - cw / 2);

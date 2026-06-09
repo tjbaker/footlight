@@ -7,6 +7,7 @@ import {
   parseContentCrop,
   parseCropSchedule,
   even,
+  roundEven,
   computeCrop,
   safeName,
   buildFfmpegArgs,
@@ -56,6 +57,26 @@ describe("parseContentCrop", () => {
   });
   it("throws on wrong arity", () => {
     expect(() => parseContentCrop("1:2:3")).toThrow();
+  });
+  it("throws on negative offsets and non-positive dimensions", () => {
+    expect(() => parseContentCrop("1800:1010:-10:34")).toThrow(/non-negative/);
+    expect(() => parseContentCrop("1800:1010:60:-1")).toThrow(/non-negative/);
+    expect(() => parseContentCrop("0:1010:60:34")).toThrow(/positive/);
+    expect(() => parseContentCrop("-1800:1010:60:34")).toThrow(/positive/);
+    expect(() => parseContentCrop("1800:0:60:34")).toThrow(/positive/);
+  });
+});
+
+describe("even / roundEven", () => {
+  it("even truncates down to even", () => {
+    expect(even(608)).toBe(608);
+    expect(even(607)).toBe(606);
+  });
+  it("roundEven rounds to nearest, then down to even", () => {
+    expect(roundEven(608)).toBe(608);
+    expect(roundEven(607.9)).toBe(608);
+    expect(roundEven(607.4)).toBe(606);
+    expect(roundEven(607)).toBe(606);
   });
 });
 
