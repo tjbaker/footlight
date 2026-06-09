@@ -97,7 +97,6 @@ export interface SettingsMessages {
     bitrate: string;
     dryRun: string;
     dryRunHint: string;
-    gapNote: string;
     captions: string;
     burnCaptions: string;
     burnCaptionsHint: string;
