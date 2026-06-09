@@ -38,10 +38,11 @@ jobs:
 
   # The native shell never compiled in CI before this job (CodeQL only analyzes
   # it statically), so a PR could break `cargo tauri build` and stay green.
-  # `cargo check` is the cheapest "does it compile" gate — no bundling, no
-  # release profile.
+  # `cargo test` both compiles the shell (subsuming the old `cargo check` gate)
+  # and runs the Rust unit tests that pin the hand-mirrored arg builders /
+  # parsers in main.rs to src/core.ts — no bundling, no release profile.
   tauri:
-    name: tauri (cargo check)
+    name: tauri (cargo test)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -61,7 +62,7 @@ jobs:
       # empty dirs satisfy it without paying for the Vite/tsc builds here (the
       # engine and app jobs already do the real builds).
       - run: mkdir -p app/dist dist
-      - run: cargo check --locked
+      - run: cargo test --locked
         working-directory: app/src-tauri
 
   app:
