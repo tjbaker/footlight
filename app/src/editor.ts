@@ -48,57 +48,7 @@ import { messages } from "./i18n/index.js";
 /** The editor's localized strings (the `editor` namespace of the catalog). */
 const m = messages.editor;
 
-/**
- * The assistant model the user picked in Settings → AI & models (persisted under
- * `footlight.ai` as `{ provider, model }`), defaulting to Gemini 3.5 Flash. Read
- * fresh per turn so a change in Settings takes effect without a reload.
- */
-function assistantSelection(): { assistantModel: { provider: string; model: string } } {
-  let assistantModel = { provider: "gemini", model: "gemini-3.5-flash" };
-  try {
-    const raw = localStorage.getItem("footlight.ai");
-    if (raw) {
-      const p = JSON.parse(raw) as { provider?: unknown; model?: unknown };
-      if (typeof p.provider === "string" && typeof p.model === "string") {
-        assistantModel = { provider: p.provider, model: p.model };
-      }
-    }
-  } catch {
-    /* fall back to the default */
-  }
-  return { assistantModel };
-}
-
-/**
- * Render flags from Settings → Rendering (persisted under `footlight.render`).
- * Caption STYLE is per-clip now (carried on each `ClipSpec.caption` in the
- * manifest); only the render-wide `burnCaptions` on/off switch lives here.
- */
-function renderOptions(outdir: string): RenderOptions {
-  const opts: RenderOptions = { outdir };
-  try {
-    const raw = localStorage.getItem("footlight.render");
-    if (raw) {
-      const p = JSON.parse(raw) as {
-        crf?: unknown;
-        preset?: unknown;
-        audio?: unknown;
-        bitrate?: unknown;
-        dryRun?: unknown;
-        burnCaptions?: unknown;
-      };
-      if (typeof p.crf === "number") opts.crf = p.crf;
-      if (typeof p.preset === "string") opts.preset = p.preset;
-      if (p.audio === "reencode" && typeof p.bitrate === "string") opts.audioBitrate = p.bitrate;
-      if (p.dryRun === true) opts.dryRun = true;
-      if (p.burnCaptions === true) opts.burnCaptions = true;
-    }
-  } catch {
-    /* fall back to the engine's own defaults */
-  }
-  return opts;
-}
-import type { HistoryEntry, SessionData, RenderOptions } from "./platform/types.js";
+import type { HistoryEntry, SessionData } from "./platform/types.js";
 import { createAssistant, type ConversationMessage } from "./assistant/index.js";
 import { openSettings, initTheme, loadAssistantOverlay, loadChatStillsBudget } from "./settings.js";
 import { BASE_PROMPT } from "./assistant/base-prompt.js";
@@ -151,6 +101,26 @@ import {
   clampTrimOut,
   keyframeFromCommit,
 } from "./editor-store.js";
+import {
+  assistantSelection,
+  renderOptions,
+  loadOutdir,
+  saveOutdir,
+  loadPreviewPref,
+  savePreviewPref,
+  loadRecents,
+  pushRecent,
+  saveTheme,
+} from "./editor-prefs.js";
+import {
+  clipDur,
+  fmtUsd,
+  ghostsFrom,
+  fmtClockTime,
+  dayLabel,
+  offsetMode,
+} from "./editor-format.js";
+import { layoutPreviewCaptions, type PreviewCaptionLine } from "./editor-caption-preview.js";
 
 export function mountEditor(root: HTMLElement): void {
   const state = createInitialEditorState();
@@ -2427,53 +2397,25 @@ export function mountEditor(root: HTMLElement): void {
    * outline colour, bold/italic/underline, drop shadow, opaque box, rotation,
    * and the font family when it's a name the browser can render). This is a
    * runtime-visual HINT only — the AUTHORITATIVE render is the engine's libass
-   * (`--burn-captions`); spacing/fonts/metrics will differ.
+   * (`--burn-captions`); spacing/fonts/metrics will differ. The WHAT/WHERE
+   * (line list, block geometry, grid anchor, per-line font strings) is the pure
+   * `layoutPreviewCaptions` (editor-caption-preview.ts); only the ctx painting
+   * lives here.
    */
   function drawPreviewCaptions(
     ctx: CanvasRenderingContext2D,
     cw: number,
     ch: number,
   ): void {
-    // Mirror the engine: newlines inside hook/title are line breaks, each line
-    // rendered at its field's size (blank inner lines kept as spacing, like \N\N).
-    const splitLines = (value: string): string[] => {
-      const t = value.trim();
-      return t ? t.split(/\r\n?|\n/).map((s) => s.trim()) : [];
-    };
     const cap = state.caption;
-    const hookSize = Math.round(ch * 0.052);
-    const titleSize = Math.round(ch * 0.036);
-    const lines = [
-      ...splitLines(state.hook).map((text) => ({ text, size: hookSize })),
-      ...splitLines(state.title).map((text) => ({ text, size: titleSize })),
-    ];
-    if (lines.length === 0) return;
-
-    const gap = Math.round(ch * 0.012);
-    const pad = Math.round(ch * 0.03);
-
-    // Total block height to place per position.
-    const blockH = lines.reduce((sum, l) => sum + l.size, 0) + gap * (lines.length - 1);
-
-    const { v, h } = parseTextPosition(state.textPosition);
-    let top: number;
-    if (v === "top") top = pad;
-    else if (v === "center") top = (ch - blockH) / 2;
-    else top = ch - blockH - pad;
-
-    // A bare family name can be rendered by the canvas; a file path can't (no
-    // @font-face here), so those fall back to the system UI face for the hint.
-    const isPath = /[\\/]/.test(cap.font) || /\.(ttf|otf|ttc)$/i.test(cap.font);
-    const family = cap.font && !isPath ? `'${cap.font.replace(/'/g, "")}', ` : "";
-    const weight = cap.bold ? 800 : 600;
-    const style = cap.italic ? "italic " : "";
-    const fontFor = (size: number): string => `${style}${weight} ${size}px ${family}system-ui, sans-serif`;
+    const layout = layoutPreviewCaptions(state.hook, state.title, state.textPosition, cap, cw, ch);
+    if (!layout) return;
+    const { lines, gap, blockH, top, x, h, hookSize } = layout;
 
     ctx.save();
     ctx.textAlign = h === "left" ? "left" : h === "right" ? "right" : "center";
     ctx.textBaseline = "top";
     ctx.lineJoin = "round";
-    const x = h === "left" ? pad : h === "right" ? cw - pad : cw / 2;
 
     // Rotate the whole block around its anchor (ASS positive angle = CCW).
     if (cap.angle) {
@@ -2486,7 +2428,7 @@ export function mountEditor(root: HTMLElement): void {
     if (cap.box) {
       let widest = 0;
       for (const line of lines) {
-        ctx.font = fontFor(line.size);
+        ctx.font = line.font;
         widest = Math.max(widest, ctx.measureText(line.text).width);
       }
       const bpad = Math.round(hookSize * 0.18);
@@ -2496,8 +2438,9 @@ export function mountEditor(root: HTMLElement): void {
     }
 
     let y = top;
-    const drawLine = (text: string, size: number): void => {
-      ctx.font = fontFor(size);
+    const drawLine = (line: PreviewCaptionLine): void => {
+      const { text, size } = line;
+      ctx.font = line.font;
       if (cap.shadow) {
         ctx.save();
         ctx.fillStyle = "rgba(0,0,0,0.55)";
@@ -2518,7 +2461,7 @@ export function mountEditor(root: HTMLElement): void {
       }
       y += size + gap;
     };
-    for (const line of lines) drawLine(line.text, line.size);
+    for (const line of lines) drawLine(line);
     ctx.restore();
   }
 
@@ -3266,19 +3209,6 @@ export function mountEditor(root: HTMLElement): void {
     return row;
   }
 
-  /** Format a tiny USD cost: 4 decimals under a dollar (fractions of a cent), 2 above. */
-  function fmtUsd(v: number): string {
-    return v >= 1 ? `$${v.toFixed(2)}` : `$${v.toFixed(4)}`;
-  }
-
-  /** The ghost previews for the not-yet-committed actions (index `from` onward). */
-  function ghostsFrom(actions: ProposedAction[], from: number): GhostPreview[] {
-    return actions
-      .slice(from)
-      .map((a) => a.ghost)
-      .filter((g): g is GhostPreview => g != null);
-  }
-
   /** "grounded in …" chip row citing the real signals (never audio). */
   function groundingRow(grounding: Grounding[]): HTMLElement {
     const row = el("div", "fl-ground");
@@ -3535,15 +3465,6 @@ export function mountEditor(root: HTMLElement): void {
     state.clips.push(spec);
     refreshManifest();
     nameInput.value = "";
-  }
-
-  /** Clip duration in seconds (0 if unparseable). */
-  function clipDur(spec: ClipSpec): number {
-    try {
-      return Math.max(0, parseTimestamp(spec.out_point) - parseTimestamp(spec.in_point));
-    } catch {
-      return 0;
-    }
   }
 
   let dragFrom: number | null = null;
@@ -4195,117 +4116,6 @@ function button(label: string, cls?: string, onClick?: () => void): HTMLButtonEl
 
 /** Max number of past renders kept in the history. */
 const HISTORY_CAP = 50;
-
-// ---- history-modal formatting helpers ----
-
-/** Wall-clock render time for an entry (e.g. "2:18 PM"). */
-function fmtClockTime(ts: number): string {
-  try {
-    return new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  } catch {
-    return "";
-  }
-}
-
-/** Day-divider label for an entry: "Today" / "Yesterday" / "Mon D". */
-function dayLabel(ts: number): string {
-  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const day = new Date(ts);
-  const diff = Math.round((startOfDay(new Date()) - startOfDay(day)) / 86400000);
-  if (diff <= 0) return m.history.today;
-  if (diff === 1) return m.history.yesterday;
-  return day.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-/** The clip's framing mode as a pill: track / punch-in / keyframes / fixed offset. */
-function offsetMode(spec: ClipSpec): { label: string; ghost: boolean } {
-  if (spec.cropPath?.length) return { label: m.history.modeTrack, ghost: false };
-  if (spec.cropWindow) return { label: m.history.modePunchIn, ghost: false };
-  const off = spec.crop_offset ?? m.framing.defaultOffset;
-  if (off.includes(";") || off.includes("=")) return { label: m.history.modeKeyframes, ghost: false };
-  return { label: off, ghost: true };
-}
-
-// Persist the chosen output folder so it survives reloads (best effort).
-const OUTDIR_KEY = "footlight.outdir";
-
-/**
- * The persisted output folder, or `""` when the user has never chosen one — the
- * caller then seeds the platform default (native: a folder in ~/Movies) via
- * `platform.defaultOutdir()`. (Returning `""` here, not `"clips"`, is what lets a
- * fresh native install adopt a real home-dir folder instead of a relative path
- * next to the app bundle — issue #58.)
- */
-function loadOutdir(): string {
-  try {
-    return localStorage.getItem(OUTDIR_KEY) || "";
-  } catch {
-    return "";
-  }
-}
-
-function saveOutdir(value: string): void {
-  try {
-    const v = value.trim();
-    if (v) localStorage.setItem(OUTDIR_KEY, v);
-  } catch {
-    /* localStorage unavailable (private mode etc.) — non-fatal. */
-  }
-}
-
-// Live 9:16 output-preview visibility (persisted; default on).
-const PREVIEW_KEY = "footlight.preview";
-
-function loadPreviewPref(): boolean {
-  try {
-    return localStorage.getItem(PREVIEW_KEY) !== "off";
-  } catch {
-    return true;
-  }
-}
-
-function savePreviewPref(on: boolean): void {
-  try {
-    localStorage.setItem(PREVIEW_KEY, on ? "on" : "off");
-  } catch {
-    /* non-fatal */
-  }
-}
-
-// Recent source paths (most-recent-first), shown as a datalist on the path field.
-const RECENTS_KEY = "footlight.recents";
-const RECENTS_CAP = 10;
-
-function loadRecents(): string[] {
-  try {
-    const v = JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]");
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function pushRecent(path: string): void {
-  const p = path.trim();
-  if (!p) return;
-  try {
-    const next = [p, ...loadRecents().filter((x) => x !== p)].slice(0, RECENTS_CAP);
-    localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
-  } catch {
-    /* non-fatal */
-  }
-}
-
-// ---- Theme (light default, persisted) ----
-const THEME_KEY = "footlight.theme";
-
-function saveTheme(t: "light" | "dark"): void {
-  try {
-    localStorage.setItem(THEME_KEY, t);
-  } catch {
-    /* non-fatal */
-  }
-}
 
 /** Build an inspector section header (`<div class="fl-sect-h"><span class="fl-label">…`). */
 function sectionHeader(text: string): HTMLElement {
