@@ -74,7 +74,13 @@ jobs:
         with:
           node-version: 26
           cache: npm
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+      # The dev-server tests exercise app/dev-server/server.mjs, which imports
+      # the shared pure builders from the ROOT package's dist/ — build it first.
+      - run: npm ci
+      - run: npm run build
       - run: npm ci
         working-directory: app
       - run: npx tsc --noEmit
