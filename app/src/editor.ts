@@ -93,14 +93,9 @@ import {
   offsetForBox,
   trackedBoxXAt,
 } from "./editor-offset.js";
-import { planChatStillTimes } from "./editor-chat.js";
-import {
-  createInitialEditorState,
-  hasActiveTrack,
-  clampInOut,
-  clampTrimOut,
-  keyframeFromCommit,
-} from "./editor-store.js";
+import { assembleAssistantContext, sampleChatStills } from "./editor-chat-context.js";
+import { applyCommitToState } from "./editor-commit.js";
+import { createInitialEditorState, hasActiveTrack } from "./editor-store.js";
 import {
   assistantSelection,
   renderOptions,
@@ -3059,77 +3054,30 @@ export function mountEditor(root: HTMLElement): void {
     const overlay = loadAssistantOverlay(); // editor's append-only framing preferences
     // Sparse still strip (#40): sample a few frames so the model SEES the footage.
     // System-chosen, bounded by the user's budget; failures degrade to fewer/no stills.
-    const stills = await sampleChatStills();
-    const ctx = {
-      region: { width: region.width, height: region.height },
+    const stills = await sampleChatStills({
       source: state.source,
-      models,
-      apiKey: apiKey.trim(),
-      basePrompt: BASE_PROMPT, // the read-only framing brain (prompts/base.md)
-      ...(overlay ? { userOverlay: overlay } : {}),
-      ...(state.inPoint != null ? { inSec: state.inPoint } : {}),
-      ...(state.outPoint != null ? { outSec: state.outPoint } : {}),
-      ...(state.duration > 0 ? { duration: state.duration } : {}),
-      ...(state.sceneCuts.length ? { sceneCuts: state.sceneCuts.slice() } : {}),
-      ...(state.swells.length
-        ? { swells: state.swells.map((s) => ({ t: s.t, label: s.label })) }
-        : {}),
-      ...(stills.length ? { stills } : {}),
-    };
-    return { ok: true, ctx };
-  }
-
-  /**
-   * Sample the per-turn still strip (#40): cut-aware frames across In→Out (or the
-   * whole source when no In/Out is set), trimmed evenly to the user's "Chat stills"
-   * budget, each extracted + base64-encoded for the model's inline image parts.
-   * Budget 0, no window, or no source → no stills; any per-frame failure is skipped
-   * so a turn never fails over a missing frame.
-   */
-  async function sampleChatStills(): Promise<
-    Array<{ t: number; mimeType: string; dataBase64: string }>
-  > {
-    if (!state.source) return [];
-    const times = planChatStillTimes({
       budget: loadChatStillsBudget(),
       inPoint: state.inPoint,
       outPoint: state.outPoint,
       duration: state.duration,
       sceneCuts: state.sceneCuts,
+      extractFrame: (source, t) => platform.extractFrame(source, t),
     });
-    const out: Array<{ t: number; mimeType: string; dataBase64: string }> = [];
-    for (const t of times) {
-      try {
-        const url = await platform.extractFrame(state.source, t);
-        const enc = await urlToBase64(url);
-        if (url.startsWith("blob:")) URL.revokeObjectURL(url);
-        if (enc) out.push({ t, mimeType: enc.mimeType, dataBase64: enc.dataBase64 });
-      } catch {
-        /* skip a frame that fails to extract/encode — never fail the turn over it */
-      }
-    }
-    return out;
-  }
-
-  /** Fetch an extracted-frame URL (blob or asset) and return its base64 + mime. */
-  async function urlToBase64(
-    url: string,
-  ): Promise<{ mimeType: string; dataBase64: string } | null> {
-    try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const dataUrl: string = await new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onload = () => resolve(String(fr.result));
-        fr.onerror = () => reject(fr.error);
-        fr.readAsDataURL(blob);
-      });
-      const comma = dataUrl.indexOf(",");
-      if (comma < 0) return null;
-      return { mimeType: blob.type || "image/jpeg", dataBase64: dataUrl.slice(comma + 1) };
-    } catch {
-      return null;
-    }
+    const ctx = assembleAssistantContext({
+      region: { width: region.width, height: region.height },
+      source: state.source,
+      models,
+      apiKey: apiKey.trim(),
+      basePrompt: BASE_PROMPT, // the read-only framing brain (prompts/base.md)
+      overlay,
+      inPoint: state.inPoint,
+      outPoint: state.outPoint,
+      duration: state.duration,
+      sceneCuts: state.sceneCuts,
+      swells: state.swells,
+      stills,
+    });
+    return { ok: true, ctx };
   }
 
   /** Run one assistant turn end-to-end: assemble context → call the model → render. */
@@ -3326,90 +3274,44 @@ export function mountEditor(root: HTMLElement): void {
   }
 
   /**
-   * Apply ONE accepted commit through the editor's existing state mutations.
-   * Returns whether it actually changed state (`applied`) and whether it merely
-   * STAGED a render (`staged` — never auto-renders). Anything that can't be
-   * cleanly applied is reported back so the row reads as skipped.
+   * Apply ONE accepted commit: the state transition is the pure
+   * `applyCommitToState` (editor-commit.ts); this wrapper runs the UI effects
+   * it returns, in order, against the closure-bound refresh/draw functions.
    */
   function applyCommit(commit: CommitOp): { applied: boolean; staged: boolean } {
-    switch (commit.kind) {
-      case "setInOut": {
-        const { inPoint, outPoint } = clampInOut(commit.inSec, commit.outSec, state.duration);
-        state.inPoint = inPoint;
-        state.outPoint = outPoint;
-        refreshIO();
-        void setT(state.inPoint, true);
-        return { applied: true, staged: false };
-      }
-      case "trim": {
-        if (state.inPoint == null) return { applied: false, staged: false };
-        state.outPoint = clampTrimOut(commit.outSec, state.inPoint, state.duration);
-        refreshIO();
-        return { applied: true, staged: false };
-      }
-      case "setContentCrop": {
-        // content-crop UI is currently inert in the editor; round-trip the spec
-        // string through the manifest restorer so the box + mode are consistent.
-        const r = specToEditorState(
-          { source_file: state.source, in_point: "0", out_point: "0", content_crop: commit.contentCrop },
-          state.dims!,
-        );
-        state.contentBox = r.contentBox;
-        state.contentMode = r.contentMode;
-        refreshContentReadout();
-        refreshCropReadout();
-        drawOverlay();
-        return { applied: true, staged: false };
-      }
-      case "detectScenes": {
-        void doScenes();
-        return { applied: true, staged: false };
-      }
-      case "addCropKeyframe": {
-        if (state.inPoint == null) return { applied: false, staged: false };
-        // The commit's x is in working-region px; an integer x-pixel offset is a
-        // valid `crop_offset` form (clamped into frame by the engine), so store it
-        // straight as the keyframe offset.
-        state.keyframes.push(keyframeFromCommit(commit.t, commit.x));
-        refreshKeyframes();
-        return { applied: true, staged: false };
-      }
-      case "suggestCropForFrame": {
-        // A single-frame framing suggestion → set the crop box from the proposed
-        // offset (overwrites the manual box). The cropPath, if any, still wins at
-        // render, so clear it so this fixed offset is what the user sees.
-        state.cropPath = null;
-        const r = specToEditorState(
-          { source_file: state.source, in_point: "0", out_point: "0", crop_offset: commit.cropOffset },
-          state.dims!,
-        );
-        state.cropBox = r.cropBox;
-        refreshCropReadout();
-        drawOverlay();
-        refreshIO();
-        return { applied: true, staged: false };
-      }
-      case "trackSubject": {
-        // Same engine as the Track-subject tab: adopt the eased crop path.
-        state.cropPath = commit.cropPath.map((k) => ({ t: k.t, x: k.x }));
-        trackStatus.textContent = `${m.assistant.trackFromAssistantPrefix}${state.cropPath.length}${m.assistant.trackFromAssistantSuffix}`;
-        drawOverlay();
-        refreshIO();
-        return { applied: true, staged: false };
-      }
-      case "render": {
-        // STAGE only — never auto-fire. Surface a hint; the manual Render button
-        // owns the encode.
-        setOutput(m.activity.stagedForRender);
-        return { applied: true, staged: true };
-      }
-      default: {
-        // Exhaustiveness guard — a new CommitOp kind lands here until wired.
-        const _never: never = commit;
-        void _never;
-        return { applied: false, staged: false };
+    const res = applyCommitToState(state, commit);
+    for (const fx of res.effects) {
+      switch (fx.kind) {
+        case "refreshIO":
+          refreshIO();
+          break;
+        case "seekToIn":
+          void setT(state.inPoint!, true);
+          break;
+        case "refreshContentReadout":
+          refreshContentReadout();
+          break;
+        case "refreshCropReadout":
+          refreshCropReadout();
+          break;
+        case "drawOverlay":
+          drawOverlay();
+          break;
+        case "detectScenes":
+          void doScenes();
+          break;
+        case "refreshKeyframes":
+          refreshKeyframes();
+          break;
+        case "trackStatus":
+          trackStatus.textContent = `${m.assistant.trackFromAssistantPrefix}${fx.count}${m.assistant.trackFromAssistantSuffix}`;
+          break;
+        case "stagedRender":
+          setOutput(m.activity.stagedForRender);
+          break;
       }
     }
+    return { applied: res.applied, staged: res.staged };
   }
 
   function addClip(): void {
