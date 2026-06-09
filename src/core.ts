@@ -622,14 +622,19 @@ function captionFontFamily(opts: RenderOptions): string {
  * override escapes can't be injected), neutralize `{` `}` (ASS override
  * delimiters), then turn the user's real newlines into `\N` line breaks — the
  * only backslash sequence we emit ourselves. Backslashes are stripped BEFORE
- * the newline conversion so user text can never smuggle one in.
+ * the newline conversion so user text can never smuggle one in. Per-line
+ * trimming uses split/trim/join (not an adjacent-quantifier regex) so
+ * library-supplied text can't trigger polynomial backtracking.
  */
 function assEscape(value: string): string {
-  return value
+  const cleaned = value
     .replace(/\\/g, "")
     .replace(/[{}]/g, (m) => (m === "{" ? "(" : ")"))
-    .trim()
-    .replace(/[ \t]*(?:\r\n?|\n)[ \t]*/g, "\\N");
+    .trim();
+  return cleaned
+    .split(/\r\n?|\n/)
+    .map((line) => line.trim())
+    .join("\\N");
 }
 
 /** Single-quote a value for a filtergraph option (`\` and `'` escaped; `:`/`,` are literal inside quotes). */
