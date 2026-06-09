@@ -19,6 +19,11 @@
  *   GET  /check-outdir   (?outdir=<path>) -> JSON {ok, resolved, error?}
  *   GET  /fonts          (?dir=<path>) -> JSON FontInfo[] (fontconfig families,
  *                                         or a scanned user fonts folder)
+ *
+ * Running `node dev-server/server.mjs` starts the server on PORT; importing the
+ * module does NOT — tests build their own instance via `createDevServer()`
+ * (optionally overriding the cli/repo-root/history/session paths) and listen on
+ * an ephemeral port.
  */
 
 import { createServer } from "node:http";
@@ -57,12 +62,8 @@ const CLI_PATH = resolve(__dirname, "..", "..", "bin", "footlight.js");
 // outdirs resolve here — NOT against this server's cwd (which is app/) — so GUI
 // renders land in the project-root clips/ alongside the CLI's own output.
 const REPO_ROOT = resolve(__dirname, "..", "..");
-// Persisted render history lives at the repo root, mirroring where GUI renders
-// land (the project-root clips/). The frontend owns capping/ordering.
-const HISTORY_PATH = resolve(REPO_ROOT, ".footlight-history.json");
-// Persisted working session (project) lives alongside the history file at the
-// repo root. Restored on next launch; null when missing or malformed.
-const SESSION_PATH = resolve(REPO_ROOT, ".footlight-session.json");
+// Persisted render history and working session live at the repo root (next to
+// where GUI renders land); see the defaults in `createRequestListener`.
 
 /** Spawn a command, collecting stdout/stderr. Resolves even on non-zero exit. */
 function run(command, args, { collectStdoutBinary = false } = {}) {
@@ -242,12 +243,12 @@ async function handleVideo(source, req, res) {
  * ONLY the samples to stdout, so we parse and forward that. Errors (bad key,
  * unsupported provider, etc.) land on stderr with a non-zero exit.
  */
-async function handleTrack(body, res) {
+async function handleTrack(body, res, cliPath) {
   const dir = await mkdtemp(join(tmpdir(), "footlight-"));
   const reqPath = join(dir, "track-request.json");
   await writeFile(reqPath, body, "utf8");
 
-  const result = await run("node", [CLI_PATH, "track", reqPath]);
+  const result = await run("node", [cliPath, "track", reqPath]);
   if (result.code !== 0) {
     sendText(res, 500, `track failed: ${result.stderr || result.stdout || "no output"}`);
     return;
@@ -263,7 +264,7 @@ async function handleTrack(body, res) {
 }
 
 /** POST /render — write manifest to a temp .json, invoke footlight CLI render. */
-async function handleRender(body, opts, res) {
+async function handleRender(body, opts, res, { cliPath, repoRoot }) {
   const dir = await mkdtemp(join(tmpdir(), "footlight-"));
   // .json extension so the CLI auto-detects the JSON manifest path (not CSV).
   const manifestPath = join(dir, "manifest.json");
@@ -274,10 +275,10 @@ async function handleRender(body, opts, res) {
   // honored as-is.
   const outDir = isAbsolute(opts.outdir || "clips")
     ? opts.outdir
-    : resolve(REPO_ROOT, opts.outdir || "clips");
+    : resolve(repoRoot, opts.outdir || "clips");
   // Render flags from Settings -> CLI. --outdir is appended LAST so the log's
   // trailing `--outdir <dir>` still parses cleanly on the client.
-  const args = [CLI_PATH, "render", manifestPath];
+  const args = [cliPath, "render", manifestPath];
   if (opts.crf) args.push("--crf", String(opts.crf));
   if (opts.preset) args.push("--preset", opts.preset);
   if (opts.audioBitrate) args.push("--audio-bitrate", opts.audioBitrate);
@@ -300,7 +301,7 @@ async function handleRender(body, opts, res) {
 }
 
 /** A short, user-facing reason for a filesystem error (no raw errno/stack). */
-function friendlyFsError(err) {
+export function friendlyFsError(err) {
   switch (err?.code) {
     case "EACCES":
     case "EPERM":
@@ -324,10 +325,10 @@ function friendlyFsError(err) {
  * {ok, resolved, error?} so the GUI can warn before a render instead of surfacing
  * a raw EACCES mid-run (issue #58).
  */
-async function handleCheckOutdir(outdir, res) {
+async function handleCheckOutdir(outdir, res, repoRoot) {
   const resolved = isAbsolute(outdir || "clips")
     ? outdir || "clips"
-    : resolve(REPO_ROOT, outdir || "clips");
+    : resolve(repoRoot, outdir || "clips");
   try {
     await mkdir(resolved, { recursive: true });
     // create_dir on an EXISTING read-only dir succeeds, so probe writability too.
@@ -339,10 +340,10 @@ async function handleCheckOutdir(outdir, res) {
 }
 
 /** GET /history — the persisted render history; [] if missing or malformed. */
-async function handleLoadHistory(res) {
+async function handleLoadHistory(res, historyPath) {
   let entries = [];
   try {
-    entries = JSON.parse(await readFile(HISTORY_PATH, "utf8"));
+    entries = JSON.parse(await readFile(historyPath, "utf8"));
   } catch {
     // Missing file or unparseable JSON — start fresh.
     entries = [];
@@ -351,17 +352,17 @@ async function handleLoadHistory(res) {
 }
 
 /** POST /history — persist the full history array from the body's `entries`. */
-async function handleSaveHistory(body, res) {
+async function handleSaveHistory(body, res, historyPath) {
   const entries = JSON.parse(body).entries;
-  await writeFile(HISTORY_PATH, JSON.stringify(entries), "utf8");
+  await writeFile(historyPath, JSON.stringify(entries), "utf8");
   sendJson(res, 200, { ok: true });
 }
 
 /** GET /session — the persisted working session; null if missing or malformed. */
-async function handleLoadSession(res) {
+async function handleLoadSession(res, sessionPath) {
   let data = null;
   try {
-    data = JSON.parse(await readFile(SESSION_PATH, "utf8"));
+    data = JSON.parse(await readFile(sessionPath, "utf8"));
   } catch {
     // Missing file or unparseable JSON — no session to restore.
     data = null;
@@ -370,23 +371,23 @@ async function handleLoadSession(res) {
 }
 
 /** POST /session — persist the working session from the body's `data`. */
-async function handleSaveSession(body, res) {
+async function handleSaveSession(body, res, sessionPath) {
   const data = JSON.parse(body).data;
-  await writeFile(SESSION_PATH, JSON.stringify(data), "utf8");
+  await writeFile(sessionPath, JSON.stringify(data), "utf8");
   sendJson(res, 200, { ok: true });
 }
 
 /** Font file extensions we scan for in a user fonts folder. */
 const FONT_EXTS = new Set([".ttf", ".otf", ".ttc"]);
 /** Sensible caps so a pathological directory can't wedge the dev server. */
-const FONT_SCAN_MAX_DEPTH = 8;
-const FONT_SCAN_MAX_FILES = 5000;
+export const FONT_SCAN_MAX_DEPTH = 8;
+export const FONT_SCAN_MAX_FILES = 5000;
 
 /**
  * Recursively collect font-file paths under `dir`, bounded by depth/count.
  * Best-effort: unreadable sub-directories are skipped silently.
  */
-async function collectFontFiles(dir, depth, acc) {
+export async function collectFontFiles(dir, depth, acc) {
   if (depth > FONT_SCAN_MAX_DEPTH || acc.length >= FONT_SCAN_MAX_FILES) return;
   let entries;
   try {
@@ -470,130 +471,157 @@ async function handleFonts(res) {
   sendJson(res, 200, fonts);
 }
 
-const server = createServer(async (req, res) => {
-  cors(res);
-  if (req.method === "OPTIONS") {
-    res.writeHead(204);
-    res.end();
-    return;
-  }
+/**
+ * Build the request listener with everything path-dependent injectable so tests
+ * can point it at a temp CLI / repo root / history / session without touching
+ * the real ones. The defaults make `createRequestListener()` behave exactly as
+ * the dev server always has.
+ */
+export function createRequestListener({
+  cliPath = CLI_PATH,
+  repoRoot = REPO_ROOT,
+  historyPath,
+  sessionPath,
+} = {}) {
+  const history = historyPath ?? resolve(repoRoot, ".footlight-history.json");
+  const session = sessionPath ?? resolve(repoRoot, ".footlight-session.json");
 
-  const url = new URL(req.url, `http://localhost:${PORT}`);
-
-  try {
-    if (req.method === "GET" && url.pathname === "/frame") {
-      const source = url.searchParams.get("source");
-      const t = url.searchParams.get("t") || "0";
-      if (!source) return sendText(res, 400, "missing source");
-      return await handleFrame(source, t, res);
+  return async (req, res) => {
+    cors(res);
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
     }
 
-    // GET /env-key — the BYOK Gemini key from THIS server's environment
-    // (GEMINI_API_KEY / FOOTLIGHT_GEMINI_API_KEY), or "" if unset. Lets `make gui`
-    // pick up a key from your shell without pasting it into the GUI. Dev-only.
-    if (req.method === "GET" && url.pathname === "/env-key") {
-      const key = (process.env.GEMINI_API_KEY || process.env.FOOTLIGHT_GEMINI_API_KEY || "").trim();
-      return sendText(res, 200, key);
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+
+    try {
+      if (req.method === "GET" && url.pathname === "/frame") {
+        const source = url.searchParams.get("source");
+        const t = url.searchParams.get("t") || "0";
+        if (!source) return sendText(res, 400, "missing source");
+        return await handleFrame(source, t, res);
+      }
+
+      // GET /env-key — the BYOK Gemini key from THIS server's environment
+      // (GEMINI_API_KEY / FOOTLIGHT_GEMINI_API_KEY), or "" if unset. Lets `make gui`
+      // pick up a key from your shell without pasting it into the GUI. Dev-only.
+      if (req.method === "GET" && url.pathname === "/env-key") {
+        const key = (process.env.GEMINI_API_KEY || process.env.FOOTLIGHT_GEMINI_API_KEY || "").trim();
+        return sendText(res, 200, key);
+      }
+
+      if (req.method === "GET" && url.pathname === "/probe") {
+        const source = url.searchParams.get("source");
+        if (!source) return sendText(res, 400, "missing source");
+        return await handleProbe(source, res);
+      }
+
+      if (req.method === "GET" && url.pathname === "/scenes") {
+        const source = url.searchParams.get("source");
+        if (!source) return sendText(res, 400, "missing source");
+        return await handleScenes(source, res);
+      }
+
+      if (req.method === "GET" && url.pathname === "/loudness") {
+        const source = url.searchParams.get("source");
+        if (!source) return sendText(res, 400, "missing source");
+        return await handleLoudness(source, res);
+      }
+
+      if (req.method === "GET" && url.pathname === "/video") {
+        const source = url.searchParams.get("source");
+        if (!source) return sendText(res, 400, "missing source");
+        return await handleVideo(source, req, res);
+      }
+
+      if (req.method === "POST" && url.pathname === "/track") {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const body = Buffer.concat(chunks).toString("utf8");
+        return await handleTrack(body, res, cliPath);
+      }
+
+      if (req.method === "POST" && url.pathname === "/render") {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const body = Buffer.concat(chunks).toString("utf8");
+        const opts = {
+          outdir: url.searchParams.get("outdir") || undefined,
+          crf: url.searchParams.get("crf") || undefined,
+          preset: url.searchParams.get("preset") || undefined,
+          audioBitrate: url.searchParams.get("audioBitrate") || undefined,
+          dryRun: url.searchParams.get("dryRun") === "1",
+          burnCaptions: url.searchParams.get("burnCaptions") === "1",
+          captionFont: url.searchParams.get("captionFont") || undefined,
+          captionColor: url.searchParams.get("captionColor") || undefined,
+          captionOutlineColor: url.searchParams.get("captionOutlineColor") || undefined,
+          captionBold: url.searchParams.get("captionBold") === "1",
+          captionItalic: url.searchParams.get("captionItalic") === "1",
+          captionUnderline: url.searchParams.get("captionUnderline") === "1",
+          captionShadow: url.searchParams.get("captionShadow") === "1",
+          captionBox: url.searchParams.get("captionBox") === "1",
+          captionBoxColor: url.searchParams.get("captionBoxColor") || undefined,
+          captionAngle: url.searchParams.get("captionAngle") || undefined,
+        };
+        return await handleRender(body, opts, res, { cliPath, repoRoot });
+      }
+
+      if (req.method === "GET" && url.pathname === "/check-outdir") {
+        return await handleCheckOutdir(url.searchParams.get("outdir") || "", res, repoRoot);
+      }
+
+      if (req.method === "GET" && url.pathname === "/history") {
+        return await handleLoadHistory(res, history);
+      }
+
+      if (req.method === "POST" && url.pathname === "/history") {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const body = Buffer.concat(chunks).toString("utf8");
+        return await handleSaveHistory(body, res, history);
+      }
+
+      if (req.method === "GET" && url.pathname === "/fonts") {
+        const dir = url.searchParams.get("dir");
+        if (dir) return await handleUserFonts(res, dir);
+        return await handleFonts(res);
+      }
+
+      if (req.method === "GET" && url.pathname === "/session") {
+        return await handleLoadSession(res, session);
+      }
+
+      if (req.method === "POST" && url.pathname === "/session") {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const body = Buffer.concat(chunks).toString("utf8");
+        return await handleSaveSession(body, res, session);
+      }
+
+      sendText(res, 404, "not found");
+    } catch (err) {
+      // Log the detail server-side; return a generic message so error internals
+      // (stack/paths) aren't exposed to the client (CodeQL js/stack-trace-exposure).
+      console.error("dev backend request failed:", err);
+      sendText(res, 500, "internal error");
     }
+  };
+}
 
-    if (req.method === "GET" && url.pathname === "/probe") {
-      const source = url.searchParams.get("source");
-      if (!source) return sendText(res, 400, "missing source");
-      return await handleProbe(source, res);
-    }
+/** Build (but do not start) the dev server; tests listen on an ephemeral port. */
+export function createDevServer(config = {}) {
+  return createServer(createRequestListener(config));
+}
 
-    if (req.method === "GET" && url.pathname === "/scenes") {
-      const source = url.searchParams.get("source");
-      if (!source) return sendText(res, 400, "missing source");
-      return await handleScenes(source, res);
-    }
-
-    if (req.method === "GET" && url.pathname === "/loudness") {
-      const source = url.searchParams.get("source");
-      if (!source) return sendText(res, 400, "missing source");
-      return await handleLoudness(source, res);
-    }
-
-    if (req.method === "GET" && url.pathname === "/video") {
-      const source = url.searchParams.get("source");
-      if (!source) return sendText(res, 400, "missing source");
-      return await handleVideo(source, req, res);
-    }
-
-    if (req.method === "POST" && url.pathname === "/track") {
-      const chunks = [];
-      for await (const chunk of req) chunks.push(chunk);
-      const body = Buffer.concat(chunks).toString("utf8");
-      return await handleTrack(body, res);
-    }
-
-    if (req.method === "POST" && url.pathname === "/render") {
-      const chunks = [];
-      for await (const chunk of req) chunks.push(chunk);
-      const body = Buffer.concat(chunks).toString("utf8");
-      const opts = {
-        outdir: url.searchParams.get("outdir") || undefined,
-        crf: url.searchParams.get("crf") || undefined,
-        preset: url.searchParams.get("preset") || undefined,
-        audioBitrate: url.searchParams.get("audioBitrate") || undefined,
-        dryRun: url.searchParams.get("dryRun") === "1",
-        burnCaptions: url.searchParams.get("burnCaptions") === "1",
-        captionFont: url.searchParams.get("captionFont") || undefined,
-        captionColor: url.searchParams.get("captionColor") || undefined,
-        captionOutlineColor: url.searchParams.get("captionOutlineColor") || undefined,
-        captionBold: url.searchParams.get("captionBold") === "1",
-        captionItalic: url.searchParams.get("captionItalic") === "1",
-        captionUnderline: url.searchParams.get("captionUnderline") === "1",
-        captionShadow: url.searchParams.get("captionShadow") === "1",
-        captionBox: url.searchParams.get("captionBox") === "1",
-        captionBoxColor: url.searchParams.get("captionBoxColor") || undefined,
-        captionAngle: url.searchParams.get("captionAngle") || undefined,
-      };
-      return await handleRender(body, opts, res);
-    }
-
-    if (req.method === "GET" && url.pathname === "/check-outdir") {
-      return await handleCheckOutdir(url.searchParams.get("outdir") || "", res);
-    }
-
-    if (req.method === "GET" && url.pathname === "/history") {
-      return await handleLoadHistory(res);
-    }
-
-    if (req.method === "POST" && url.pathname === "/history") {
-      const chunks = [];
-      for await (const chunk of req) chunks.push(chunk);
-      const body = Buffer.concat(chunks).toString("utf8");
-      return await handleSaveHistory(body, res);
-    }
-
-    if (req.method === "GET" && url.pathname === "/fonts") {
-      const dir = url.searchParams.get("dir");
-      if (dir) return await handleUserFonts(res, dir);
-      return await handleFonts(res);
-    }
-
-    if (req.method === "GET" && url.pathname === "/session") {
-      return await handleLoadSession(res);
-    }
-
-    if (req.method === "POST" && url.pathname === "/session") {
-      const chunks = [];
-      for await (const chunk of req) chunks.push(chunk);
-      const body = Buffer.concat(chunks).toString("utf8");
-      return await handleSaveSession(body, res);
-    }
-
-    sendText(res, 404, "not found");
-  } catch (err) {
-    // Log the detail server-side; return a generic message so error internals
-    // (stack/paths) aren't exposed to the client (CodeQL js/stack-trace-exposure).
-    console.error("dev backend request failed:", err);
-    sendText(res, 500, "internal error");
-  }
-});
-
-server.listen(PORT, () => {
-  console.log(`Footlight dev backend listening on http://localhost:${PORT}`);
-  console.log(`  CLI: ${CLI_PATH}`);
-});
+// Start listening only when executed directly (`node dev-server/server.mjs`,
+// i.e. `npm run dev:server`) — importing this module must NOT bind the port.
+const runAsScript =
+  process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (runAsScript) {
+  createDevServer().listen(PORT, () => {
+    console.log(`Footlight dev backend listening on http://localhost:${PORT}`);
+    console.log(`  CLI: ${CLI_PATH}`);
+  });
+}

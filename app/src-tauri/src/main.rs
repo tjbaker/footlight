@@ -85,47 +85,50 @@ async fn extract_frame(source: String, t: f64) -> Result<String, String> {
     Err("ffmpeg frame extraction failed".into())
 }
 
+/// Args for one single-frame ffmpeg extraction with the given seek args, writing
+/// a JPEG to `out`. HAND MIRROR of the seek-prefix split in core.ts
+/// `frameExtractArgs` / `frameExtractTailArgs` (`-ss <t>` vs `-sseof -0.2`),
+/// except the native shell writes a temp file instead of MJPEG on stdout.
+fn frame_extract_args<'a>(seek: &[&'a str], source: &'a str, out: &'a str) -> Vec<&'a str> {
+    let mut args: Vec<&str> = vec!["-hide_banner", "-loglevel", "error", "-y"];
+    args.extend_from_slice(seek);
+    args.extend_from_slice(&["-i", source, "-frames:v", "1", "-q:v", "3", out]);
+    args
+}
+
 /// Run one single-frame ffmpeg extraction with the given seek args, writing a
 /// JPEG to `out`. Returns Ok(true) only when ffmpeg succeeded AND wrote a
 /// non-empty file (a seek past EOF exits non-zero / writes nothing).
 fn run_frame_extract(seek: &[&str], source: &str, out: &str) -> Result<bool, String> {
-    let mut args: Vec<&str> = vec!["-hide_banner", "-loglevel", "error", "-y"];
-    args.extend_from_slice(seek);
-    args.extend_from_slice(&["-i", source, "-frames:v", "1", "-q:v", "3", out]);
     let status = Command::new("ffmpeg")
-        .args(&args)
+        .args(frame_extract_args(seek, source, out))
         .status()
         .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
     let wrote = std::fs::metadata(out).map(|m| m.len() > 0).unwrap_or(false);
     Ok(status.success() && wrote)
 }
 
-/// Probe width, height, duration via ffprobe + a cropdetect (black-bar) hint.
-#[tauri::command]
-async fn probe(source: String) -> Result<ProbeResult, String> {
-    let probe_out = Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-select_streams",
-            "v:0",
-            "-show_entries",
-            "stream=width,height:format=duration",
-            "-of",
-            "json",
-            &source,
-        ])
-        .output()
-        .map_err(|e| format!("failed to spawn ffprobe: {e}"))?;
+/// ffprobe args for the first video stream's width/height + container duration.
+/// HAND MIRROR of core.ts `ffprobeStreamArgs` — keep in sync.
+fn ffprobe_stream_args(source: &str) -> Vec<&str> {
+    vec![
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height:format=duration",
+        "-of",
+        "json",
+        source,
+    ]
+}
 
-    if !probe_out.status.success() {
-        return Err(format!(
-            "ffprobe failed: {}",
-            String::from_utf8_lossy(&probe_out.stderr)
-        ));
-    }
-
-    let json: serde_json::Value = serde_json::from_slice(&probe_out.stdout)
+/// Parse `ffprobe_stream_args` JSON stdout into (width, height, duration),
+/// defaulting missing fields to 0. HAND MIRROR of core.ts `parseProbe` (which
+/// also throws only on unparseable JSON).
+fn parse_probe(stdout: &[u8]) -> Result<(u32, u32, f64), String> {
+    let json: serde_json::Value = serde_json::from_slice(stdout)
         .map_err(|e| format!("ffprobe returned unparseable output: {e}"))?;
 
     let stream = json
@@ -141,23 +144,49 @@ async fn probe(source: String) -> Result<ProbeResult, String> {
         .and_then(|d| d.as_str())
         .and_then(|s| s.parse::<f64>().ok())
         .unwrap_or(0.0);
+    Ok((width, height, duration))
+}
+
+/// ffmpeg args for a cropdetect (BLACK BARS ONLY) probe; the analysis lands on
+/// stderr — pass it to `last_crop_suggestion`. HAND MIRROR of core.ts
+/// `cropdetectArgs` — keep in sync.
+fn cropdetect_args(source: &str) -> Vec<&str> {
+    vec![
+        "-hide_banner",
+        "-ss",
+        "60",
+        "-i",
+        source,
+        "-vf",
+        "cropdetect=limit=24:round=2",
+        "-frames:v",
+        "300",
+        "-f",
+        "null",
+        "-",
+    ]
+}
+
+/// Probe width, height, duration via ffprobe + a cropdetect (black-bar) hint.
+#[tauri::command]
+async fn probe(source: String) -> Result<ProbeResult, String> {
+    let probe_out = Command::new("ffprobe")
+        .args(ffprobe_stream_args(&source))
+        .output()
+        .map_err(|e| format!("failed to spawn ffprobe: {e}"))?;
+
+    if !probe_out.status.success() {
+        return Err(format!(
+            "ffprobe failed: {}",
+            String::from_utf8_lossy(&probe_out.stderr)
+        ));
+    }
+
+    let (width, height, duration) = parse_probe(&probe_out.stdout)?;
 
     // cropdetect — black bars only (mirrors the dev server / CLI).
     let cd = Command::new("ffmpeg")
-        .args([
-            "-hide_banner",
-            "-ss",
-            "60",
-            "-i",
-            &source,
-            "-vf",
-            "cropdetect=limit=24:round=2",
-            "-frames:v",
-            "300",
-            "-f",
-            "null",
-            "-",
-        ])
+        .args(cropdetect_args(&source))
         .output()
         .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
     let stderr = String::from_utf8_lossy(&cd.stderr);
@@ -171,24 +200,24 @@ async fn probe(source: String) -> Result<ProbeResult, String> {
     })
 }
 
-/// Detect scene-cut timestamps (seconds), mirroring the CLI's scenes command.
-#[tauri::command]
-async fn scenes(source: String) -> Result<Vec<f64>, String> {
-    let out = Command::new("ffmpeg")
-        .args([
-            "-hide_banner",
-            "-i",
-            &source,
-            "-vf",
-            "scale=-2:144,select='gt(scene,0.4)',showinfo",
-            "-f",
-            "null",
-            "-",
-        ])
-        .output()
-        .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
+/// ffmpeg args for scene-cut detection (downscale → scene filter → showinfo).
+/// HAND MIRROR of core.ts `scenesArgs` (SCENE_THRESHOLD = 0.4) — keep in sync.
+fn scenes_args(source: &str) -> Vec<&str> {
+    vec![
+        "-hide_banner",
+        "-i",
+        source,
+        "-vf",
+        "scale=-2:144,select='gt(scene,0.4)',showinfo",
+        "-f",
+        "null",
+        "-",
+    ]
+}
 
-    let stderr = String::from_utf8_lossy(&out.stderr);
+/// Parse scene-cut timestamps (seconds, rounded to ms) from showinfo's
+/// `pts_time:` markers on stderr. HAND MIRROR of core.ts `parseScenes`.
+fn parse_scenes(stderr: &str) -> Vec<f64> {
     let mut times = Vec::new();
     for token in stderr.split("pts_time:").skip(1) {
         let num: String = token
@@ -199,7 +228,19 @@ async fn scenes(source: String) -> Result<Vec<f64>, String> {
             times.push((t * 1000.0).round() / 1000.0);
         }
     }
-    Ok(times)
+    times
+}
+
+/// Detect scene-cut timestamps (seconds), mirroring the CLI's scenes command.
+#[tauri::command]
+async fn scenes(source: String) -> Result<Vec<f64>, String> {
+    let out = Command::new("ffmpeg")
+        .args(scenes_args(&source))
+        .output()
+        .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    Ok(parse_scenes(&stderr))
 }
 
 #[derive(Serialize)]
@@ -208,99 +249,105 @@ struct LoudnessResult {
     detect: Vec<f64>,
 }
 
-/// Compute the timeline's two loudness envelopes (0..1) in ONE ffmpeg pass.
-/// Mirrors core.ts `loudnessCombinedArgs` + `parseEbur128Momentary`/`bucketLufs`
-/// (display) + `bucketLoudness` (detect); Rust can't import the TS. The ebur128
-/// analysis filter passes audio through, so the same run logs per-frame momentary
-/// LUFS to stderr (→ `display`, the perceptual bars) AND emits mono 8 kHz f32le
-/// PCM on stdout (→ `detect`, the raw-energy RMS the swell detector needs). Keep
-/// LOUDNESS_BUCKETS (160) and the LUFS floor/ceiling in sync with core.ts.
-#[tauri::command]
-async fn loudness(source: String) -> Result<LoudnessResult, String> {
-    // Keep these in sync with core.ts LOUDNESS_BUCKETS / LUFS_FLOOR / LUFS_CEIL.
-    const LOUDNESS_BUCKETS: usize = 160;
-    const LUFS_FLOOR: f64 = -40.0;
-    const LUFS_CEIL: f64 = -5.0;
+// Keep these in sync with core.ts LOUDNESS_BUCKETS / LUFS_FLOOR / LUFS_CEIL.
+const LOUDNESS_BUCKETS: usize = 160;
+const LUFS_FLOOR: f64 = -40.0;
+const LUFS_CEIL: f64 = -5.0;
 
-    // Same args as core.ts loudnessCombinedArgs.
-    let out = Command::new("ffmpeg")
-        .args([
-            "-hide_banner",
-            "-nostats",
-            // verbose REQUIRED: ebur128 prints per-frame `M:` only above `info`.
-            "-loglevel",
-            "verbose",
-            "-i",
-            &source,
-            "-af",
-            "ebur128=metadata=1",
-            "-ac",
-            "1",
-            "-ar",
-            "8000",
-            "-f",
-            "f32le",
-            "-",
-        ])
-        .output()
-        .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
+/// ffmpeg args for the one-pass loudness run: the ebur128 analysis filter logs
+/// per-frame momentary LUFS to stderr while mono 8 kHz f32le PCM lands on
+/// stdout. HAND MIRROR of core.ts `loudnessCombinedArgs` — keep in sync.
+fn loudness_combined_args(source: &str) -> Vec<&str> {
+    vec![
+        "-hide_banner",
+        "-nostats",
+        // verbose REQUIRED: ebur128 prints per-frame `M:` only above `info`.
+        "-loglevel",
+        "verbose",
+        "-i",
+        source,
+        "-af",
+        "ebur128=metadata=1",
+        "-ac",
+        "1",
+        "-ar",
+        "8000",
+        "-f",
+        "f32le",
+        "-",
+    ]
+}
 
-    // --- display: per-frame momentary `M:` LUFS from stderr (mirrors bucketLufs).
-    let log = String::from_utf8_lossy(&out.stderr);
+/// Per-frame momentary `M:` LUFS readings from ebur128's verbose log, in time
+/// order. Unparseable/non-finite readings (-inf/nan over silence / startup) ->
+/// the floor (-∞). HAND MIRROR of core.ts `parseEbur128Momentary`.
+fn parse_ebur128_momentary(log: &str) -> Vec<f64> {
     let mut momentary: Vec<f64> = Vec::new();
     for line in log.lines() {
         if let Some(idx) = line.find("M:") {
             let tok = line[idx + 2..].trim_start().split_whitespace().next().unwrap_or("");
-            // Non-finite readings (-inf/nan over silence / startup) -> floor.
             momentary.push(tok.parse::<f64>().unwrap_or(f64::NEG_INFINITY));
         }
     }
+    momentary
+}
 
-    if !out.status.success() && momentary.is_empty() && out.stdout.is_empty() {
-        return Err(format!("loudness failed: {log}"));
+/// Map one LUFS reading to 0..1 over [LUFS_FLOOR, LUFS_CEIL]; non-finite -> 0.
+/// HAND MIRROR of core.ts `lufsToNormalized`.
+fn lufs_to_normalized(lufs: f64) -> f64 {
+    if !lufs.is_finite() {
+        return 0.0;
     }
+    ((lufs - LUFS_FLOOR) / (LUFS_CEIL - LUFS_FLOOR)).clamp(0.0, 1.0)
+}
 
-    // Map one LUFS reading to 0..1 over [floor, ceil]; non-finite -> 0.
-    let norm = |lufs: f64| -> f64 {
-        if !lufs.is_finite() {
-            return 0.0;
-        }
-        ((lufs - LUFS_FLOOR) / (LUFS_CEIL - LUFS_FLOOR)).clamp(0.0, 1.0)
-    };
-
+/// Bucket momentary LUFS into `buckets` windows of averaged normalized (0..1)
+/// levels — an ABSOLUTE perceptual scale (not max-normalized). Non-finite
+/// readings are skipped within a window (an all-silence window -> 0). HAND
+/// MIRROR of core.ts `bucketLufs`.
+fn bucket_lufs(momentary: &[f64], buckets: usize) -> Vec<f64> {
     let mn = momentary.len();
-    let mut display = vec![0.0f64; LOUDNESS_BUCKETS];
+    let mut display = vec![0.0f64; buckets];
     if mn > 0 {
         for (b, slot) in display.iter_mut().enumerate() {
-            let start = (b * mn) / LOUDNESS_BUCKETS;
-            let end = ((b + 1) * mn) / LOUDNESS_BUCKETS;
+            let start = (b * mn) / buckets;
+            let end = ((b + 1) * mn) / buckets;
             let mut sum = 0.0f64;
             let mut count = 0usize;
             for v in &momentary[start..end] {
                 if v.is_finite() {
-                    sum += norm(*v);
+                    sum += lufs_to_normalized(*v);
                     count += 1;
                 }
             }
             *slot = if count > 0 { sum / count as f64 } else { 0.0 };
         }
     }
+    display
+}
 
-    // --- detect: RMS of the mono f32le PCM on stdout (mirrors bucketLoudness:
-    // per-window RMS, then normalize the whole array to 0..1 by its max).
-    let bytes = &out.stdout;
+/// Reinterpret raw little-endian f32 PCM bytes as samples (a trailing partial
+/// sample is dropped).
+fn pcm_f32le_samples(bytes: &[u8]) -> Vec<f32> {
     let sn = bytes.len() / 4;
-    let samples: Vec<f32> = (0..sn)
+    (0..sn)
         .map(|i| {
             let b = &bytes[i * 4..i * 4 + 4];
             f32::from_le_bytes([b[0], b[1], b[2], b[3]])
         })
-        .collect();
-    let mut detect = vec![0.0f64; LOUDNESS_BUCKETS];
+        .collect()
+}
+
+/// Bucket raw mono PCM into `buckets` per-window RMS values, then normalize the
+/// whole array to 0..1 by its max (all-silence stays zeros). HAND MIRROR of
+/// core.ts `bucketLoudness`.
+fn bucket_loudness(samples: &[f32], buckets: usize) -> Vec<f64> {
+    let sn = samples.len();
+    let mut detect = vec![0.0f64; buckets];
     if sn > 0 {
         for (b, slot) in detect.iter_mut().enumerate() {
-            let start = (b * sn) / LOUDNESS_BUCKETS;
-            let end = ((b + 1) * sn) / LOUDNESS_BUCKETS;
+            let start = (b * sn) / buckets;
+            let end = ((b + 1) * sn) / buckets;
             let count = end - start;
             let mut sum_sq = 0.0f64;
             for s in &samples[start..end] {
@@ -316,6 +363,37 @@ async fn loudness(source: String) -> Result<LoudnessResult, String> {
             }
         }
     }
+    detect
+}
+
+/// Compute the timeline's two loudness envelopes (0..1) in ONE ffmpeg pass.
+/// Mirrors core.ts `loudnessCombinedArgs` + `parseEbur128Momentary`/`bucketLufs`
+/// (display) + `bucketLoudness` (detect); Rust can't import the TS. The ebur128
+/// analysis filter passes audio through, so the same run logs per-frame momentary
+/// LUFS to stderr (→ `display`, the perceptual bars) AND emits mono 8 kHz f32le
+/// PCM on stdout (→ `detect`, the raw-energy RMS the swell detector needs). Keep
+/// LOUDNESS_BUCKETS (160) and the LUFS floor/ceiling in sync with core.ts.
+#[tauri::command]
+async fn loudness(source: String) -> Result<LoudnessResult, String> {
+    let out = Command::new("ffmpeg")
+        .args(loudness_combined_args(&source))
+        .output()
+        .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
+
+    // --- display: per-frame momentary `M:` LUFS from stderr (mirrors bucketLufs).
+    let log = String::from_utf8_lossy(&out.stderr);
+    let momentary = parse_ebur128_momentary(&log);
+
+    if !out.status.success() && momentary.is_empty() && out.stdout.is_empty() {
+        return Err(format!("loudness failed: {log}"));
+    }
+
+    let display = bucket_lufs(&momentary, LOUDNESS_BUCKETS);
+
+    // --- detect: RMS of the mono f32le PCM on stdout (mirrors bucketLoudness:
+    // per-window RMS, then normalize the whole array to 0..1 by its max).
+    let samples = pcm_f32le_samples(&out.stdout);
+    let detect = bucket_loudness(&samples, LOUDNESS_BUCKETS);
 
     Ok(LoudnessResult { display, detect })
 }
@@ -349,16 +427,13 @@ async fn track(app: AppHandle, req: serde_json::Value) -> Result<serde_json::Val
         .map_err(|e| format!("track returned unparseable output: {e}"))
 }
 
-/// Render a JSON manifest: write it to a temp `.json` file and invoke the
-/// footlight CLI. The CLI auto-detects the JSON path by the `.json` extension,
-/// which lets clips carry an eased `cropPath` the CSV path can't express. The
-/// CLI is resolved relative to the bundled resources; in dev it sits at the
-/// repo's `bin/footlight.js`.
-#[tauri::command]
-async fn render(
-    app: AppHandle,
-    manifest_json: String,
-    outdir: Option<String>,
+/// Build the footlight CLI `render` argv (everything after `node <cli>`):
+/// manifest path, the Settings-derived flags, then `--outdir` LAST so the log's
+/// trailing `--outdir <dir>` parses cleanly on the client. Flag names mirror
+/// src/cli.ts; empty strings and false/None toggles emit nothing.
+fn render_cli_args(
+    manifest_path: &str,
+    out_dir: &str,
     crf: Option<i64>,
     preset: Option<String>,
     audio_bitrate: Option<String>,
@@ -374,18 +449,8 @@ async fn render(
     caption_box: Option<bool>,
     caption_box_color: Option<String>,
     caption_angle: Option<f64>,
-) -> Result<RenderResult, String> {
-    let mut manifest_path = std::env::temp_dir();
-    manifest_path.push(format!("footlight_manifest_{}.json", std::process::id()));
-    std::fs::write(&manifest_path, manifest_json)
-        .map_err(|e| format!("write temp manifest: {e}"))?;
-
-    let cli = locate_cli(&app);
-    let out_dir = resolve_outdir(&cli, outdir);
-
-    // Render flags from Settings -> CLI. --outdir is appended LAST so the log's
-    // trailing `--outdir <dir>` parses cleanly on the client.
-    let mut args: Vec<String> = vec!["render".into(), manifest_path.to_string_lossy().into_owned()];
+) -> Vec<String> {
+    let mut args: Vec<String> = vec!["render".into(), manifest_path.into()];
     if let Some(c) = crf {
         args.push("--crf".into());
         args.push(c.to_string());
@@ -450,7 +515,64 @@ async fn render(
         args.push(a.to_string());
     }
     args.push("--outdir".into());
-    args.push(out_dir.clone());
+    args.push(out_dir.into());
+    args
+}
+
+/// Render a JSON manifest: write it to a temp `.json` file and invoke the
+/// footlight CLI. The CLI auto-detects the JSON path by the `.json` extension,
+/// which lets clips carry an eased `cropPath` the CSV path can't express. The
+/// CLI is resolved relative to the bundled resources; in dev it sits at the
+/// repo's `bin/footlight.js`.
+#[tauri::command]
+async fn render(
+    app: AppHandle,
+    manifest_json: String,
+    outdir: Option<String>,
+    crf: Option<i64>,
+    preset: Option<String>,
+    audio_bitrate: Option<String>,
+    dry_run: Option<bool>,
+    burn_captions: Option<bool>,
+    caption_font: Option<String>,
+    caption_color: Option<String>,
+    caption_outline_color: Option<String>,
+    caption_bold: Option<bool>,
+    caption_italic: Option<bool>,
+    caption_underline: Option<bool>,
+    caption_shadow: Option<bool>,
+    caption_box: Option<bool>,
+    caption_box_color: Option<String>,
+    caption_angle: Option<f64>,
+) -> Result<RenderResult, String> {
+    let mut manifest_path = std::env::temp_dir();
+    manifest_path.push(format!("footlight_manifest_{}.json", std::process::id()));
+    std::fs::write(&manifest_path, manifest_json)
+        .map_err(|e| format!("write temp manifest: {e}"))?;
+
+    let cli = locate_cli(&app);
+    let out_dir = resolve_outdir(&cli, outdir);
+
+    // Render flags from Settings -> CLI (see render_cli_args for the shape).
+    let args = render_cli_args(
+        &manifest_path.to_string_lossy(),
+        &out_dir,
+        crf,
+        preset,
+        audio_bitrate,
+        dry_run,
+        burn_captions,
+        caption_font,
+        caption_color,
+        caption_outline_color,
+        caption_bold,
+        caption_italic,
+        caption_underline,
+        caption_shadow,
+        caption_box,
+        caption_box_color,
+        caption_angle,
+    );
 
     let output = Command::new("node")
         .arg(&cli)
@@ -988,4 +1110,435 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running Footlight");
+}
+
+// Unit tests for the pure pieces of the shell: the hand-mirrored ffmpeg/ffprobe
+// arg builders and output parsers, plus the path helpers. Where a piece mirrors
+// src/core.ts, the test mirrors the corresponding vitest case (cited per test)
+// with the SAME inputs and expected values, so drift between the two
+// implementations fails one suite or the other.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- probe (ffprobe + cropdetect) ------------------------------------
+
+    /// Mirrors test/commands.test.ts "ffprobeStreamArgs / parseProbe" — requests
+    /// width, height and container duration for the first video stream.
+    #[test]
+    fn ffprobe_stream_args_requests_dims_and_duration() {
+        let a = ffprobe_stream_args("in.mp4");
+        assert!(a.contains(&"stream=width,height:format=duration"));
+        assert!(a.contains(&"v:0"));
+        assert_eq!(*a.last().unwrap(), "in.mp4");
+    }
+
+    /// Mirrors test/commands.test.ts "parses width/height/duration".
+    #[test]
+    fn parse_probe_parses_width_height_duration() {
+        let out = br#"{"streams":[{"width":1920,"height":1080}],"format":{"duration":"12.5"}}"#;
+        assert_eq!(parse_probe(out).unwrap(), (1920, 1080, 12.5));
+    }
+
+    /// Mirrors test/commands.test.ts "defaults missing fields to 0".
+    #[test]
+    fn parse_probe_defaults_missing_fields_to_zero() {
+        assert_eq!(parse_probe(b"{}").unwrap(), (0, 0, 0.0));
+    }
+
+    #[test]
+    fn parse_probe_rejects_unparseable_output() {
+        assert!(parse_probe(b"not json").is_err());
+    }
+
+    /// Mirrors test/commands.test.ts "builds a black-bars-only cropdetect probe".
+    #[test]
+    fn cropdetect_args_black_bars_probe() {
+        assert!(cropdetect_args("in.mp4").contains(&"cropdetect=limit=24:round=2"));
+    }
+
+    /// Mirrors test/commands.test.ts "returns the LAST crop= suggestion from
+    /// stderr" (same stderr fixture as parseCropdetect's test).
+    #[test]
+    fn last_crop_suggestion_returns_last_match() {
+        let stderr = "crop=100:100:0:0\nnoise\ncrop=1080:1920:420:0\n";
+        assert_eq!(last_crop_suggestion(stderr).as_deref(), Some("1080:1920:420:0"));
+    }
+
+    /// Mirrors test/commands.test.ts "returns null when no crop= suggestion".
+    #[test]
+    fn last_crop_suggestion_none_without_match() {
+        assert_eq!(last_crop_suggestion("no black bars here"), None);
+    }
+
+    // --- extract_frame ----------------------------------------------------
+
+    /// Mirrors test/commands.test.ts "INPUT-seeks (-ss before -i)"; the native
+    /// shell writes a temp JPEG (with -y) instead of MJPEG on stdout.
+    #[test]
+    fn frame_extract_args_input_seeks_before_i() {
+        let a = frame_extract_args(&["-ss", "3.5"], "in.mp4", "/tmp/f.jpg");
+        let ss = a.iter().position(|s| *s == "-ss").unwrap();
+        let i = a.iter().position(|s| *s == "-i").unwrap();
+        assert!(ss < i, "-ss must be an INPUT option (before -i)");
+        assert_eq!(a[ss + 1], "3.5");
+        assert!(a.contains(&"-y"), "must overwrite the reused temp path");
+        assert_eq!(*a.last().unwrap(), "/tmp/f.jpg");
+    }
+
+    /// Mirrors test/commands.test.ts "frameExtractTailArgs" — the EOF fallback
+    /// seeks relative to EOF; extract_frame passes `-sseof -0.2`, core.ts
+    /// FRAME_TAIL_SEEK_SEC = 0.2.
+    #[test]
+    fn frame_extract_args_eof_fallback_seeks_from_eof() {
+        let a = frame_extract_args(&["-sseof", "-0.2"], "in.mp4", "/tmp/f.jpg");
+        let sseof = a.iter().position(|s| *s == "-sseof").unwrap();
+        assert!(sseof < a.iter().position(|s| *s == "-i").unwrap());
+        assert!(a[sseof + 1].parse::<f64>().unwrap() < 0.0);
+        assert!(!a.contains(&"-ss"));
+    }
+
+    // --- scenes -----------------------------------------------------------
+
+    /// Mirrors test/commands.test.ts "downscales to 144p before the
+    /// shared-threshold scene filter" (SCENE_THRESHOLD = 0.4 in core.ts).
+    #[test]
+    fn scenes_args_downscale_then_scene_filter() {
+        assert!(scenes_args("in.mp4").contains(&"scale=-2:144,select='gt(scene,0.4)',showinfo"));
+    }
+
+    /// Mirrors test/commands.test.ts "parses pts_time markers, rounded to
+    /// milliseconds" (same stderr fixture as parseScenes's test).
+    #[test]
+    fn parse_scenes_rounds_to_ms() {
+        let stderr = "frame pts_time:14.5001 info\n pts_time:21 end";
+        assert_eq!(parse_scenes(stderr), vec![14.5, 21.0]);
+    }
+
+    /// Mirrors test/commands.test.ts "returns an empty array when no cuts".
+    #[test]
+    fn parse_scenes_empty_without_cuts() {
+        assert!(parse_scenes("no markers").is_empty());
+    }
+
+    // --- loudness ---------------------------------------------------------
+
+    /// Mirrors test/loudness.test.ts "loudnessCombinedArgs" — the exact argv,
+    /// element for element.
+    #[test]
+    fn loudness_combined_args_one_pass_pcm_and_lufs() {
+        assert_eq!(
+            loudness_combined_args("in.mp4"),
+            vec![
+                "-hide_banner",
+                "-nostats",
+                "-loglevel",
+                "verbose",
+                "-i",
+                "in.mp4",
+                "-af",
+                "ebur128=metadata=1",
+                "-ac",
+                "1",
+                "-ar",
+                "8000",
+                "-f",
+                "f32le",
+                "-",
+            ]
+        );
+    }
+
+    /// Mirrors test/loudness.test.ts "extracts every M: value in order, handling
+    /// the no-space format" (same log fixture as parseEbur128Momentary's test).
+    #[test]
+    fn parse_ebur128_momentary_extracts_m_values_in_order() {
+        let log = [
+            "[Parsed_ebur128_0 @ 0x1] t: 0.0999  TARGET:-23 LUFS    M:-120.7 S:-120.7     I: -70.0 LUFS",
+            "[Parsed_ebur128_0 @ 0x1] t: 0.1999  TARGET:-23 LUFS    M: -22.4 S:-30.1      I: -25.0 LUFS",
+            "[Parsed_ebur128_0 @ 0x1] t: 0.2999  TARGET:-23 LUFS    M:-9.5 S:-12.0        I: -18.0 LUFS",
+            "some unrelated verbose line without the field",
+        ]
+        .join("\n");
+        assert_eq!(parse_ebur128_momentary(&log), vec![-120.7, -22.4, -9.5]);
+    }
+
+    /// Mirrors test/loudness.test.ts "maps -inf / nan readings to -Infinity".
+    /// TS pins both to -Infinity; here `-inf` parses to -∞ and `nan` to NaN —
+    /// both NON-FINITE, which is all the downstream bucketing distinguishes.
+    #[test]
+    fn parse_ebur128_momentary_non_finite_readings() {
+        let out = parse_ebur128_momentary("M:-inf x\nM:nan y\nM:-12.0 z");
+        assert_eq!(out.len(), 3);
+        assert_eq!(out[0], f64::NEG_INFINITY);
+        assert!(!out[1].is_finite());
+        assert_eq!(out[2], -12.0);
+    }
+
+    /// Mirrors test/loudness.test.ts "returns [] when there are no M: lines".
+    #[test]
+    fn parse_ebur128_momentary_empty_without_m_lines() {
+        assert!(parse_ebur128_momentary("no fields here\nSummary:\n  I: -16 LUFS").is_empty());
+    }
+
+    /// Mirrors test/loudness.test.ts "lufsToNormalized" (floor -> 0, ceiling ->
+    /// 1, midpoint ~0.5, out-of-range clamped, non-finite -> 0).
+    #[test]
+    fn lufs_to_normalized_maps_floor_to_ceiling() {
+        assert_eq!(lufs_to_normalized(LUFS_FLOOR), 0.0);
+        assert_eq!(lufs_to_normalized(LUFS_CEIL), 1.0);
+        assert!((lufs_to_normalized((LUFS_FLOOR + LUFS_CEIL) / 2.0) - 0.5).abs() < 1e-10);
+        assert_eq!(lufs_to_normalized(0.0), 1.0); // above ceiling
+        assert_eq!(lufs_to_normalized(-100.0), 0.0); // below floor
+        assert_eq!(lufs_to_normalized(f64::NEG_INFINITY), 0.0);
+        assert_eq!(lufs_to_normalized(f64::NAN), 0.0);
+    }
+
+    /// Mirrors test/loudness.test.ts "returns exactly `buckets` values,
+    /// averaging normalized levels" ([ceil, ceil, floor, floor] / 2 -> [1, 0]).
+    #[test]
+    fn bucket_lufs_averages_normalized_windows() {
+        let lufs = [LUFS_CEIL, LUFS_CEIL, LUFS_FLOOR, LUFS_FLOOR];
+        assert_eq!(bucket_lufs(&lufs, 2), vec![1.0, 0.0]);
+        assert_eq!(bucket_lufs(&lufs, LOUDNESS_BUCKETS).len(), LOUDNESS_BUCKETS);
+    }
+
+    /// Mirrors test/loudness.test.ts "skips non-finite readings; an all-silence
+    /// window is 0".
+    #[test]
+    fn bucket_lufs_skips_non_finite_readings() {
+        let lufs = [f64::NEG_INFINITY, LUFS_CEIL, f64::NEG_INFINITY, f64::NEG_INFINITY];
+        assert_eq!(bucket_lufs(&lufs, 2), vec![1.0, 0.0]);
+    }
+
+    /// Mirrors test/loudness.test.ts "is an absolute scale — quiet material
+    /// never reaches 1".
+    #[test]
+    fn bucket_lufs_absolute_scale_quiet_stays_below_one() {
+        let quiet = [-25.0f64; 20];
+        for v in bucket_lufs(&quiet, 4) {
+            assert!(v > 0.0 && v < 1.0);
+        }
+    }
+
+    /// Mirrors test/loudness.test.ts "returns zeros for empty input".
+    #[test]
+    fn bucket_lufs_zeros_for_empty_input() {
+        assert_eq!(bucket_lufs(&[], 5), vec![0.0; 5]);
+    }
+
+    #[test]
+    fn pcm_f32le_samples_decodes_and_drops_partial_sample() {
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(&1.0f32.to_le_bytes());
+        bytes.extend_from_slice(&(-0.5f32).to_le_bytes());
+        bytes.extend_from_slice(&[0x00, 0x01]); // trailing partial sample
+        assert_eq!(pcm_f32le_samples(&bytes), vec![1.0, -0.5]);
+    }
+
+    /// Mirrors test/loudness.test.ts "normalizes so the max value is exactly 1
+    /// (a rising ramp)" — same 8000-sample ramp, 80 buckets.
+    #[test]
+    fn bucket_loudness_normalizes_rising_ramp_to_max_one() {
+        let n = 8000usize;
+        let samples: Vec<f32> = (0..n).map(|i| i as f32 / n as f32).collect();
+        let out = bucket_loudness(&samples, 80);
+        assert_eq!(out.len(), 80);
+        let max = out.iter().cloned().fold(0.0f64, f64::max);
+        assert!((max - 1.0).abs() < 1e-10);
+        // Monotonic non-decreasing for a ramp (RMS rises with the window).
+        for b in 1..out.len() {
+            assert!(out[b] >= out[b - 1] - 1e-9);
+        }
+        // Last bucket is the loud end, first is the quiet end.
+        assert!((out[79] - 1.0).abs() < 1e-10);
+        assert!(out[0] < out[79]);
+    }
+
+    /// Mirrors test/loudness.test.ts "returns all zeros for empty input or
+    /// all-silence".
+    #[test]
+    fn bucket_loudness_zeros_for_empty_or_silence() {
+        assert_eq!(bucket_loudness(&[], 10), vec![0.0; 10]);
+        assert_eq!(bucket_loudness(&[0.0f32; 500], 10), vec![0.0; 10]);
+    }
+
+    // --- render -----------------------------------------------------------
+
+    /// No flags set: just `render <manifest> --outdir <dir>`, with --outdir
+    /// LAST (the client parses the log's trailing `--outdir <dir>`).
+    #[test]
+    fn render_cli_args_minimal_appends_outdir_last() {
+        let a = render_cli_args(
+            "/tmp/m.json",
+            "/out",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        assert_eq!(a, vec!["render", "/tmp/m.json", "--outdir", "/out"]);
+    }
+
+    /// Every Settings flag set: names/order match src/cli.ts's render flags.
+    #[test]
+    fn render_cli_args_full_flag_set() {
+        let a = render_cli_args(
+            "/tmp/m.json",
+            "/out",
+            Some(19),
+            Some("medium".into()),
+            Some("256k".into()),
+            Some(true),
+            Some(true),
+            Some("Avenir".into()),
+            Some("#ffffff".into()),
+            Some("#000000".into()),
+            Some(true),
+            Some(true),
+            Some(true),
+            Some(true),
+            Some(true),
+            Some("#00000080".into()),
+            Some(-4.0),
+        );
+        assert_eq!(
+            a,
+            vec![
+                "render",
+                "/tmp/m.json",
+                "--crf",
+                "19",
+                "--preset",
+                "medium",
+                "--audio-bitrate",
+                "256k",
+                "--dry-run",
+                "--burn-captions",
+                "--caption-font",
+                "Avenir",
+                "--caption-color",
+                "#ffffff",
+                "--caption-outline-color",
+                "#000000",
+                "--caption-bold",
+                "--caption-italic",
+                "--caption-underline",
+                "--caption-shadow",
+                "--caption-box",
+                "--caption-box-color",
+                "#00000080",
+                "--caption-angle",
+                "-4",
+                "--outdir",
+                "/out",
+            ]
+        );
+    }
+
+    /// Empty strings and explicit-false toggles emit no flags at all.
+    #[test]
+    fn render_cli_args_skips_empty_and_false_options() {
+        let a = render_cli_args(
+            "/tmp/m.json",
+            "/out",
+            None,
+            Some(String::new()),
+            Some(String::new()),
+            Some(false),
+            Some(false),
+            None,
+            Some(String::new()),
+            Some(String::new()),
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(String::new()),
+            None,
+        );
+        assert_eq!(a, vec!["render", "/tmp/m.json", "--outdir", "/out"]);
+    }
+
+    // --- path helpers -----------------------------------------------------
+
+    #[test]
+    fn resolve_outdir_keeps_absolute_paths_verbatim() {
+        assert_eq!(
+            resolve_outdir("/repo/bin/footlight.js", Some("/abs/clips".into())),
+            "/abs/clips"
+        );
+    }
+
+    /// A relative outdir resolves against the repo root (two levels up from the
+    /// located `<root>/bin/footlight.js`), defaulting to `clips`.
+    #[test]
+    fn resolve_outdir_resolves_relative_against_repo_root() {
+        assert_eq!(resolve_outdir("/repo/bin/footlight.js", None), "/repo/clips");
+        assert_eq!(
+            resolve_outdir("/repo/bin/footlight.js", Some("out".into())),
+            "/repo/out"
+        );
+    }
+
+    /// A bare CLI path (no repo root to walk up to) falls back to the raw value.
+    #[test]
+    fn resolve_outdir_bare_cli_falls_back_to_raw() {
+        assert_eq!(resolve_outdir("footlight.js", None), "clips");
+    }
+
+    #[test]
+    fn friendly_fs_error_maps_kinds_to_friendly_reasons() {
+        use std::io::{Error, ErrorKind};
+        assert_eq!(
+            friendly_fs_error(&Error::from(ErrorKind::PermissionDenied)),
+            "permission denied"
+        );
+        assert_eq!(
+            friendly_fs_error(&Error::from(ErrorKind::NotFound)),
+            "the parent folder does not exist"
+        );
+        assert_eq!(
+            friendly_fs_error(&Error::from(ErrorKind::TimedOut)),
+            "it could not be created"
+        );
+    }
+
+    // --- fonts ------------------------------------------------------------
+
+    /// collect_font_files keeps only .ttf/.otf/.ttc (case-insensitively),
+    /// recursing into subdirectories.
+    #[test]
+    fn collect_font_files_filters_extensions_recursively() {
+        let dir = std::env::temp_dir().join(format!("footlight_fonts_test_{}", std::process::id()));
+        let sub = dir.join("nested");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(dir.join("a.ttf"), b"x").unwrap();
+        std::fs::write(dir.join("b.OTF"), b"x").unwrap(); // extension case-insensitive
+        std::fs::write(dir.join("notes.txt"), b"x").unwrap();
+        std::fs::write(sub.join("c.ttc"), b"x").unwrap();
+
+        let mut found = Vec::new();
+        collect_font_files(&dir, 0, &mut found);
+        let mut names: Vec<String> = found
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
+        names.sort();
+        assert_eq!(names, vec!["a.ttf", "b.OTF", "c.ttc"]);
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }

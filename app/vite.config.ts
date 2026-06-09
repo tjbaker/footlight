@@ -47,10 +47,11 @@ export default defineConfig({
     include: ["test/**/*.test.ts"],
     coverage: {
       provider: "v8",
-      // The app's own frontend source. Most of it is DOM/UI wiring that isn't
-      // unit-tested yet, so this is an honest (currently low) picture; the pure
-      // engine in ../src is measured by the root package's coverage instead.
-      include: ["src/**/*.ts"],
+      // The app's own frontend source plus the Node dev backend. Most of the
+      // frontend is DOM/UI wiring that isn't unit-tested yet, so this is an
+      // honest (currently low) picture; the pure engine in ../src is measured
+      // by the root package's coverage instead.
+      include: ["src/**/*.ts", "dev-server/**/*.mjs"],
       exclude: ["src/**/*.d.ts", "src/i18n/types.ts"],
       // Console (`text`/`text-summary`) + `cobertura` (coverage/cobertura-coverage.xml)
       // for the Codecov upload in CI. No HTML report — console + Codecov suffice.
