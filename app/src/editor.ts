@@ -25,6 +25,7 @@ import {
   detectSwells,
   detectOnsets,
   coverOutName,
+  easedCropWindowAt,
   LOUDNESS_BUCKETS,
 } from "@core";
 import {
@@ -1948,21 +1949,7 @@ export function mountEditor(root: HTMLElement): void {
       in_point: (state.inPoint ?? 0).toFixed(3),
       out_point: (state.outPoint ?? state.duration).toFixed(3),
     };
-    const win = cropWindowSpec();
-    if (hasActiveTrack(state)) {
-      spec.cropPath = state.cropPath!.map((k) => ({ t: k.t, x: k.x }));
-      spec.crop_offset = "center";
-    } else if (win) {
-      spec.cropWindow = win;
-      spec.crop_offset = currentOffset();
-    } else {
-      spec.crop_offset = state.keyframes.length
-        ? scheduleToString(state.keyframes)
-        : currentOffset();
-    }
-    if (state.contentMode && state.contentBox && state.contentBox.w > 0) {
-      spec.content_crop = contentCropFromBox(state.contentBox);
-    }
+    Object.assign(spec, framingToSpec(state.t));
     const name = nameInput.value.trim();
     if (name) spec.out_name = name;
     try {
@@ -2769,6 +2756,54 @@ export function mountEditor(root: HTMLElement): void {
     return state.contentMode && state.contentBox
       ? { x: state.contentBox.x, y: state.contentBox.y }
       : null;
+  }
+
+  /**
+   * The CURRENT framing as manifest fields — the ONE place the framing
+   * precedence is encoded for emission (addClip and the cover export share it):
+   * push (`cropWindowPath`, #163) > AI track (`cropPath`, SPEC §6.9) > punch-in
+   * window > keyframe schedule / fixed offset, plus any content crop. Each
+   * animated form keeps a sensible static `crop_offset` fallback so the row
+   * stays valid if its path is ever stripped.
+   *
+   * `coverAtT` (a SOURCE time) flattens an armed push to its eased window at
+   * that instant — the cover backends take a static window, and a cover is one
+   * frame, so this is the render-exact framing for it.
+   */
+  function framingToSpec(
+    coverAtT?: number,
+  ): Pick<ClipSpec, "cropWindowPath" | "cropPath" | "cropWindow" | "crop_offset" | "content_crop"> {
+    const spec: ReturnType<typeof framingToSpec> = {};
+    const win = cropWindowSpec();
+    const dur =
+      state.inPoint != null && state.outPoint != null
+        ? state.outPoint - state.inPoint
+        : clipLength(state);
+    const pushKfs = pushKeyframes(state.push, dur);
+    if (pushKfs && coverAtT != null) {
+      const w = easedCropWindowAt(pushKfs, Math.max(0, coverAtT - (state.inPoint ?? 0)));
+      spec.cropWindow = { x: w.x, y: w.y, w: w.w, h: w.h };
+      spec.crop_offset = "center";
+    } else if (pushKfs) {
+      spec.cropWindowPath = pushKfs;
+      spec.crop_offset = "center";
+    } else if (hasActiveTrack(state)) {
+      spec.cropPath = state.cropPath!.map((k) => ({ t: k.t, x: k.x }));
+      spec.crop_offset = "center";
+    } else if (win) {
+      // Schedules don't apply to a fixed window, so keyframes are intentionally
+      // ignored here; the offset fallback keeps the row framing sensibly.
+      spec.cropWindow = win;
+      spec.crop_offset = currentOffset();
+    } else {
+      spec.crop_offset = state.keyframes.length
+        ? scheduleToString(state.keyframes)
+        : currentOffset();
+    }
+    if (state.contentMode && state.contentBox && state.contentBox.w > 0) {
+      spec.content_crop = contentCropFromBox(state.contentBox);
+    }
+    return spec;
   }
 
   /** Cursor hinting the move/resize/draw affordance under the pointer. */
@@ -3595,33 +3630,7 @@ export function mountEditor(root: HTMLElement): void {
       in_point: state.inPoint.toFixed(3),
       out_point: state.outPoint.toFixed(3),
     };
-    const win = cropWindowSpec();
-    const pushKfs = pushKeyframes(state.push, state.outPoint - state.inPoint);
-    if (pushKfs) {
-      // Animated punch-in (#163) — the render's highest framing precedence.
-      // Keep a "center" fallback so the row stays valid if the path is stripped.
-      spec.cropWindowPath = pushKfs;
-      spec.crop_offset = "center";
-    } else if (hasActiveTrack(state)) {
-      // AI tracking takes precedence over crop_offset (SPEC §6.9). Keep a
-      // "center" fallback so the row is still valid if the path is stripped.
-      spec.cropPath = state.cropPath!.map((k) => ({ t: k.t, x: k.x }));
-      spec.crop_offset = "center";
-    } else if (win) {
-      // Punch-in / zoom: a fixed 9:16 window takes precedence over crop_offset
-      // at render. Keep a horizontal-offset fallback so the row still frames
-      // sensibly if the window is ever stripped. (Schedules don't apply to a
-      // fixed window, so any keyframes are intentionally ignored here.)
-      spec.cropWindow = win;
-      spec.crop_offset = currentOffset();
-    } else {
-      spec.crop_offset = state.keyframes.length
-        ? scheduleToString(state.keyframes)
-        : currentOffset();
-    }
-    if (state.contentMode && state.contentBox && state.contentBox.w > 0) {
-      spec.content_crop = contentCropFromBox(state.contentBox);
-    }
+    Object.assign(spec, framingToSpec());
     const name = nameInput.value.trim();
     if (name) spec.out_name = name;
 

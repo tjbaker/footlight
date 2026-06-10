@@ -22,7 +22,7 @@
  * cut — that is the hard-switch schedule's job, §3.3).
  */
 
-import { TARGET_AR, roundEven, type CropPathKeyframe } from "./core.js";
+import { computeCrop, type CropPathKeyframe } from "./core.js";
 import type { Box, Dims } from "./manifest.js";
 import type { TrackSample, VisionTracker } from "./providers/types.js";
 
@@ -192,17 +192,15 @@ export class OneEuroFilter {
 
 /**
  * Desired crop x so the subject's horizontal center sits in the MIDDLE of the
- * 9:16 window. Crop width matches the engine's landscape rule
- * (`cw = roundEven(region.height * TARGET_AR)`); x is clamped into
- * [0, region.width - cw] so the window never leaves the frame.
+ * 9:16 window. Delegates the crop width AND the into-frame clamp to the
+ * engine's own `computeCrop` (one source of the landscape rule, instead of
+ * restating `roundEven(height * TARGET_AR)` here): first probe for the width,
+ * then resolve the centered integer offset exactly as the render would.
  */
 export function boxCenterToCropX(box: Box, region: Dims): number {
-  const cw = roundEven(region.height * TARGET_AR);
-  const maxX = Math.max(0, region.width - cw);
-  const centerX = boxCenterX(box);
-  let x = Math.round(centerX - cw / 2);
-  x = Math.max(0, Math.min(x, maxX));
-  return x;
+  const { cw } = computeCrop(region.width, region.height, "center");
+  const x = Math.round(boxCenterX(box) - cw / 2);
+  return computeCrop(region.width, region.height, String(x)).x;
 }
 
 /** Smoothing config for `samplesToCropPath`. */
