@@ -102,11 +102,12 @@ export const es: Messages = {
               "Pasa el cursor por la pista para previsualizar el fotograma en ese momento.",
               "Las etiquetas de “crescendo” sugeridas marcan los aumentos de silencio→fuerte — haz clic en una para saltar justo antes de la subida.",
               "Los cortes de escena aparecen como marcas; los botones ⏮ / ⏭ saltan entre ellos. La detección se ejecuta automáticamente al cargar; Detectar escenas la vuelve a ejecutar.",
+              "Los ataques de audio detectados — golpes de batería, inicios de nota — aparecen como marcas sutiles en el borde inferior de la pista. Activa Imán y, al soltar un arrastre de In/Out (o al pulsar I / O), el punto se imanta al ataque más cercano dentro de ±150 ms, para que los cortes caigan en el ritmo.",
             ],
           },
           {
             kind: "tip",
-            text: "Las sugerencias de crescendo solo desplazan el cabezal de reproducción — nunca fijan el In por ti. El corte siempre lo haces tú.",
+            text: "Las sugerencias de crescendo solo desplazan el cabezal de reproducción — nunca fijan el In por ti. El corte siempre lo haces tú. El imán de ataques funciona igual: desactivado por defecto, se aplica solo al soltar (nunca a mitad del arrastre), y las teclas ← / → siempre mueven el punto exactamente adonde tú digas.",
           },
         ],
       },
@@ -740,6 +741,9 @@ export const es: Messages = {
       swellsLabel: "crescendos",
       detectScenes: "Detectar escenas",
       detectScenesTitle: "Detecta cortes de escena — alinea con ellos los tiempos de cambio de fotogramas clave.",
+      snapLabel: "Imán",
+      snapTitle:
+        "Ajustar In/Out al ritmo: cuando está activo, soltar un arrastre o pulsar I/O lleva el punto al ataque de audio detectado más cercano (±150 ms). Desactivado por defecto — tus puntos se quedan exactamente donde los pusiste.",
       seekSwellPrefix: "Ir a justo antes de este crescendo (",
       seekSwellSuffix: ")",
     },

@@ -408,6 +408,11 @@ input[type="text"], input[type="number"], input[type="password"] {
 .fl-tl-region.sel-in { border-left-width: 4px; box-shadow: -2px 0 8px -1px var(--ok); }
 .fl-tl-region.sel-out { border-right-width: 4px; box-shadow: 2px 0 8px -1px var(--accent); }
 .fl-tl-cut { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--accent-2); opacity: 0.5; pointer-events: none; }
+/* Onset ticks (beat-snap targets): subtle stubs along the bottom edge, sitting
+   visually BELOW the full-height scene-cut lines. */
+.fl-tl-onset { position: absolute; bottom: 0; width: 1px; height: 7px; background: var(--accent-2); opacity: 0.35; pointer-events: none; }
+/* Onset-snap toggle: lights up accent while snapping is armed. */
+.fl-btn.fl-snap.on { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
 .fl-tl-suggest-mark { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed var(--accent-line); pointer-events: none; }
 .fl-tl-suggest-mark::before { content: ""; position: absolute; top: -2px; left: -3px; width: 6px; height: 6px; background: var(--accent); transform: rotate(45deg); }
 .fl-tl-kf { position: absolute; bottom: 7px; width: 9px; height: 9px; background: var(--accent); transform: translateX(-50%) rotate(45deg); border: 1px solid rgba(0, 0, 0, 0.25); pointer-events: none; }

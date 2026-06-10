@@ -397,6 +397,9 @@ export interface EditorMessages {
     swellsLabel: string;
     detectScenes: string;
     detectScenesTitle: string;
+    /** Onset-snap toggle: button label + tooltip (issue #164). */
+    snapLabel: string;
+    snapTitle: string;
     /** `Seek to just before this swell ({clock})` — composed in code. */
     seekSwellPrefix: string;
     seekSwellSuffix: string;

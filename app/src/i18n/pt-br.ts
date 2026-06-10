@@ -102,11 +102,12 @@ export const ptBR: Messages = {
               "Passe o mouse sobre a faixa para pré-visualizar o quadro naquele momento.",
               "Os marcadores de “crescendo” sugeridos indicam transições de baixo→alto volume — clique em um para pular para logo antes da elevação.",
               "Os cortes de cena aparecem como traços; os botões ⏮ / ⏭ saltam entre eles. A detecção roda automaticamente ao carregar; Detectar cenas a executa novamente.",
+              "Os ataques de áudio detectados — batidas de bateria, inícios de nota — aparecem como traços sutis na borda inferior da faixa. Ative o Ímã e, ao soltar um arraste de Entrada/Saída (ou ao pressionar I / O), o ponto é atraído para o ataque mais próximo dentro de ±150 ms, para que os cortes caiam na batida.",
             ],
           },
           {
             kind: "tip",
-            text: "As sugestões de crescendo apenas movem o cabeçote — elas nunca definem a Entrada por você. Você sempre faz o corte.",
+            text: "As sugestões de crescendo apenas movem o cabeçote — elas nunca definem a Entrada por você. Você sempre faz o corte. O ímã de ataques é igual: desativado por padrão, aplicado apenas ao soltar (nunca no meio do arraste), e as teclas ← / → sempre movem o ponto exatamente para onde você mandar.",
           },
         ],
       },
@@ -740,6 +741,9 @@ export const ptBR: Messages = {
       swellsLabel: "crescendos",
       detectScenes: "Detectar cenas",
       detectScenesTitle: "Detectar cortes de cena — alinhe os tempos de troca de keyframe a eles.",
+      snapLabel: "Ímã",
+      snapTitle:
+        "Ajustar Entrada/Saída à batida: quando ativo, soltar um arraste ou pressionar I/O leva o ponto ao ataque de áudio detectado mais próximo (±150 ms). Desativado por padrão — seus pontos ficam exatamente onde você os colocou.",
       seekSwellPrefix: "Ir para logo antes deste crescendo (",
       seekSwellSuffix: ")",
     },

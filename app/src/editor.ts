@@ -19,7 +19,7 @@
  *    and rendered through `platform.render`.
  */
 
-import { TARGET_AR, parseTimestamp, detectSwells, LOUDNESS_BUCKETS } from "@core";
+import { TARGET_AR, parseTimestamp, detectSwells, detectOnsets, LOUDNESS_BUCKETS } from "@core";
 import {
   cropBoxToOffset,
   cropBoxToWindow,
@@ -103,10 +103,13 @@ import {
   saveOutdir,
   loadPreviewPref,
   savePreviewPref,
+  loadSnapPref,
+  saveSnapPref,
   loadRecents,
   pushRecent,
   saveTheme,
 } from "./editor-prefs.js";
+import { snapToOnset } from "./editor-snap.js";
 import {
   clipDur,
   fmtUsd,
@@ -453,14 +456,18 @@ export function mountEditor(root: HTMLElement): void {
   clipSect.append(sectionHeader(m.clip.header));
   const ioRow = el("div", "fl-rowg");
   ioRow.style.marginBottom = "12px";
+  // Marking In/Out (button or I/O key) goes through `snapT`: with the timeline's
+  // onset-snap toggle ON the point magnetizes to the nearest detected onset
+  // (±150 ms); OFF (the default) it is the identity — the point stays exactly
+  // where the user put it.
   const setInBtn = button("", "fl-btn", () => {
-    state.inPoint = state.t;
+    state.inPoint = snapT(state.t);
     refreshIO();
   });
   setInBtn.innerHTML = `<span class="idot in"></span>${escapeHtml(m.clip.setIn)}`;
   setInBtn.title = m.clip.setInTitle;
   const setOutBtn = button("", "fl-btn", () => {
-    state.outPoint = state.t;
+    state.outPoint = snapT(state.t);
     refreshIO();
   });
   setOutBtn.innerHTML = `<span class="idot out"></span>${escapeHtml(m.clip.setOut)}`;
@@ -1150,6 +1157,7 @@ export function mountEditor(root: HTMLElement): void {
     return d;
   };
   const tlCutsLayer = layer();
+  const tlOnsetsLayer = layer();
   const tlMarksLayer = layer();
   const tlRegion = el("div", "fl-tl-region");
   tlRegion.style.display = "none";
@@ -1168,6 +1176,7 @@ export function mountEditor(root: HTMLElement): void {
   tlTrack.append(
     tlRuler,
     tlWave,
+    tlOnsetsLayer,
     tlCutsLayer,
     tlMarksLayer,
     tlRegion,
@@ -1183,9 +1192,23 @@ export function mountEditor(root: HTMLElement): void {
   cutsChip.innerHTML = `<span class="lab">${escapeHtml(m.timeline.cutsLabel)}</span><span class="val">0</span>`;
   const swellsChip = el("span", "fl-rdchip swell");
   swellsChip.innerHTML = `<span class="lab">${escapeHtml(m.timeline.swellsLabel)}</span><span class="val">0</span>`;
+  // Onset snap (issue #164): opt-in, persisted. When ON, releasing an In/Out
+  // drag or keying I/O magnetizes the point to the nearest detected onset
+  // (±ONSET_SNAP_WINDOW_SEC). Never applied during the drag itself.
+  let snapOn = loadSnapPref();
+  const snapBtn = button(m.timeline.snapLabel, "fl-btn sm fl-snap", () => {
+    snapOn = !snapOn;
+    saveSnapPref(snapOn);
+    snapBtn.classList.toggle("on", snapOn);
+  });
+  snapBtn.title = m.timeline.snapTitle;
+  snapBtn.classList.toggle("on", snapOn);
   const scenesBtn = button(m.timeline.detectScenes, "fl-btn sm", doScenes);
   scenesBtn.title = m.timeline.detectScenesTitle;
-  tlInfo.append(cutsChip, swellsChip, scenesBtn);
+  tlInfo.append(cutsChip, swellsChip, snapBtn, scenesBtn);
+
+  /** `t` snapped to the nearest onset when the toggle is on (else unchanged). */
+  const snapT = (t: number): number => (snapOn ? snapToOnset(t, state.onsets) : t);
 
   timeline.append(tlCluster, tlCol, tlInfo);
 
@@ -1260,6 +1283,18 @@ export function mountEditor(root: HTMLElement): void {
     });
     const v = swellsChip.querySelector(".val");
     if (v) v.textContent = String(state.swells.length);
+  }
+
+  /** Subtle onset ticks along the bottom of the track (below the scene-cut
+   *  markers' full-height lines) — the beat grid the snap toggle targets. */
+  function renderOnsets(): void {
+    tlOnsetsLayer.innerHTML = "";
+    if (!(state.duration > 0)) return;
+    state.onsets.forEach((t) => {
+      const tick = el("div", "fl-tl-onset");
+      tick.style.left = pct(t);
+      tlOnsetsLayer.append(tick);
+    });
   }
 
   function renderCuts(): void {
@@ -1353,25 +1388,29 @@ export function mountEditor(root: HTMLElement): void {
   }
 
   /**
-   * Fetch the source's two loudness envelopes and update the timeline: the
-   * perceptual `display` envelope draws the bars; the raw-energy `detect`
-   * envelope feeds the swell heuristic (it surfaces musical dips that
-   * perceptually-gated LUFS smooths away on compressed material).
+   * Fetch the source's audio envelopes and update the timeline: the perceptual
+   * `display` envelope draws the bars; the raw-energy `detect` envelope feeds
+   * the swell heuristic (it surfaces musical dips that perceptually-gated LUFS
+   * smooths away on compressed material); the fine `onsetEnvelope` feeds the
+   * onset detector behind the In/Out snap toggle and the timeline's beat ticks.
    */
   async function loadLoudness(source: string): Promise<void> {
     renderWave(true);
     try {
-      const { display, detect } = await platform.loudness(source);
+      const { display, detect, onsetEnvelope } = await platform.loudness(source);
       if (state.source !== source) return; // a newer load superseded this one
       state.loudness = display;
       state.swells = detectSwells(detect, state.duration);
+      state.onsets = detectOnsets(onsetEnvelope ?? []);
     } catch {
       if (state.source !== source) return;
       state.loudness = null;
       state.swells = [];
+      state.onsets = [];
     }
     renderWave(false);
     renderSwells();
+    renderOnsets();
   }
 
   /** Source time at a client-X over the timeline track. */
@@ -1487,6 +1526,17 @@ export function mountEditor(root: HTMLElement): void {
       // A plain click: seek there and drop any marker selection.
       setSelectedMarker(null);
       seek(regionAnchor);
+    } else if (snapOn) {
+      // Onset snap happens at RELEASE only (never mid-drag), so the magnet
+      // assists the gesture without fighting the hand. With the toggle off,
+      // the release leaves the user's point exactly where they put it.
+      if ((tlDrag === "in" || tlDrag === "region") && state.inPoint != null) {
+        state.inPoint = round3(clamp(snapT(state.inPoint), 0, state.outPoint ?? state.duration));
+      }
+      if ((tlDrag === "out" || tlDrag === "region") && state.outPoint != null) {
+        state.outPoint = round3(clamp(snapT(state.outPoint), state.inPoint ?? 0, state.duration));
+      }
+      refreshIO();
     }
     tlDrag = null;
   };
@@ -1636,7 +1686,7 @@ export function mountEditor(root: HTMLElement): void {
             setSelectedMarker("in");
           }
         } else {
-          state.inPoint = state.t;
+          state.inPoint = snapT(state.t); // identity unless onset snap is ON
           refreshIO();
           setSelectedMarker("in");
         }
@@ -1649,7 +1699,7 @@ export function mountEditor(root: HTMLElement): void {
             setSelectedMarker("out");
           }
         } else {
-          state.outPoint = state.t;
+          state.outPoint = snapT(state.t); // identity unless onset snap is ON
           refreshIO();
           setSelectedMarker("out");
         }
@@ -1981,9 +2031,11 @@ export function mountEditor(root: HTMLElement): void {
       state.sceneCuts = [];
       state.loudness = null;
       state.swells = [];
+      state.onsets = [];
       renderRuler();
       renderCuts();
       renderSwells();
+      renderOnsets();
       renderKf();
       renderRegion();
       movePlayhead();

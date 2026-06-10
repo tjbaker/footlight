@@ -288,9 +288,15 @@ describe("GET /scenes", () => {
 // --- /loudness ------------------------------------------------------------------
 
 describe("GET /loudness", () => {
-  it("returns both envelopes from one combined ffmpeg pass", async () => {
-    // stderr: per-frame momentary LUFS; stdout: mono f32le PCM for the RMS path.
-    const pcm = Buffer.from(new Float32Array([0.5, -0.5, 0.25, -0.25]).buffer);
+  it("returns all three envelopes from one combined ffmpeg pass", async () => {
+    // stderr: per-frame momentary LUFS; stdout: mono f32le PCM for the RMS +
+    // onset-envelope paths. 480 samples = three 160-sample (0.02s @ 8kHz) onset
+    // frames at constant levels 0.1 / 1.0 / 0.1 → RMS [0.1, 1, 0.1] normalized.
+    const samples = new Float32Array(480);
+    samples.fill(0.1, 0, 160);
+    samples.fill(1.0, 160, 320);
+    samples.fill(0.1, 320, 480);
+    const pcm = Buffer.from(samples.buffer);
     onSpawn(() => ({
       stderr:
         "[Parsed_ebur128_0 @ 0x1] t: 0.1  TARGET:-23 LUFS  M: -22.5 S:-23.0\n" +
@@ -301,11 +307,18 @@ describe("GET /loudness", () => {
     const res = await fetch(`${base}/loudness?source=${encodeURIComponent("/v.mp4")}`);
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { display: number[]; detect: number[] };
+    const body = (await res.json()) as {
+      display: number[];
+      detect: number[];
+      onsetEnvelope: number[];
+    };
     expect(body.display).toHaveLength(LOUDNESS_BUCKETS);
     expect(body.detect).toHaveLength(LOUDNESS_BUCKETS);
     expect(Math.max(...body.display)).toBeGreaterThan(0);
     expect(Math.max(...body.detect)).toBeGreaterThan(0);
+    // The fine onset envelope rides along: one frame per ONSET_FRAME_SEC,
+    // max-normalized (computed by the same core.ts onsetEnvelope the CLI uses).
+    expect(body.onsetEnvelope).toEqual([0.1, 1, 0.1]);
     expect(spawnCall(0)).toEqual({ cmd: "ffmpeg", args: loudnessCombinedArgs("/v.mp4") });
   });
 
