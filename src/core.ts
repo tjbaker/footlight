@@ -266,6 +266,27 @@ export interface CropPathKeyframe {
 }
 
 /**
+ * One keyframe of an animated punch-in (slow push): a full crop WINDOW at a
+ * clip-relative time, in working-region pixels. Where `CropPathKeyframe` only
+ * animates the crop's x (horizontal tracking at fixed size), this animates the
+ * window's position AND size, so the render eases between zoom levels — the
+ * "slow push toward the subject". Windows should be ~9:16 like `CropWindowSpec`;
+ * the engine even-rounds w/h and clamps x/y into the working region.
+ */
+export interface CropWindowKeyframe {
+  /** Clip-relative time in seconds. */
+  t: number;
+  /** Window x offset in pixels, within the working region. */
+  x: number;
+  /** Window y offset in pixels, within the working region. */
+  y: number;
+  /** Window width in pixels (even-rounded by the engine). */
+  w: number;
+  /** Window height in pixels (even-rounded by the engine). */
+  h: number;
+}
+
+/**
  * Build an ffmpeg `crop` x-EXPRESSION that smoothly interpolates x across the
  * given keyframes using smoothstep easing (SPEC §6.9 — the eased, within-shot
  * crop path for AI subject tracking). This is the SMOOTH alternative to the
@@ -292,31 +313,42 @@ export function buildEasedCropX(keyframes: CropPathKeyframe[], _y?: number): str
   if (keyframes.length === 0) {
     throw new Error("buildEasedCropX: at least one keyframe required");
   }
-  const kfs = [...keyframes].sort((a, b) => a.t - b.t);
+  return buildEasedExpr(keyframes.map((k) => ({ t: k.t, v: k.x })));
+}
+
+/**
+ * Build a smoothstep-eased ffmpeg expression over `t` for one scalar value
+ * given (time, value) keyframes — the shared core of `buildEasedCropX` (eased
+ * crop x) and `buildEasedCropWindowFilters` (each of the window's x/y/w/h).
+ * Keyframes are sorted by `t` here; callers guarantee at least one (they
+ * validate emptiness themselves for a clearer error message).
+ */
+function buildEasedExpr(points: Array<{ t: number; v: number }>): string {
+  const kfs = [...points].sort((a, b) => a.t - b.t);
   if (kfs.length === 1) {
-    return num(kfs[0]!.x);
+    return num(kfs[0]!.v);
   }
 
   // Build the smoothstep expression for one segment [a, b].
-  const segExpr = (a: CropPathKeyframe, b: CropPathKeyframe): string => {
+  const segExpr = (a: { t: number; v: number }, b: { t: number; v: number }): string => {
     const dt = b.t - a.t;
     if (dt <= 0) {
       // Coincident/inverted keyframes: degenerate to an instantaneous step to b.
-      return num(b.x);
+      return num(b.v);
     }
     // p clamped to [0,1] so the segment expression holds its endpoints outside
-    // [a.t, b.t]; smoothstep s = p*p*(3-2*p); x = x_a + (x_b - x_a)*s.
+    // [a.t, b.t]; smoothstep s = p*p*(3-2*p); v = v_a + (v_b - v_a)*s.
     const p = `clip((t-${num(a.t)})/${num(dt)},0,1)`;
     const s = `(${p})*(${p})*(3-2*(${p}))`;
-    const dx = b.x - a.x;
-    return `(${num(a.x)}+(${num(dx)})*(${s}))`;
+    const dv = b.v - a.v;
+    return `(${num(a.v)}+(${num(dv)})*(${s}))`;
   };
 
   // Nest from the LAST segment outward, so the first segment is the outermost
   // `if`: for t < t_1 use segment 0, else fall through to the next test. The
-  // final `else` is the last segment (which itself holds last x for t > t_last
-  // thanks to the clamped p). t before t_0 falls into segment 0, whose clamped
-  // p holds x_0.
+  // final `else` is the last segment (which itself holds the last value for
+  // t > t_last thanks to the clamped p). t before t_0 falls into segment 0,
+  // whose clamped p holds v_0.
   const last = kfs.length - 1;
   let expr = segExpr(kfs[last - 1]!, kfs[last]!);
   for (let i = last - 2; i >= 0; i--) {
@@ -324,6 +356,102 @@ export function buildEasedCropX(keyframes: CropPathKeyframe[], _y?: number): str
     expr = `if(lt(t,${num(boundary)}),${segExpr(kfs[i]!, kfs[i + 1]!)},${expr})`;
   }
   return expr;
+}
+
+/**
+ * Build the ffmpeg filter stages for an ANIMATED punch-in (slow push): a crop
+ * window whose position and size smoothstep-ease across the given keyframes
+ * within a single shot, landing directly at TARGET_W×TARGET_H.
+ *
+ * ffmpeg's `crop` filter evaluates its `w`/`h` expressions ONCE at configure
+ * time (only `x`/`y` are per-frame), so a dynamic-size crop cannot animate —
+ * verified empirically. Instead the zoom is rendered as:
+ *
+ *   1. optional static pre-crop to the keyframes' bounding box (smoothstep is a
+ *      convex blend of segment endpoints, so every interpolated window stays
+ *      inside the keyframe windows' union box — pre-cropping just trims the
+ *      per-frame upscale cost);
+ *   2. `scale=…:eval=frame` — the whole region upscaled PER FRAME by the eased
+ *      zoom factor (TARGET/window), even-truncated for yuv420p;
+ *   3. a FIXED TARGET_W×TARGET_H `crop` whose per-frame x/y place the eased
+ *      window, clamped against the live canvas (`iw`/`ih`) so even-truncation
+ *      at the edges can never push the window out of frame.
+ *
+ * Scaling happens once (lanczos, straight to output size), so quality matches
+ * the static punch-in path. Keyframe w/h are even-rounded and x/y clamped into
+ * the working region like `cropWindow`; keyframes are sorted by `t`, the first
+ * window holds before its time and the last holds after (no extrapolation).
+ * Returns the filter stages in order; the caller appends `setsar=1` etc.
+ * Throws on no keyframes, non-positive w/h, or a window larger than the region.
+ */
+export function buildEasedCropWindowFilters(
+  keyframes: CropWindowKeyframe[],
+  workW: number,
+  workH: number,
+): string[] {
+  if (keyframes.length === 0) {
+    throw new Error("buildEasedCropWindowFilters: at least one keyframe required");
+  }
+  // Sanitize each window exactly like the static `cropWindow` branch: even
+  // w/h (H.264-friendly sizes), x/y clamped into the working region.
+  const kfs = keyframes
+    .map((k) => {
+      const w = even(k.w);
+      const h = even(k.h);
+      if (w <= 0 || h <= 0) {
+        throw new Error(`cropWindowPath window at t=${k.t} must have positive w/h, got ${w}x${h}`);
+      }
+      if (w > workW || h > workH) {
+        throw new Error(
+          `cropWindowPath window at t=${k.t} (${w}x${h}) exceeds working region ${workW}x${workH}`,
+        );
+      }
+      const x = even(Math.max(0, Math.min(k.x, workW - w)));
+      const y = even(Math.max(0, Math.min(k.y, workH - h)));
+      return { t: k.t, x, y, w, h };
+    })
+    .sort((a, b) => a.t - b.t);
+
+  // Bounding box of all keyframe windows (every eased window stays inside it).
+  let bx0 = Infinity;
+  let by0 = Infinity;
+  let bx1 = -Infinity;
+  let by1 = -Infinity;
+  for (const k of kfs) {
+    bx0 = Math.min(bx0, k.x);
+    by0 = Math.min(by0, k.y);
+    bx1 = Math.max(bx1, k.x + k.w);
+    by1 = Math.max(by1, k.y + k.h);
+  }
+  const bw = bx1 - bx0; // even: differences of even values
+  const bh = by1 - by0;
+
+  const filters: string[] = [];
+  // Pre-crop to the bounding box when it actually trims something, and express
+  // the keyframes relative to its origin.
+  const preCrop = bw < workW || bh < workH;
+  if (preCrop) {
+    filters.push(`crop=${bw}:${bh}:${bx0}:${by0}`);
+  }
+  const srcW = preCrop ? bw : workW;
+  const srcH = preCrop ? bh : workH;
+  const ox = preCrop ? bx0 : 0;
+  const oy = preCrop ? by0 : 0;
+
+  const wExpr = buildEasedExpr(kfs.map((k) => ({ t: k.t, v: k.w })));
+  const hExpr = buildEasedExpr(kfs.map((k) => ({ t: k.t, v: k.h })));
+  const xExpr = buildEasedExpr(kfs.map((k) => ({ t: k.t, v: k.x - ox })));
+  const yExpr = buildEasedExpr(kfs.map((k) => ({ t: k.t, v: k.y - oy })));
+
+  // Per-frame canvas: the region scaled so the eased window maps onto the fixed
+  // output crop. trunc(…/2)*2 keeps dimensions even for yuv420p.
+  const canvasW = `trunc(${srcW}*${TARGET_W}/(${wExpr})/2)*2`;
+  const canvasH = `trunc(${srcH}*${TARGET_H}/(${hExpr})/2)*2`;
+  filters.push(`scale=w='${canvasW}':h='${canvasH}':eval=frame:flags=lanczos`);
+  const cropX = `min(max((${xExpr})*${TARGET_W}/(${wExpr}),0),iw-${TARGET_W})`;
+  const cropY = `min(max((${yExpr})*${TARGET_H}/(${hExpr}),0),ih-${TARGET_H})`;
+  filters.push(`crop=${TARGET_W}:${TARGET_H}:x='${cropX}':y='${cropY}'`);
+  return filters;
 }
 
 /** Sanitize text for use in a filename. */
@@ -367,6 +495,17 @@ export interface BuildOptions extends RenderOptions {
    * supply them (the CLI probes via ffprobe). Exposed so tests need no files.
    */
   dims: [number, number];
+  /**
+   * Optional ANIMATED punch-in (slow push): smoothstep-interpolated crop-window
+   * keyframes (position AND size) within a single continuous shot. When present
+   * it takes precedence over everything else (`cropWindowPath` > `cropPath` >
+   * `cropWindow` > `crop_offset`); the geometry renders via
+   * `buildEasedCropWindowFilters` (per-frame eased upscale + fixed output-size
+   * crop), replacing the usual crop + static scale stages. A single keyframe
+   * degenerates to the equivalent static `cropWindow`. `content_crop`, setsar
+   * and audio are unchanged.
+   */
+  cropWindowPath?: CropWindowKeyframe[];
   /**
    * Optional eased crop path (SPEC §6.9): smoothstep-interpolated keyframes
    * that pan the crop window's x within a single continuous shot. When present
