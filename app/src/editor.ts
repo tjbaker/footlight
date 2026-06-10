@@ -110,13 +110,8 @@ import {
   fadesFit,
   loopSeamTimes,
 } from "./editor-fades.js";
-import {
-  boxToRegionWindow,
-  pushKeyframes,
-  pushPreviewBox,
-  describePush,
-} from "./editor-push.js";
-import { createEditorStore, hasActiveTrack, clipLength } from "./editor-store.js";
+import { boxToRegionWindow, pushKeyframes, pushPreviewBox, describePush } from "./editor-push.js";
+import { createEditorStore, hasActiveTrack, clipLength, type EditorState } from "./editor-store.js";
 import {
   assistantSelection,
   renderOptions,
@@ -213,7 +208,16 @@ export function mountEditor(root: HTMLElement): void {
   const settingsBtn = button("", "fl-iconbtn", () => openSettings());
   settingsBtn.innerHTML = ICON_GEAR;
   settingsBtn.title = m.topbar.settingsTitle;
-  actions.append(renderBtn, previewBtn, assistantBtn, historyBtn, activityToggle, clearBtn, themeBtn, settingsBtn);
+  actions.append(
+    renderBtn,
+    previewBtn,
+    assistantBtn,
+    historyBtn,
+    activityToggle,
+    clearBtn,
+    themeBtn,
+    settingsBtn,
+  );
   topbar.append(brand, crumb, actions);
 
   function refreshThemeIcon(): void {
@@ -530,7 +534,11 @@ export function mountEditor(root: HTMLElement): void {
   // whenever any fade is set.
   const fadeRow = el("div", "fl-rowg");
   fadeRow.style.marginTop = "8px";
-  const mkFadeInput = (label: string, title: string, set: (v: number) => void): HTMLInputElement => {
+  const mkFadeInput = (
+    label: string,
+    title: string,
+    set: (v: number) => void,
+  ): HTMLInputElement => {
     const lab = el("span", "fl-rowlab");
     lab.textContent = label;
     const inp = input("number", "0");
@@ -546,8 +554,16 @@ export function mountEditor(root: HTMLElement): void {
     fadeRow.append(lab, inp);
     return inp;
   };
-  const fadeInInput = mkFadeInput(m.clip.fadeInLabel, m.clip.fadeInTitle, (v) => (state.fadeIn = v));
-  const fadeOutInput = mkFadeInput(m.clip.fadeOutLabel, m.clip.fadeOutTitle, (v) => (state.fadeOut = v));
+  const fadeInInput = mkFadeInput(
+    m.clip.fadeInLabel,
+    m.clip.fadeInTitle,
+    (v) => (state.fadeIn = v),
+  );
+  const fadeOutInput = mkFadeInput(
+    m.clip.fadeOutLabel,
+    m.clip.fadeOutTitle,
+    (v) => (state.fadeOut = v),
+  );
   const fadeHint = el("div", "hint");
   fadeHint.textContent = m.clip.fadeAudioHint;
   fadeHint.style.display = "none";
@@ -621,26 +637,17 @@ export function mountEditor(root: HTMLElement): void {
   const pushStartBtn = button(m.framing.pushSetStart, "fl-btn sm ghost", () => {
     const w = capturePushWindow();
     if (!w) return;
-    state.push.start = w;
-    refreshPushReadout();
-    refreshIO();
-    drawOverlay();
+    store.set({ push: { ...state.push, start: w } });
   });
   pushStartBtn.title = m.framing.pushSetStartTitle;
   const pushEndBtn = button(m.framing.pushSetEnd, "fl-btn sm ghost", () => {
     const w = capturePushWindow();
     if (!w) return;
-    state.push.end = w;
-    refreshPushReadout();
-    refreshIO();
-    drawOverlay();
+    store.set({ push: { ...state.push, end: w } });
   });
   pushEndBtn.title = m.framing.pushSetEndTitle;
   const pushClearBtn = button("✕", "fl-btn sm ghost", () => {
-    state.push = { start: null, end: null };
-    refreshPushReadout();
-    refreshIO();
-    drawOverlay();
+    store.set({ push: { start: null, end: null } });
   });
   pushClearBtn.title = m.framing.pushClearTitle;
   pushRow.append(pushLab, pushStartBtn, pushEndBtn, pushClearBtn, pushReadout);
@@ -790,7 +797,9 @@ export function mountEditor(root: HTMLElement): void {
   const openFontPopup = (): void => {
     fontPopup.style.display = "block";
     fontTrigger.setAttribute("aria-expanded", "true");
-    fontPopup.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+    fontPopup
+      .querySelector<HTMLElement>('[aria-selected="true"]')
+      ?.scrollIntoView({ block: "nearest" });
   };
   fontTrigger.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -1008,8 +1017,9 @@ export function mountEditor(root: HTMLElement): void {
 
     // System families: de-dupe + sort; a folder font that also exists system-wide
     // is dropped here so the file-backed entry wins.
-    const sysFamilies = Array.from(new Set(sysFonts.map((f) => f.family).filter((f) => f.trim())))
-      .filter((f) => !userKeys.has(f.toLowerCase()));
+    const sysFamilies = Array.from(
+      new Set(sysFonts.map((f) => f.family).filter((f) => f.trim())),
+    ).filter((f) => !userKeys.has(f.toLowerCase()));
     sysFamilies.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
     const userOpts: FontOpt[] = userList.map((f) => ({
@@ -1040,11 +1050,7 @@ export function mountEditor(root: HTMLElement): void {
   }
 
   /** A `#RRGGBB` colour control: swatch + live hex label, bound to `bind`. */
-  function colorControl(
-    label: string,
-    get: () => string,
-    set: (v: string) => void,
-  ): HTMLElement {
+  function colorControl(label: string, get: () => string, set: (v: string) => void): HTMLElement {
     const row = el("div", "fl-rowg");
     row.style.cssText = "align-items:center; gap:8px;";
     const lab = el("span", "fl-label");
@@ -1068,7 +1074,11 @@ export function mountEditor(root: HTMLElement): void {
     row.append(lab, swatch, hex);
     return row;
   }
-  const fillRow = colorControl(m.captions.fill, () => state.caption.color, (v) => (state.caption.color = v));
+  const fillRow = colorControl(
+    m.captions.fill,
+    () => state.caption.color,
+    (v) => (state.caption.color = v),
+  );
   const outlineRow = colorControl(
     m.captions.outline,
     () => state.caption.outlineColor,
@@ -1096,19 +1106,53 @@ export function mountEditor(root: HTMLElement): void {
     refresh();
     return b;
   }
-  const boldBtn = toggleBtn("B", "font-weight:700;", m.captions.bold, () => state.caption.bold, (v) => (state.caption.bold = v));
-  const italicBtn = toggleBtn("I", "font-style:italic;", m.captions.italic, () => state.caption.italic, (v) => (state.caption.italic = v));
-  const underlineBtn = toggleBtn("U", "text-decoration:underline;", m.captions.underline, () => state.caption.underline, (v) => (state.caption.underline = v));
+  const boldBtn = toggleBtn(
+    "B",
+    "font-weight:700;",
+    m.captions.bold,
+    () => state.caption.bold,
+    (v) => (state.caption.bold = v),
+  );
+  const italicBtn = toggleBtn(
+    "I",
+    "font-style:italic;",
+    m.captions.italic,
+    () => state.caption.italic,
+    (v) => (state.caption.italic = v),
+  );
+  const underlineBtn = toggleBtn(
+    "U",
+    "text-decoration:underline;",
+    m.captions.underline,
+    () => state.caption.underline,
+    (v) => (state.caption.underline = v),
+  );
   const emphasisRow = el("div", "fl-rowg");
   emphasisRow.style.gap = "6px";
   emphasisRow.append(boldBtn, italicBtn, underlineBtn);
 
-  const boxColorRow = colorControl(m.captions.boxColor, () => state.caption.boxColor, (v) => (state.caption.boxColor = v));
-  const shadowBtn = toggleBtn(m.captions.shadow, "", m.captions.shadowTitle, () => state.caption.shadow, (v) => (state.caption.shadow = v));
-  const boxBtn = toggleBtn(m.captions.box, "", m.captions.boxTitle, () => state.caption.box, (v) => {
-    state.caption.box = v;
-    boxColorRow.style.display = v ? "" : "none";
-  });
+  const boxColorRow = colorControl(
+    m.captions.boxColor,
+    () => state.caption.boxColor,
+    (v) => (state.caption.boxColor = v),
+  );
+  const shadowBtn = toggleBtn(
+    m.captions.shadow,
+    "",
+    m.captions.shadowTitle,
+    () => state.caption.shadow,
+    (v) => (state.caption.shadow = v),
+  );
+  const boxBtn = toggleBtn(
+    m.captions.box,
+    "",
+    m.captions.boxTitle,
+    () => state.caption.box,
+    (v) => {
+      state.caption.box = v;
+      boxColorRow.style.display = v ? "" : "none";
+    },
+  );
   boxColorRow.style.display = state.caption.box ? "" : "none";
   const fxRow = el("div", "fl-rowg");
   fxRow.style.gap = "6px";
@@ -1136,7 +1180,16 @@ export function mountEditor(root: HTMLElement): void {
   });
   angleRow.append(angleLab, angleInput, angleVal);
 
-  styleWrap.append(fontRow, fontField, fillRow, outlineRow, emphasisRow, fxRow, boxColorRow, angleRow);
+  styleWrap.append(
+    fontRow,
+    fontField,
+    fillRow,
+    outlineRow,
+    emphasisRow,
+    fxRow,
+    boxColorRow,
+    angleRow,
+  );
 
   /** Refresh every caption-style control from `state.caption` (used on clip restore). */
   function syncCaptionControls(): void {
@@ -1167,8 +1220,7 @@ export function mountEditor(root: HTMLElement): void {
   const addKfBtn = button(m.keyframes.add, "fl-btn sm", addKeyframe);
   addKfBtn.title = m.keyframes.addTitle;
   const clearKfBtn = button(m.keyframes.clear, "fl-btn sm ghost", () => {
-    state.keyframes = [];
-    refreshKeyframes();
+    store.set({ keyframes: [] });
   });
   kfRow.append(addKfBtn, clearKfBtn);
   const kfList = el("ul", "fl-kf-list") as HTMLUListElement;
@@ -1599,12 +1651,16 @@ export function mountEditor(root: HTMLElement): void {
   /** Nudge the selected In/Out marker by `delta` seconds (keyboard). */
   function nudgeMarker(delta: number): boolean {
     if (selectedMarker === "in" && state.inPoint != null) {
-      store.set({ inPoint: round3(clamp(state.inPoint + delta, 0, state.outPoint ?? state.duration)) });
+      store.set({
+        inPoint: round3(clamp(state.inPoint + delta, 0, state.outPoint ?? state.duration)),
+      });
       seek(state.inPoint);
       return true;
     }
     if (selectedMarker === "out" && state.outPoint != null) {
-      store.set({ outPoint: round3(clamp(state.outPoint + delta, state.inPoint ?? 0, state.duration)) });
+      store.set({
+        outPoint: round3(clamp(state.outPoint + delta, state.inPoint ?? 0, state.duration)),
+      });
       seek(state.outPoint);
       return true;
     }
@@ -1633,7 +1689,8 @@ export function mountEditor(root: HTMLElement): void {
   tlTrack.addEventListener("pointermove", (e) => {
     if (!tlDrag) {
       const d = edgeDist(e.clientX);
-      tlTrack.style.cursor = d && (d.inPx <= TL_EDGE_PX || d.outPx <= TL_EDGE_PX) ? "ew-resize" : "pointer";
+      tlTrack.style.cursor =
+        d && (d.inPx <= TL_EDGE_PX || d.outPx <= TL_EDGE_PX) ? "ew-resize" : "pointer";
       showHoverThumb(e.clientX);
       return;
     }
@@ -1744,9 +1801,12 @@ export function mountEditor(root: HTMLElement): void {
     const token = ++hoverToken;
     hoverTimer = window.setTimeout(() => {
       // Quantize to 0.5s so nearby hovers share a cached frame (smooth + cheap).
-      void extractCached(state.source, Math.round(t * 2) / 2).then((url) => {
-        if (token === hoverToken) tlHoverImg.src = url;
-      }, () => undefined);
+      void extractCached(state.source, Math.round(t * 2) / 2).then(
+        (url) => {
+          if (token === hoverToken) tlHoverImg.src = url;
+        },
+        () => undefined,
+      );
     }, 90);
   }
   tlTrack.addEventListener("pointerleave", hideHoverThumb);
@@ -1770,7 +1830,8 @@ export function mountEditor(root: HTMLElement): void {
   window.addEventListener("keydown", (e) => {
     // Never hijack typing in a field; let browser/OS combos through.
     const tgt = e.target as HTMLElement | null;
-    if (tgt && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" || tgt.isContentEditable)) return;
+    if (tgt && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" || tgt.isContentEditable))
+      return;
     if (e.metaKey || e.ctrlKey) return;
     if (e.key === "?") {
       openShortcuts();
@@ -2046,8 +2107,7 @@ export function mountEditor(root: HTMLElement): void {
       e.preventDefault();
       setDropActive(false);
       if (e.dataTransfer?.files?.length) {
-        dimsLine.innerHTML =
-          `<span class="err-text">${escapeHtml(m.source.dropHint)}</span>`;
+        dimsLine.innerHTML = `<span class="err-text">${escapeHtml(m.source.dropHint)}</span>`;
         srcInput.focus();
       }
     });
@@ -2179,8 +2239,7 @@ export function mountEditor(root: HTMLElement): void {
   async function load(): Promise<void> {
     const source = srcInput.value.trim();
     if (!source) {
-      dimsLine.innerHTML =
-        `<span class="err-text">${escapeHtml(m.source.enterPath)}</span>`;
+      dimsLine.innerHTML = `<span class="err-text">${escapeHtml(m.source.enterPath)}</span>`;
       srcInput.focus();
       return;
     }
@@ -2243,15 +2302,14 @@ export function mountEditor(root: HTMLElement): void {
     if (width / height >= TARGET_AR) {
       const cw = roundEvenLocal(height * TARGET_AR);
       const maxX = width - cw;
-      state.cropBox = { x: Math.floor(maxX / 2), y: 0, w: cw, h: height };
+      store.set({ cropBox: { x: Math.floor(maxX / 2), y: 0, w: cw, h: height } });
     } else {
       // Taller than 9:16: full width, crop height.
       const ch = roundEvenLocal(width / TARGET_AR);
-      state.cropBox = { x: 0, y: Math.floor((height - ch) / 2), w: width, h: ch };
+      store.set({ cropBox: { x: 0, y: Math.floor((height - ch) / 2), w: width, h: ch } });
     }
     // Default content box covers the full frame.
-    state.contentBox = { x: 0, y: 0, w: width, h: height };
-    refreshCropReadout();
+    store.set({ contentBox: { x: 0, y: 0, w: width, h: height } });
   }
 
   let frameToken = 0;
@@ -2371,7 +2429,10 @@ export function mountEditor(root: HTMLElement): void {
     const eps = 1e-3;
     const target =
       dir < 0
-        ? state.sceneCuts.filter((c) => c < state.t - eps).sort((a, b) => a - b).pop()
+        ? state.sceneCuts
+            .filter((c) => c < state.t - eps)
+            .sort((a, b) => a - b)
+            .pop()
         : state.sceneCuts.filter((c) => c > state.t + eps).sort((a, b) => a - b)[0];
     if (target != null) seek(target);
   }
@@ -2479,7 +2540,7 @@ export function mountEditor(root: HTMLElement): void {
     // Position the overlay exactly over the active media element.
     overlay.style.left = `${m.offsetLeft}px`;
     overlay.style.top = `${m.offsetTop}px`;
-    state.displayScale = rect.width / state.dims.width;
+    store.set({ displayScale: rect.width / state.dims.width });
   }
 
   function drawOverlay(): void {
@@ -2646,11 +2707,7 @@ export function mountEditor(root: HTMLElement): void {
    * `layoutPreviewCaptions` (editor-caption-preview.ts); only the ctx painting
    * lives here.
    */
-  function drawPreviewCaptions(
-    ctx: CanvasRenderingContext2D,
-    cw: number,
-    ch: number,
-  ): void {
+  function drawPreviewCaptions(ctx: CanvasRenderingContext2D, cw: number, ch: number): void {
     const cap = state.caption;
     const layout = layoutPreviewCaptions(state.hook, state.title, state.textPosition, cap, cw, ch);
     if (!layout) return;
@@ -2676,7 +2733,8 @@ export function mountEditor(root: HTMLElement): void {
         widest = Math.max(widest, ctx.measureText(line.text).width);
       }
       const bpad = Math.round(hookSize * 0.18);
-      const bx = h === "left" ? x - bpad : h === "right" ? x - widest - bpad : x - widest / 2 - bpad;
+      const bx =
+        h === "left" ? x - bpad : h === "right" ? x - widest - bpad : x - widest / 2 - bpad;
       ctx.fillStyle = cap.boxColor;
       ctx.fillRect(bx, top - bpad, widest + bpad * 2, blockH + bpad * 2);
     }
@@ -2733,9 +2791,7 @@ export function mountEditor(root: HTMLElement): void {
   /** Reset the crop box to the default FULL-HEIGHT, centered 9:16 of the region. */
   function resetCropBoxFullHeight(): void {
     if (!state.dims) return;
-    state.cropBox = fullHeightCropBox(cropRegionRect());
-    refreshCropReadout();
-    drawOverlay();
+    store.set({ cropBox: fullHeightCropBox(cropRegionRect()) });
   }
 
   /**
@@ -2835,15 +2891,13 @@ export function mountEditor(root: HTMLElement): void {
     return "default";
   }
 
-  let drag:
-    | null
-    | {
-        startX: number;
-        startY: number;
-        box: Box;
-        mode: "move-crop" | "resize-crop" | "move-content" | "resize-content" | "draw-content";
-        edges?: { l: boolean; r: boolean; t: boolean; b: boolean };
-      } = null;
+  let drag: null | {
+    startX: number;
+    startY: number;
+    box: Box;
+    mode: "move-crop" | "resize-crop" | "move-content" | "resize-content" | "draw-content";
+    edges?: { l: boolean; r: boolean; t: boolean; b: boolean };
+  } = null;
 
   overlay.addEventListener("pointerdown", (e) => {
     if (!state.dims) return;
@@ -2874,7 +2928,13 @@ export function mountEditor(root: HTMLElement): void {
       const ed = edgeHits(px, py, state.cropBox, m);
       // A corner grab resizes (aspect-locked) → punch-in; anywhere else moves.
       if ((ed.l || ed.r) && (ed.t || ed.b)) {
-        drag = { startX: px, startY: py, box: { ...state.cropBox }, mode: "resize-crop", edges: ed };
+        drag = {
+          startX: px,
+          startY: py,
+          box: { ...state.cropBox },
+          mode: "resize-crop",
+          edges: ed,
+        };
       } else {
         drag = { startX: px, startY: py, box: { ...state.cropBox }, mode: "move-crop" };
       }
@@ -2895,23 +2955,22 @@ export function mountEditor(root: HTMLElement): void {
     if (drag.mode === "move-crop" && state.cropBox) {
       // Orange 9:16 box: pan within the working region. Horizontal always; also
       // vertical once the box is a punch-in (shorter than full region height).
+      // A FRESH box (not in-place x/y writes) so the store sees the change and
+      // the readout + overlay render via subscription.
       const r = cropRegionRect();
-      const nx = drag.box.x + (px - drag.startX);
-      state.cropBox.x = clamp(nx, r.x0, Math.max(r.x0, r.x1 - state.cropBox.w));
-      if (state.cropBox.h < r.y1 - r.y0 - 2) {
-        const ny = drag.box.y + (py - drag.startY);
-        state.cropBox.y = clamp(ny, r.y0, Math.max(r.y0, r.y1 - state.cropBox.h));
+      const box = { ...state.cropBox };
+      box.x = clamp(drag.box.x + (px - drag.startX), r.x0, Math.max(r.x0, r.x1 - box.w));
+      if (box.h < r.y1 - r.y0 - 2) {
+        box.y = clamp(drag.box.y + (py - drag.startY), r.y0, Math.max(r.y0, r.y1 - box.h));
       }
-      refreshCropReadout();
+      store.set({ cropBox: box });
     } else if (drag.mode === "resize-crop" && state.cropBox && drag.edges) {
-      state.cropBox = resizeCrop(px, py, drag.box, drag.edges, cropRegionRect());
-      refreshCropReadout();
+      store.set({ cropBox: resizeCrop(px, py, drag.box, drag.edges, cropRegionRect()) });
     } else if (drag.mode === "move-content" && state.contentBox) {
       const { w, h } = drag.box;
       const nx = clamp(drag.box.x + (px - drag.startX), 0, state.dims.width - w);
       const ny = clamp(drag.box.y + (py - drag.startY), 0, state.dims.height - h);
-      state.contentBox = { x: nx, y: ny, w, h };
-      refreshContentReadout();
+      store.set({ contentBox: { x: nx, y: ny, w, h } });
     } else if (drag.mode === "resize-content" && state.contentBox && drag.edges) {
       let left = drag.box.x;
       let top = drag.box.y;
@@ -2921,20 +2980,22 @@ export function mountEditor(root: HTMLElement): void {
       if (drag.edges.r) right = clamp(px, left + 4, state.dims.width);
       if (drag.edges.t) top = clamp(py, 0, bottom - 4);
       if (drag.edges.b) bottom = clamp(py, top + 4, state.dims.height);
-      state.contentBox = { x: left, y: top, w: right - left, h: bottom - top };
-      refreshContentReadout();
+      store.set({ contentBox: { x: left, y: top, w: right - left, h: bottom - top } });
     } else if (drag.mode === "draw-content" && state.contentBox) {
       const x0 = Math.min(drag.startX, px);
       const y0 = Math.min(drag.startY, py);
-      state.contentBox = {
-        x: clamp(x0, 0, state.dims.width),
-        y: clamp(y0, 0, state.dims.height),
-        w: clamp(Math.abs(px - drag.startX), 0, state.dims.width),
-        h: clamp(Math.abs(py - drag.startY), 0, state.dims.height),
-      };
-      refreshContentReadout();
+      store.set({
+        contentBox: {
+          x: clamp(x0, 0, state.dims.width),
+          y: clamp(y0, 0, state.dims.height),
+          w: clamp(Math.abs(px - drag.startX), 0, state.dims.width),
+          h: clamp(Math.abs(py - drag.startY), 0, state.dims.height),
+        },
+      });
     }
-    drawOverlay();
+    // Rendering is subscription-driven: each branch's store.set repaints the
+    // overlay + readouts exactly once per change (the old trailing drawOverlay
+    // and per-branch refresh calls are gone).
   });
 
   overlay.addEventListener("pointerup", (e) => {
@@ -2949,7 +3010,6 @@ export function mountEditor(root: HTMLElement): void {
     if (state.contentMode || !state.cropBox || !cropInteractive()) return;
     resetCropBoxFullHeight();
   });
-
 
   /**
    * The working region a `crop_offset` is computed against. Thin wrapper over the
@@ -3014,13 +3074,25 @@ export function mountEditor(root: HTMLElement): void {
     void refreshLoopSeam(); // the seam frames track In/Out while the panel is open
   }
 
-  // Phase 3 (#125): the In/Out readout renders REACTIVELY — any `store.set`
-  // touching the clip window triggers it, so mutation sites no longer call
-  // refreshIO() by hand. (Direct legacy writes don't notify; they keep their
-  // manual calls until their cluster migrates.)
+  // Phase 3 (#125): rendering is REACTIVE — `store.set` drives the renders, so
+  // mutation sites no longer call the refresh/draw functions by hand. (Direct
+  // legacy writes don't notify; they keep their manual calls until their
+  // cluster migrates.) The In/Out readout also shows the framing MODE, so it
+  // re-renders on framing changes too.
+  const any = (changed: ReadonlySet<string>, ...keys: string[]): boolean =>
+    keys.some((k) => changed.has(k));
   store.onChange((changed) => {
-    if (changed.has("inPoint") || changed.has("outPoint") || changed.has("duration")) {
+    if (
+      any(changed, "inPoint", "outPoint", "duration", "keyframes", "cropPath", "push", "cropBox")
+    ) {
       refreshIO();
+    }
+    if (any(changed, "cropBox", "contentBox", "contentMode")) refreshCropReadout();
+    if (any(changed, "contentBox", "contentMode")) refreshContentReadout();
+    if (changed.has("keyframes")) refreshKeyframes();
+    if (changed.has("push")) refreshPushReadout();
+    if (any(changed, "cropBox", "contentBox", "contentMode", "keyframes", "cropPath", "push")) {
+      drawOverlay();
     }
   });
 
@@ -3056,8 +3128,7 @@ export function mountEditor(root: HTMLElement): void {
       return;
     }
     const rel = Math.max(0, state.t - state.inPoint);
-    state.keyframes.push({ t: round3(rel), offset: currentOffset() });
-    refreshKeyframes();
+    store.set({ keyframes: [...state.keyframes, { t: round3(rel), offset: currentOffset() }] });
   }
 
   function refreshKeyframes(): void {
@@ -3070,8 +3141,7 @@ export function mountEditor(root: HTMLElement): void {
         const span = document.createElement("span");
         span.textContent = `t=${kf.t}s → ${kf.offset}`;
         const del = button("✕", undefined, () => {
-          state.keyframes = state.keyframes.filter((k) => k !== kf);
-          refreshKeyframes();
+          store.set({ keyframes: state.keyframes.filter((k) => k !== kf) });
         });
         li.append(span, del);
         kfList.append(li);
@@ -3155,24 +3225,21 @@ export function mountEditor(root: HTMLElement): void {
       });
       const path = samplesToCropPath(samples, region);
       if (path.length === 0) {
-        state.cropPath = null;
+        store.set({ cropPath: null });
         trackStatus.textContent = m.track.statusNoBoxes;
         setOutput(m.track.noBoxesOutput);
       } else {
-        state.cropPath = path;
+        store.set({ cropPath: path });
         trackStatus.textContent = `${m.track.statusOnPrefix}${path.length}${m.track.statusOnSuffix}`;
         setOutput(
           `${m.track.resultPrefix}${path.length}${m.track.resultMid}${samples.length}${m.track.resultSuffix}`,
           "ok",
         );
       }
-      drawOverlay();
-      refreshIO();
     } catch (err) {
-      state.cropPath = null;
+      store.set({ cropPath: null });
       trackStatus.textContent = m.track.statusFailed;
       setOutput(`${m.track.failedOutputPrefix}${errMsg(err)}`, "err");
-      drawOverlay();
     } finally {
       window.clearInterval(trackTimer);
       trackStatus.classList.remove("working");
@@ -3182,10 +3249,8 @@ export function mountEditor(root: HTMLElement): void {
 
   /** Drop the tracked crop path; revert to the manual crop_offset / schedule. */
   function clearTrack(): void {
-    state.cropPath = null;
+    store.set({ cropPath: null });
     trackStatus.textContent = m.track.statusNone;
-    drawOverlay();
-    refreshIO();
   }
 
   // ============================================================
@@ -3520,7 +3585,9 @@ export function mountEditor(root: HTMLElement): void {
     const discardBtn = button(m.assistant.discard, "fl-btn sm ghost");
 
     const markActiveStep = () => {
-      rows.forEach((r, i) => r.classList.toggle("active", i === stepIndex && stepIndex < actions.length));
+      rows.forEach((r, i) =>
+        r.classList.toggle("active", i === stepIndex && stepIndex < actions.length),
+      );
       stepLab.textContent = `${Math.min(stepIndex, actions.length)}/${actions.length}`;
     };
 
@@ -3629,8 +3696,7 @@ export function mountEditor(root: HTMLElement): void {
   function addClip(): void {
     clipErr.textContent = "";
     if (!state.source || !state.dims) return flashErr(m.errors.loadSourceFirst);
-    if (state.inPoint == null || state.outPoint == null)
-      return flashErr(m.errors.setInOut);
+    if (state.inPoint == null || state.outPoint == null) return flashErr(m.errors.setInOut);
     if (state.outPoint <= state.inPoint) return flashErr(m.errors.outAfterIn);
     // Mirror the engine's early fade validation so the queue never holds a clip
     // the render would reject.
@@ -3711,7 +3777,10 @@ export function mountEditor(root: HTMLElement): void {
         refreshManifest();
       });
 
-      card.addEventListener("click", () => void openSpec(spec, outdirInput.value.trim() || undefined));
+      card.addEventListener(
+        "click",
+        () => void openSpec(spec, outdirInput.value.trim() || undefined),
+      );
       // HTML5 drag-to-reorder.
       card.addEventListener("dragstart", () => {
         dragFrom = i;
@@ -3737,7 +3806,9 @@ export function mountEditor(root: HTMLElement): void {
     queueLabel.innerHTML = state.clips.length
       ? `${escapeHtml(m.queue.queueLabel)} <span class="n">${state.clips.length}</span> · <span class="n">${fmtClock(total, false)}</span>`
       : `${escapeHtml(m.queue.queueLabel)} <span class="n">0</span>`;
-    renderBtn.textContent = state.clips.length ? `${m.queue.renderN} ${state.clips.length}` : m.topbar.render;
+    renderBtn.textContent = state.clips.length
+      ? `${m.queue.renderN} ${state.clips.length}`
+      : m.topbar.render;
     renderBtn.disabled = state.clips.length === 0;
     void saveSessionSoon();
   }
@@ -3938,23 +4009,27 @@ export function mountEditor(root: HTMLElement): void {
     await load();
     if (!state.dims) return; // load failed — the error is already surfaced
     const r = specToEditorState(spec, state.dims);
-    store.set({ inPoint: r.inPoint, outPoint: r.outPoint });
-    state.contentMode = r.contentMode;
-    state.contentBox = r.contentBox;
-    state.cropBox = r.cropBox;
-    state.keyframes = r.keyframes;
-    state.cropPath = r.cropPath;
     // Animated push (#163): rehydrate the captured endpoints from the path's
     // first/last keyframes (v1 authors exactly two; extra mid-keyframes from a
     // hand-written manifest still restore as their endpoints).
+    let push: EditorState["push"] = { start: null, end: null };
     if (r.cropWindowPath?.length) {
       const sorted = [...r.cropWindowPath].sort((a, b) => a.t - b.t);
       const strip = (k: (typeof sorted)[number]) => ({ x: k.x, y: k.y, w: k.w, h: k.h });
-      state.push = { start: strip(sorted[0]!), end: strip(sorted[sorted.length - 1]!) };
-    } else {
-      state.push = { start: null, end: null };
+      push = { start: strip(sorted[0]!), end: strip(sorted[sorted.length - 1]!) };
     }
-    refreshPushReadout();
+    // One atomic patch: the clip window + the whole framing cluster render via
+    // their subscriptions, once.
+    store.set({
+      inPoint: r.inPoint,
+      outPoint: r.outPoint,
+      contentMode: r.contentMode,
+      contentBox: r.contentBox,
+      cropBox: r.cropBox,
+      keyframes: r.keyframes,
+      cropPath: r.cropPath,
+      push,
+    });
     nameInput.value = r.name;
     // Caption fields aren't part of specToEditorState (they live untouched in
     // the manifest module); read them straight off the spec for round-trip.
@@ -3977,11 +4052,8 @@ export function mountEditor(root: HTMLElement): void {
     syncSelectsFromPos();
     state.caption = captionStyleFromSpec(spec.caption);
     syncCaptionControls();
-    refreshContentReadout();
-    refreshCropReadout();
-    refreshKeyframes();
     await setT(r.inPoint, true);
-    drawOverlay();
+    drawOverlay(); // setT redraws the frame; ensure the overlay lands after it
   }
 
   /**
@@ -4034,8 +4106,7 @@ export function mountEditor(root: HTMLElement): void {
 
     const foot = el("div", "fl-modal-foot");
     foot.innerHTML =
-      '<span class="idot in" style="background:var(--accent)"></span>' +
-      m.history.footHtmlBody;
+      '<span class="idot in" style="background:var(--accent)"></span>' + m.history.footHtmlBody;
 
     modal.append(head, tools, body, empty, foot);
     backdrop.append(modal);
@@ -4074,7 +4145,9 @@ export function mountEditor(root: HTMLElement): void {
         `<span class="idot in"></span><span class="v">${inT}</span><span class="arrow">→</span>` +
         `<span class="idot out"></span><span class="v">${outT}</span>` +
         `<span class="sep">·</span><span class="k">${escapeHtml(m.clip.durKey)}</span><span class="v accent">${dur}</span>` +
-        (kf > 0 ? `<span class="sep">·</span><span class="k">kf</span><span class="v">${kf}</span>` : "") +
+        (kf > 0
+          ? `<span class="sep">·</span><span class="k">kf</span><span class="v">${kf}</span>`
+          : "") +
         `<span class="sep">·</span><span class="path">${escapeHtml(entry.outdir)}</span>`;
       meta.append(top, src, read);
 
