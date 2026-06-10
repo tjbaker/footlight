@@ -26,6 +26,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npm ci
       - run: npm run format:check
+      # One root ESLint covers both packages (eslint.config.js); recommended
+      # rules only — Prettier owns style, tsc owns types.
+      - run: npm run lint
       - run: npm run build
       - run: npm run coverage
       - name: Upload coverage to Codecov

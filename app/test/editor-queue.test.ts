@@ -49,7 +49,6 @@ import {
   resetHarness,
   flush,
   pressKey,
-  setValue,
 } from "./helpers/editor-harness.js";
 
 installDomShims();

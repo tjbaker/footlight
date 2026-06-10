@@ -61,7 +61,7 @@ export class MockAssistant implements AssistantModel {
     const ctx = req.context;
     const toolCalls: ToolCall[] = [];
     const grounding: Grounding[] = [];
-    let text = "";
+    let text: string;
     let warn: string | undefined;
 
     if (/\btrim\b/.test(m)) {

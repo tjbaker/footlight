@@ -1,0 +1,4 @@
+# Bulk, behavior-free commits to skip in blame. GitHub honors this file
+# automatically; locally: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# chore: adopt Prettier and codify the DRY convention (#176) — one-time format
+ed44d6811545f1dd22ed61cf62a16322f03a6b66
