@@ -82,6 +82,10 @@ export const ptBR: Messages = {
             text: "A Entrada e a Saída marcam o início e o fim do clipe. Defina-as de três maneiras: arrastando sobre a linha do tempo de volume (a mais rápida), clicando em Definir entrada / Definir saída no quadro atual, ou pressionando I / O. O painel mostra entrada / saída / duração; os tempos de keyframe e de rastreamento automático são medidos a partir da Entrada.",
           },
           {
+            kind: "p",
+            text: "Fade de entrada / Fade de saída (segundos, ao lado do painel de Entrada/Saída) fazem o vídeo do clipe surgir do/desaparecer para o preto e o áudio do/para o silêncio — legendas gravadas desaparecem junto com a imagem. Um fade força a recodificação do áudio daquele clipe como AAC 256k, porque uma cópia de áudio sem perdas não pode fazer fade. O botão Emenda do loop mostra o primeiro e o último quadro do clipe lado a lado, para você aparar até um loop visualmente limpo (o último quadro corta direto para o primeiro quando o clipe repete).",
+          },
+          {
             kind: "tip",
             text: "Clique em um marcador de Entrada ou Saída na linha do tempo para selecioná-lo, depois ajuste-o um quadro por vez com ← / → (segure Shift para ±0,1s).",
           },
@@ -589,6 +593,19 @@ export const ptBR: Messages = {
       outKey: "saída",
       durKey: "dur",
       offsetKey: "deslocamento",
+      fadeInLabel: "Fade de entrada",
+      fadeInTitle:
+        "Faz o clipe surgir do preto (e o áudio subir do silêncio) ao longo destes segundos.",
+      fadeOutLabel: "Fade de saída",
+      fadeOutTitle:
+        "Faz o clipe desaparecer para o preto (e o áudio descer ao silêncio) ao longo destes segundos.",
+      fadeAudioHint:
+        "Fades recodificam o áudio deste clipe (AAC 256k) — uma cópia sem perdas não pode fazer fade.",
+      loopSeam: "Emenda do loop",
+      loopSeamTitle:
+        "Mostra o primeiro e o último quadro do clipe lado a lado para conferir o loop (último → primeiro).",
+      loopSeamInLabel: "Quadro de entrada",
+      loopSeamOutLabel: "Quadro de saída",
     },
     framing: {
       header: "Enquadramento",
@@ -804,6 +821,7 @@ export const ptBR: Messages = {
       outAfterIn: "A Saída deve vir depois da Entrada.",
       addAtLeastOne: "Adicione pelo menos um clipe à fila.",
       previewPlayerFailed: "o reprodutor de pré-visualização não conseguiu carregar esta origem",
+      fadesTooLong: "Os fades duram mais que o clipe — encurte-os ou amplie a Entrada/Saída.",
     },
     common: {
       close: "Fechar",

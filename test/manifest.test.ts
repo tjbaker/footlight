@@ -129,7 +129,7 @@ describe("serializeManifestCSV", () => {
 
     const csv = serializeManifestCSV(rows);
     expect(csv.split("\n")[0]).toBe(
-      "source_file,in_point,out_point,crop_offset,content_crop,out_name,hook,title,text_position,notes",
+      "source_file,in_point,out_point,fade_in,fade_out,crop_offset,content_crop,out_name,hook,title,text_position,notes",
     );
 
     const parsed = parseCsv(csv);
@@ -140,6 +140,8 @@ describe("serializeManifestCSV", () => {
       source_file: "downloads/live-set.mp4",
       in_point: "0",
       out_point: "30",
+      fade_in: "",
+      fade_out: "",
       crop_offset: "center",
       content_crop: "",
       out_name: "",
@@ -171,6 +173,31 @@ describe("serializeManifestCSV", () => {
     expect(parsed[0]!.hook).toBe("Watch this\nright now");
     expect(parsed[0]!.title).toBe("the solo");
     expect(parsed[0]!.text_position).toBe("top");
+  });
+
+  it("round-trips fade columns (fade_in / fade_out)", () => {
+    const rows: ClipRow[] = [
+      {
+        source_file: "a.mp4",
+        in_point: "0",
+        out_point: "10",
+        crop_offset: "center",
+        fade_in: "0.5",
+        fade_out: "1",
+      },
+      {
+        source_file: "b.mp4",
+        in_point: "0",
+        out_point: "10",
+        crop_offset: "center",
+      },
+    ];
+    const parsed = parseCsv(serializeManifestCSV(rows));
+    expect(parsed[0]!.fade_in).toBe("0.5");
+    expect(parsed[0]!.fade_out).toBe("1");
+    // A clip without fades round-trips to empty cells.
+    expect(parsed[1]!.fade_in).toBe("");
+    expect(parsed[1]!.fade_out).toBe("");
   });
 
   it("quotes fields containing quotes and newlines", () => {
@@ -255,6 +282,23 @@ describe("serializeManifestJSON", () => {
       },
     ];
     expect(JSON.parse(serializeManifestJSON(clips))).toEqual(clips);
+  });
+
+  it("round-trips per-clip fades (numbers in JSON)", () => {
+    const clips: ClipSpec[] = [
+      {
+        source_file: "downloads/live-set.mp4",
+        in_point: "0",
+        out_point: "30",
+        crop_offset: "center",
+        fade_in: 0.5,
+        fade_out: 1.25,
+      },
+    ];
+    const parsed = JSON.parse(serializeManifestJSON(clips)) as ClipSpec[];
+    expect(parsed).toEqual(clips);
+    expect(typeof parsed[0]!.fade_in).toBe("number");
+    expect(typeof parsed[0]!.fade_out).toBe("number");
   });
 
   it("round-trips per-clip caption styling on a clip spec", () => {

@@ -211,6 +211,8 @@ The manifest is the source of truth: **one row per clip.**
 | `source_file` | yes | path to the source video |
 | `in_point` | yes | start timestamp — `HH:MM:SS`, `MM:SS`, or seconds |
 | `out_point` | yes | end timestamp — same formats |
+| `fade_in` | optional | fade the clip in from black (and its audio up from silence) over this many seconds |
+| `fade_out` | optional | fade the clip out to black (and its audio down to silence) over this many seconds |
 | `crop_offset` | defaults `center` | horizontal framing: `left` / `center` / `right`, an integer x-pixel offset (from the left edge, clamped into frame), **or** a time-keyed schedule like `0=center; 14.5=440` |
 | `content_crop` | optional | `W:H:X:Y` region cropped *first* to strip letterbox/pillarbox bars; crop offsets then become relative to it |
 | `out_name` | optional | output filename; auto-generated from source + timestamps if blank |
@@ -221,6 +223,18 @@ The manifest is the source of truth: **one row per clip.**
 The `hook` / `title` / `text_position` fields carry your caption shot-list with the
 manifest. Clips export **clean by default** — these are only burned in when you pass
 `--burn-captions`. See **[Captions](#captions-optional)**.
+
+**Fades.** `fade_in` / `fade_out` fade the video from/to black and the audio
+from/to silence over the given seconds (burned captions fade with the picture —
+the fades run last in the filter chain). Reels/TikTok loop, so a short fade pair
+reads as a finished clip. Two rules to know: the fades together must fit inside
+the clip (`fade_in + fade_out ≤ out − in`, checked before rendering), and **a
+fade forces that clip's audio to re-encode** (AAC 256k) when the render is set to
+the default lossless `--audio-bitrate copy` — an `afade` can't ride a stream
+copy, and a video fade over a hard audio cut reads as broken. The CLI logs a note
+on each clip this applies to. In the GUI, use the **Loop seam** toggle next to
+the In/Out readout to see the clip's last and first frames side by side and trim
+to a clean loop.
 
 **JSON manifests.** Pass a `.json` array of the same clip objects instead of a CSV
 to use fields CSV can't express: **`cropWindow`** (an explicit 9:16

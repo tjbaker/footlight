@@ -66,6 +66,10 @@ export interface EditorState {
    * narrows them to a sparse `CaptionStyle` (omitting defaults) on the saved clip.
    */
   caption: CaptionStyleState;
+  /** Per-clip fade-in length in seconds (0 = no fade); issue #165. */
+  fadeIn: number;
+  /** Per-clip fade-out length in seconds (0 = no fade). */
+  fadeOut: number;
 }
 
 /** A fresh editor state for an empty workspace (no source loaded). */
@@ -93,6 +97,8 @@ export function createInitialEditorState(): EditorState {
     title: "",
     textPosition: "bottom",
     caption: defaultCaptionStyle(),
+    fadeIn: 0,
+    fadeOut: 0,
   };
 }
 
