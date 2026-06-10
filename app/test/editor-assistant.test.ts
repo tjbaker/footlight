@@ -41,102 +41,21 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+vi.mock("../src/platform/index.js", async () =>
+  (await import("./helpers/platform-mock.js")).platformModule);
+
+import { platformMocks } from "./helpers/platform-mock.js";
+import {
+  installDomShims,
+  resetHarness,
+  flush,
+  pressKey,
+  setValue,
+} from "./helpers/editor-harness.js";
+
+installDomShims();
+
 // --- localStorage: Map-backed shim -------------------------------------------
-const store = new Map<string, string>();
-const localStorageMock = {
-  getItem: (k: string): string | null => (store.has(k) ? store.get(k)! : null),
-  setItem: (k: string, v: string): void => {
-    store.set(k, String(v));
-  },
-  removeItem: (k: string): void => {
-    store.delete(k);
-  },
-  clear: (): void => {
-    store.clear();
-  },
-  key: (i: number): string | null => [...store.keys()][i] ?? null,
-  get length(): number {
-    return store.size;
-  },
-};
-(globalThis as unknown as { localStorage: typeof localStorageMock }).localStorage =
-  localStorageMock;
-
-// --- window.matchMedia: initTheme() needs it on boot (jsdom lacks it) --------
-if (typeof window.matchMedia !== "function") {
-  window.matchMedia = ((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-    addListener: () => undefined,
-    removeListener: () => undefined,
-    dispatchEvent: () => false,
-  })) as unknown as typeof window.matchMedia;
-}
-
-// --- HTMLCanvasElement.getContext: jsdom returns undefined; force null --------
-HTMLCanvasElement.prototype.getContext = (() =>
-  null) as unknown as typeof HTMLCanvasElement.prototype.getContext;
-
-// --- URL object-URL helpers: frame plumbing touches them (jsdom lacks) -------
-if (typeof URL.createObjectURL !== "function") {
-  (URL as unknown as { createObjectURL: (b: unknown) => string }).createObjectURL =
-    () => "blob:stub";
-}
-if (typeof URL.revokeObjectURL !== "function") {
-  (URL as unknown as { revokeObjectURL: (u: string) => void }).revokeObjectURL =
-    () => undefined;
-}
-
-// --- platform: mocked wholesale; key + frame resolve so the dock is enabled ---
-const getSecretMock = vi.fn(async () => "fake-gemini-key");
-const extractFrameMock = vi.fn(async () => "data:image/png;base64,AAAA");
-const probeMock = vi.fn(async () => ({
-  width: 1920,
-  height: 1080,
-  duration: 30,
-  cropdetect: null as string | null,
-}));
-vi.mock("../src/platform/index.js", () => {
-  const platform = {
-    platformName: "web" as const,
-    supportsFilePicker: false, // → the editor renders the "Load" button + Enter loads
-    extractFrame: extractFrameMock,
-    probe: probeMock,
-    scenes: vi.fn(async () => [] as number[]),
-    loudness: vi.fn(async () => ({ display: [] as number[], detect: [] as number[] })),
-    track: vi.fn(async () => []),
-    listFonts: vi.fn(async () => []),
-    listUserFonts: vi.fn(async () => []),
-    render: vi.fn(async () => ({ ok: true, log: "" })),
-    defaultOutdir: vi.fn(async () => ""),
-    checkOutdir: vi.fn(async () => ({ ok: true, resolved: "" })),
-    exportTextFile: vi.fn(async () => false),
-    openExternal: vi.fn(async () => undefined),
-    pickSourceFile: vi.fn(async () => null),
-    pickDirectory: vi.fn(async () => null),
-    videoSrc: vi.fn(async () => "blob:x"),
-    loadHistory: vi.fn(async () => []),
-    saveHistory: vi.fn(async () => undefined),
-    loadSession: vi.fn(async () => null),
-    saveSession: vi.fn(async () => undefined),
-    getSecret: getSecretMock,
-    setSecret: vi.fn(async () => undefined),
-    deleteSecret: vi.fn(async () => undefined),
-  };
-  return {
-    platform,
-    platformName: platform.platformName,
-    isTauri: () => false,
-  };
-});
-
-// --- assistant: model mocked end-to-end (no network, no key spent) -----------
-// `createAssistant().turn` resolves a canned reply matching the real
-// `@assistant-types` `AssistantReply` shape: prose `text`, empty `grounding[]`,
-// and one `setInOut` `ProposedAction` (`display.{fn,detail}` + typed `commit`).
 const turnMock = vi.fn(async () => ({
   text: "Setting your clip.",
   grounding: [] as never[],
@@ -154,22 +73,15 @@ vi.mock("../src/assistant/index.js", () => ({
 // Import AFTER the mocks/shims above are installed.
 const { mountEditor } = await import("../src/editor.js");
 
-/** Flush microtasks so the editor's async load / turn promises settle. */
-async function flush(times = 12): Promise<void> {
-  for (let i = 0; i < times; i++) await Promise.resolve();
-}
 
 describe("editor assistant dock: propose → accept / discard (jsdom)", () => {
   beforeEach(() => {
-    store.clear();
+    resetHarness();
+    // This suite's platform default: a stored BYOK key (the harness's is null).
+    platformMocks.getSecret.mockResolvedValue("fake-gemini-key");
     // Budget 0 → sampleChatStills() samples no frames, keeping the turn off
     // jsdom's data-URL `fetch` (unsupported) and off `extractFrame` entirely.
-    store.set("footlight.ai", JSON.stringify({ provider: "gemini", model: "gemini-3.5-flash", chatStills: 0 }));
-    document.body.innerHTML = "";
-    document.documentElement.removeAttribute("data-theme");
-    probeMock.mockClear();
-    getSecretMock.mockClear();
-    extractFrameMock.mockClear();
+    localStorage.setItem("footlight.ai", JSON.stringify({ provider: "gemini", model: "gemini-3.5-flash", chatStills: 0 }));
     turnMock.mockClear();
   });
 

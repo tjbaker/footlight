@@ -37,105 +37,20 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// --- localStorage: Map-backed shim (same shape as editor-mount.test.ts) ------
-const store = new Map<string, string>();
-const localStorageMock = {
-  getItem: (k: string): string | null => (store.has(k) ? store.get(k)! : null),
-  setItem: (k: string, v: string): void => {
-    store.set(k, String(v));
-  },
-  removeItem: (k: string): void => {
-    store.delete(k);
-  },
-  clear: (): void => {
-    store.clear();
-  },
-  key: (i: number): string | null => [...store.keys()][i] ?? null,
-  get length(): number {
-    return store.size;
-  },
-};
-(globalThis as unknown as { localStorage: typeof localStorageMock }).localStorage =
-  localStorageMock;
+vi.mock("../src/platform/index.js", async () =>
+  (await import("./helpers/platform-mock.js")).platformModule);
 
-// --- window.matchMedia: initTheme() needs it on boot (jsdom lacks it) --------
-if (typeof window.matchMedia !== "function") {
-  window.matchMedia = ((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-    addListener: () => undefined,
-    removeListener: () => undefined,
-    dispatchEvent: () => false,
-  })) as unknown as typeof window.matchMedia;
-}
+import {
+  installDomShims,
+  resetHarness,
+  flush,
+} from "./helpers/editor-harness.js";
 
-// --- HTMLCanvasElement.getContext: jsdom returns undefined; force null --------
-HTMLCanvasElement.prototype.getContext = (() =>
-  null) as unknown as typeof HTMLCanvasElement.prototype.getContext;
-
-// --- HTMLMediaElement.play/pause: jsdom does not implement playback ----------
-// jsdom's <video>.play() returns `undefined` (not a Promise) and logs a "not
-// implemented" error; the editor's transport code does `video.play().catch(…)`,
-// so we install benign no-ops (play resolves) to keep the J/K/L/Space transport
-// branches from throwing. Real playback still can't be observed, so the
-// transport tests assert only no-throw — see the suite docblock.
-HTMLMediaElement.prototype.play = (() =>
-  Promise.resolve()) as unknown as typeof HTMLMediaElement.prototype.play;
-HTMLMediaElement.prototype.pause = (() =>
-  undefined) as unknown as typeof HTMLMediaElement.prototype.pause;
-
-// --- platform: mocked wholesale (no ffmpeg / dev-server is reached) -----------
-// probe returns a real 16:9 landscape source with a duration so a load yields
-// `state.dims` (which un-gates the source-dependent shortcuts).
-vi.mock("../src/platform/index.js", () => {
-  const platform = {
-    platformName: "web" as const,
-    supportsFilePicker: false,
-    extractFrame: vi.fn(async () => ""),
-    probe: vi.fn(async () => ({
-      width: 1920,
-      height: 1080,
-      duration: 30,
-      cropdetect: null,
-    })),
-    scenes: vi.fn(async () => [] as number[]),
-    loudness: vi.fn(async () => ({ display: [] as number[], detect: [] as number[] })),
-    track: vi.fn(async () => []),
-    listFonts: vi.fn(async () => []),
-    listUserFonts: vi.fn(async () => []),
-    render: vi.fn(async () => ({ ok: true, log: "" })),
-    defaultOutdir: vi.fn(async () => ""),
-    checkOutdir: vi.fn(async () => ({ ok: true, resolved: "" })),
-    exportTextFile: vi.fn(async () => false),
-    openExternal: vi.fn(async () => undefined),
-    pickSourceFile: vi.fn(async () => null),
-    pickDirectory: vi.fn(async () => null),
-    videoSrc: vi.fn(async () => ""),
-    loadHistory: vi.fn(async () => []),
-    saveHistory: vi.fn(async () => undefined),
-    loadSession: vi.fn(async () => null),
-    saveSession: vi.fn(async () => undefined),
-    getSecret: vi.fn(async () => null),
-    setSecret: vi.fn(async () => undefined),
-    deleteSecret: vi.fn(async () => undefined),
-  };
-  return {
-    platform,
-    platformName: platform.platformName,
-    isTauri: () => false,
-  };
-});
-
+installDomShims();
 // Import AFTER the mocks/shims above are installed.
 const { mountEditor } = await import("../src/editor.js");
 
 /** Flush the microtask queue so fire-and-forget async work settles. */
-async function flush(times = 6): Promise<void> {
-  for (let i = 0; i < times; i++) await Promise.resolve();
-}
 
 /** Dispatch a keydown on `window` (where the editor's handler is registered). */
 function key(init: KeyboardEventInit): void {
@@ -178,9 +93,7 @@ describe("editor keyboard shortcuts (jsdom integration)", () => {
   let root: HTMLDivElement;
 
   beforeEach(() => {
-    store.clear();
-    document.body.innerHTML = "";
-    document.documentElement.removeAttribute("data-theme");
+    resetHarness();
     root = document.createElement("div");
     document.body.append(root);
     mountEditor(root);

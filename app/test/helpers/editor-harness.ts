@@ -62,6 +62,9 @@ export function installDomShims(): void {
     (URL as unknown as { revokeObjectURL: (u: string) => void }).revokeObjectURL =
       () => undefined;
   }
+  // Pointer capture: jsdom lacks it; the crop/timeline drag handlers call it.
+  Element.prototype.setPointerCapture = () => undefined;
+  Element.prototype.releasePointerCapture = () => undefined;
 }
 
 /** Fresh DOM + storage + platform-mock defaults; call in beforeEach. */
