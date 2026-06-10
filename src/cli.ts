@@ -141,6 +141,20 @@ interface RenderItem {
   caption?: CaptionStyle;
 }
 
+/** The x264 speed/efficiency presets `--preset` accepts (libx264's own set). */
+const X264_PRESETS = new Set([
+  "ultrafast",
+  "superfast",
+  "veryfast",
+  "faster",
+  "fast",
+  "medium",
+  "slow",
+  "slower",
+  "veryslow",
+  "placebo",
+]);
+
 /** `footlight render` — read a CSV or JSON manifest, build + run ffmpeg per row. */
 async function cmdRender(argv: string[]): Promise<number> {
   const { positionals, flags } = parseArgs(
@@ -165,8 +179,20 @@ async function cmdRender(argv: string[]): Promise<number> {
   }
 
   const outdir = String(flags.get("outdir") ?? "clips");
+  // Validate the encode flags UP FRONT: a bad value would otherwise surface as
+  // a per-clip ffmpeg failure deep into the render instead of a clear error.
   const crf = flags.has("crf") ? Number(flags.get("crf")) : DEFAULT_RENDER_OPTIONS.crf;
+  if (!Number.isInteger(crf) || crf < 0 || crf > 51) {
+    console.error(`render: --crf must be an integer 0-51 (x264), got ${flags.get("crf")}`);
+    return 1;
+  }
   const preset = String(flags.get("preset") ?? DEFAULT_RENDER_OPTIONS.preset);
+  if (!X264_PRESETS.has(preset)) {
+    console.error(
+      `render: --preset must be one of ${[...X264_PRESETS].join(", ")}, got ${JSON.stringify(preset)}`,
+    );
+    return 1;
+  }
   const audioBitrate = String(flags.get("audio-bitrate") ?? DEFAULT_RENDER_OPTIONS.audioBitrate);
   const dryRun = flags.get("dry-run") === true;
 

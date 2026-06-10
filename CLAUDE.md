@@ -84,25 +84,38 @@ same split applies to `manifest.ts` and `track.ts` (both pure, frontend-safe).
 `buildFfmpegArgs(row, opts)` (in `core.ts`) is the heart: it builds the ffmpeg arg
 array for one clip without running anything (dimensions are passed in, so it stays
 pure/testable). Filter chain per clip:
-`[optional content_crop] → 9:16 crop → scale=1080:1920:lanczos → setsar=1 → libx264 → audio`.
-Audio defaults to lossless `-c:a copy` (source is the quality ceiling); a bitrate
-forces an AAC re-encode. `computeCrop` fixes the 9:16 crop **width** for landscape
+`[optional content_crop] → 9:16 crop → scale=1080:1920:lanczos → setsar=1 →
+[optional burned captions] → [optional fades] → libx264 → audio` — captions burn
+last on the final frame so positions are 1:1; fades run after them so captions
+fade with the picture. Audio defaults to lossless `-c:a copy` (source is the
+quality ceiling); a bitrate — or a fade, which needs a matching `afade` —
+forces an AAC re-encode (`BuiltCommand.forcedAudioReencode` reports the forced
+case; never silent). `computeCrop` fixes the 9:16 crop **width** for landscape
 sources and only varies **x** (horizontal framing).
 
-`crop_offset` has three forms, all resolved here:
-- fixed: `left`/`center`/`right` or an integer x-pixel offset (clamped into frame);
-- time-keyed schedule `"0=center; 14.5=440"` → a nested `if(lt(t,…))` **hard-switch**
-  x-expression (align switch times to scene cuts from `footlight scenes`);
-- eased `cropPath` (JSON manifest only) → `buildEasedCropX` emits a smoothstep
-  `x='…'` expression. **A `cropPath` takes precedence over `crop_offset`.**
+Framing precedence (highest first), all resolved here:
+- **`cropWindowPath`** (JSON only) — ANIMATED punch-in / slow push: crop-window
+  keyframes `{t,x,y,w,h}` smoothstep-eased via `buildEasedCropWindowFilters`
+  (per-frame eased upscale + fixed output-size crop; ffmpeg's `crop` can't
+  animate `w`/`h`, and its `iw`/`ih` bind at configure time — both verified
+  empirically, see `test/cropwindowpath.test.ts`);
+- **`cropPath`** (JSON only) — eased horizontal tracking: `buildEasedCropX`
+  emits a smoothstep `x='…'` expression;
+- **`cropWindow`** (JSON only) — a static punch-in / zoom window;
+- **`crop_offset`** — fixed `left`/`center`/`right` or integer x (clamped into
+  frame), or a time-keyed schedule `"0=center; 14.5=440"` → a nested
+  `if(lt(t,…))` **hard-switch** x-expression (align switch times to scene cuts
+  from `footlight scenes`).
 
 ### Manifests: CSV and JSON
 
 `render` reads CSV (`parseCsv` in `csv.ts`) **or** JSON (`.json` → array of
-`ClipSpec`). CSV is the documented source of truth (one row per clip); JSON adds the
-eased `cropPath` and a per-clip `caption` style object. CSV columns
-`hook`/`title`/`text_position` carry caption **text + position** (burned only with
-`--burn-captions`); per-clip caption **style** (the `caption` object) is JSON-only.
+`ClipSpec`). CSV is the documented source of truth (one row per clip; includes
+per-clip `fade_in`/`fade_out` seconds); JSON adds the animated `cropWindowPath`,
+the eased `cropPath`, the static `cropWindow`, and a per-clip `caption` style
+object. CSV columns `hook`/`title`/`text_position` carry caption **text +
+position** (burned only with `--burn-captions`); per-clip caption **style** (the
+`caption` object) is JSON-only.
 
 ### Captions: render-wide defaults + per-clip style
 
@@ -140,11 +153,14 @@ so the round-trip box → offset → crop is consistent.
 
 The frontend talks to one `FootlightPlatform` interface (`app/src/platform/`),
 selected at runtime in `platform/index.ts`: the **native Tauri backend** (`tauri.ts`,
-four Rust `#[tauri::command]`s in `app/src-tauri/src/main.rs`) when `__TAURI__` is on
-`window`, else the **web dev backend** (`web.ts` → `app/dev-server/server.mjs`, a
-dependency-free `node:http` server on :8787). Both expose the same
-frame/probe/scenes/track/render capabilities by shelling out to ffmpeg/ffprobe and
-the root `footlight` CLI — keep the two backends in sync when changing the interface.
+backed by the Rust `#[tauri::command]`s in `app/src-tauri/src/main.rs`) when
+`__TAURI__` is on `window`, else the **web dev backend** (`web.ts` →
+`app/dev-server/server.mjs`, a dependency-free `node:http` server on :8787). Both
+expose the same capabilities (frame/probe/scenes/loudness/track/render/cover and
+more) by shelling out to ffmpeg/ffprobe and the root `footlight` CLI — keep the
+two backends in sync when changing the interface. The Rust side HAND-MIRRORS the
+pure builders in `src/core.ts` (it cannot import TS); every mirror carries a
+`#[cfg(test)]` test pinned to the TS fixtures so drift fails CI.
 
 ## Conventions
 
