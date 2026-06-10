@@ -548,8 +548,7 @@ export function mountEditor(root: HTMLElement): void {
     inp.classList.add("mono");
     inp.style.maxWidth = "70px";
     inp.addEventListener("input", () => {
-      set(parseFadeField(inp.value));
-      refreshFadeHint();
+      set(parseFadeField(inp.value)); // the fade hint renders via subscription
     });
     fadeRow.append(lab, inp);
     return inp;
@@ -557,12 +556,12 @@ export function mountEditor(root: HTMLElement): void {
   const fadeInInput = mkFadeInput(
     m.clip.fadeInLabel,
     m.clip.fadeInTitle,
-    (v) => (state.fadeIn = v),
+    (v) => store.set({ fadeIn: v }),
   );
   const fadeOutInput = mkFadeInput(
     m.clip.fadeOutLabel,
     m.clip.fadeOutTitle,
-    (v) => (state.fadeOut = v),
+    (v) => store.set({ fadeOut: v }),
   );
   const fadeHint = el("div", "hint");
   fadeHint.textContent = m.clip.fadeAudioHint;
@@ -668,9 +667,8 @@ export function mountEditor(root: HTMLElement): void {
   const hookInput = textarea(m.captions.hookPlaceholder);
   hookInput.title = m.captions.hookTitle;
   hookInput.addEventListener("input", () => {
-    state.hook = hookInput.value;
+    store.set({ hook: hookInput.value }); // the preview renders via subscription
     autosize(hookInput);
-    drawPreview();
   });
   hookField.append(hookInput);
   const titleCapField = el("div", "fl-field");
@@ -678,9 +676,8 @@ export function mountEditor(root: HTMLElement): void {
   const titleCapInput = textarea(m.captions.titlePlaceholder);
   titleCapInput.title = m.captions.titleTitle;
   titleCapInput.addEventListener("input", () => {
-    state.title = titleCapInput.value;
+    store.set({ title: titleCapInput.value });
     autosize(titleCapInput);
-    drawPreview();
   });
   titleCapField.append(titleCapInput);
   // Caption placement on a 9-zone grid: two small selects (vertical × horizontal)
@@ -712,11 +709,9 @@ export function mountEditor(root: HTMLElement): void {
     posHSelect.append(opt);
   }
   const syncPosFromSelects = (): void => {
-    state.textPosition = joinTextPosition(
-      posVSelect.value as TextPosV,
-      posHSelect.value as TextPosH,
-    );
-    drawPreview();
+    store.set({
+      textPosition: joinTextPosition(posVSelect.value as TextPosV, posHSelect.value as TextPosH),
+    });
   };
   const syncSelectsFromPos = (): void => {
     const { v, h } = parseTextPosition(state.textPosition);
@@ -759,8 +754,7 @@ export function mountEditor(root: HTMLElement): void {
   fontField.style.display = "none";
   fontPathInput.addEventListener("input", () => {
     if (selected === FONT_CUSTOM) {
-      state.caption.font = fontPathInput.value.trim();
-      drawPreview();
+      setCaption("font", fontPathInput.value.trim());
     }
   });
 
@@ -923,15 +917,15 @@ export function mountEditor(root: HTMLElement): void {
       selected = opt.value;
       markFontSelected(selected);
       if (opt.value === FONT_DEFAULT) {
-        state.caption.font = "";
+        setCaption("font", "");
         fontPathInput.value = "";
       } else if (opt.value === FONT_CUSTOM) {
         // Reveal the free-text field; keep whatever path is already there.
-        state.caption.font = fontPathInput.value.trim();
+        setCaption("font", fontPathInput.value.trim());
       } else {
         // A folder font sets caption.font = its file path (engine resolves the
         // family + fontsdir); a system font sets caption.font = the family.
-        state.caption.font = opt.path ?? opt.value;
+        setCaption("font", opt.path ?? opt.value);
       }
       const realFont = opt.value !== FONT_DEFAULT && opt.value !== FONT_CUSTOM;
       syncFontTrigger(
@@ -941,7 +935,6 @@ export function mountEditor(root: HTMLElement): void {
       closeFontPopup();
       if (opt.value === FONT_CUSTOM) fontPathInput.focus();
       else fontTrigger.focus();
-      drawPreview();
     };
     li.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1050,6 +1043,15 @@ export function mountEditor(root: HTMLElement): void {
   }
 
   /** A `#RRGGBB` colour control: swatch + live hex label, bound to `bind`. */
+  /** Patch ONE field of the per-clip caption style through the store (a fresh
+   *  object, so the preview renders via subscription). */
+  function setCaption<K extends keyof EditorState["caption"]>(
+    key: K,
+    value: EditorState["caption"][K],
+  ): void {
+    store.set({ caption: { ...state.caption, [key]: value } });
+  }
+
   function colorControl(label: string, get: () => string, set: (v: string) => void): HTMLElement {
     const row = el("div", "fl-rowg");
     row.style.cssText = "align-items:center; gap:8px;";
@@ -1065,7 +1067,6 @@ export function mountEditor(root: HTMLElement): void {
     swatch.addEventListener("input", () => {
       set(swatch.value);
       hex.textContent = swatch.value.toUpperCase();
-      drawPreview();
     });
     (swatch as HTMLInputElement & { _sync?: () => void })._sync = () => {
       swatch.value = get();
@@ -1077,12 +1078,12 @@ export function mountEditor(root: HTMLElement): void {
   const fillRow = colorControl(
     m.captions.fill,
     () => state.caption.color,
-    (v) => (state.caption.color = v),
+    (v) => setCaption("color", v),
   );
   const outlineRow = colorControl(
     m.captions.outline,
     () => state.caption.outlineColor,
-    (v) => (state.caption.outlineColor = v),
+    (v) => setCaption("outlineColor", v),
   );
 
   /** A B/I/U-style toggle button bound to a boolean on `state.caption`. */
@@ -1100,7 +1101,6 @@ export function mountEditor(root: HTMLElement): void {
     b.addEventListener("click", () => {
       set(!get());
       refresh();
-      drawPreview();
     });
     (b as HTMLButtonElement & { _sync?: () => void })._sync = refresh;
     refresh();
@@ -1111,21 +1111,21 @@ export function mountEditor(root: HTMLElement): void {
     "font-weight:700;",
     m.captions.bold,
     () => state.caption.bold,
-    (v) => (state.caption.bold = v),
+    (v) => setCaption("bold", v),
   );
   const italicBtn = toggleBtn(
     "I",
     "font-style:italic;",
     m.captions.italic,
     () => state.caption.italic,
-    (v) => (state.caption.italic = v),
+    (v) => setCaption("italic", v),
   );
   const underlineBtn = toggleBtn(
     "U",
     "text-decoration:underline;",
     m.captions.underline,
     () => state.caption.underline,
-    (v) => (state.caption.underline = v),
+    (v) => setCaption("underline", v),
   );
   const emphasisRow = el("div", "fl-rowg");
   emphasisRow.style.gap = "6px";
@@ -1134,14 +1134,14 @@ export function mountEditor(root: HTMLElement): void {
   const boxColorRow = colorControl(
     m.captions.boxColor,
     () => state.caption.boxColor,
-    (v) => (state.caption.boxColor = v),
+    (v) => setCaption("boxColor", v),
   );
   const shadowBtn = toggleBtn(
     m.captions.shadow,
     "",
     m.captions.shadowTitle,
     () => state.caption.shadow,
-    (v) => (state.caption.shadow = v),
+    (v) => setCaption("shadow", v),
   );
   const boxBtn = toggleBtn(
     m.captions.box,
@@ -1149,7 +1149,7 @@ export function mountEditor(root: HTMLElement): void {
     m.captions.boxTitle,
     () => state.caption.box,
     (v) => {
-      state.caption.box = v;
+      setCaption("box", v);
       boxColorRow.style.display = v ? "" : "none";
     },
   );
@@ -1174,9 +1174,8 @@ export function mountEditor(root: HTMLElement): void {
   angleVal.style.cssText = "font-size:12px; color:var(--faint); min-width:34px; text-align:right;";
   angleVal.textContent = `${state.caption.angle}°`;
   angleInput.addEventListener("input", () => {
-    state.caption.angle = Number(angleInput.value);
+    setCaption("angle", Number(angleInput.value));
     angleVal.textContent = `${state.caption.angle}°`;
-    drawPreview();
   });
   angleRow.append(angleLab, angleInput, angleVal);
 
@@ -3094,6 +3093,9 @@ export function mountEditor(root: HTMLElement): void {
     if (any(changed, "cropBox", "contentBox", "contentMode", "keyframes", "cropPath", "push")) {
       drawOverlay();
     }
+    if (any(changed, "hook", "title", "textPosition", "caption")) drawPreview();
+    if (any(changed, "fadeIn", "fadeOut")) refreshFadeHint();
+    if (changed.has("clips")) refreshManifest();
   });
 
   /**
@@ -3728,8 +3730,7 @@ export function mountEditor(root: HTMLElement): void {
       if (cap) spec.caption = cap;
     }
 
-    state.clips.push(spec);
-    refreshManifest();
+    store.set({ clips: [...state.clips, spec] });
     nameInput.value = "";
   }
 
@@ -3765,16 +3766,20 @@ export function mountEditor(root: HTMLElement): void {
       dup.title = m.queue.duplicateTitle;
       dup.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        state.clips.splice(i + 1, 0, structuredClone(spec));
-        refreshManifest();
+        store.set({
+          clips: [
+            ...state.clips.slice(0, i + 1),
+            structuredClone(spec),
+            ...state.clips.slice(i + 1),
+          ],
+        });
       });
       const del = el("button", "fl-clip-x") as HTMLButtonElement;
       del.textContent = "✕";
       del.title = m.queue.removeTitle;
       del.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        state.clips.splice(i, 1);
-        refreshManifest();
+        store.set({ clips: state.clips.filter((_, idx) => idx !== i) });
       });
 
       card.addEventListener(
@@ -3794,9 +3799,11 @@ export function mountEditor(root: HTMLElement): void {
       card.addEventListener("drop", (ev) => {
         ev.preventDefault();
         if (dragFrom == null || dragFrom === i) return;
-        const [moved] = state.clips.splice(dragFrom, 1);
-        if (moved) state.clips.splice(i, 0, moved);
-        refreshManifest();
+        const moved = state.clips[dragFrom];
+        if (moved) {
+          const without = state.clips.filter((_, idx) => idx !== dragFrom);
+          store.set({ clips: [...without.slice(0, i), moved, ...without.slice(i)] });
+        }
       });
 
       card.append(thumb, meta, dup, del);
@@ -4020,6 +4027,14 @@ export function mountEditor(root: HTMLElement): void {
     }
     // One atomic patch: the clip window + the whole framing cluster render via
     // their subscriptions, once.
+    // Caption fields aren't part of specToEditorState (they live untouched in
+    // the manifest module); read them straight off the spec for round-trip.
+    // The text_position re-normalizes through the parse/join round-trip so any
+    // 9-zone value (or a legacy bare keyword) restores cleanly.
+    const restored = parseTextPosition(spec.text_position);
+    const fades = fadesFromSpec(spec);
+    // ONE atomic patch — window, framing, captions, fades; every subscriber
+    // renders once.
     store.set({
       inPoint: r.inPoint,
       outPoint: r.outPoint,
@@ -4029,28 +4044,21 @@ export function mountEditor(root: HTMLElement): void {
       keyframes: r.keyframes,
       cropPath: r.cropPath,
       push,
+      hook: spec.hook ?? "",
+      title: spec.title ?? "",
+      textPosition: joinTextPosition(restored.v, restored.h),
+      caption: captionStyleFromSpec(spec.caption),
+      fadeIn: fades.fadeIn,
+      fadeOut: fades.fadeOut,
     });
     nameInput.value = r.name;
-    // Caption fields aren't part of specToEditorState (they live untouched in
-    // the manifest module); read them straight off the spec for round-trip.
-    state.hook = spec.hook ?? "";
-    state.title = spec.title ?? "";
-    // Re-normalize through the parse/join round-trip so any 9-zone value (or a
-    // legacy bare keyword) restores cleanly and the two selects reflect it.
-    const restored = parseTextPosition(spec.text_position);
-    state.textPosition = joinTextPosition(restored.v, restored.h);
     hookInput.value = state.hook;
     titleCapInput.value = state.title;
     autosize(hookInput);
     autosize(titleCapInput);
-    const fades = fadesFromSpec(spec);
-    state.fadeIn = fades.fadeIn;
-    state.fadeOut = fades.fadeOut;
     fadeInInput.value = fades.fadeIn > 0 ? String(fades.fadeIn) : "";
     fadeOutInput.value = fades.fadeOut > 0 ? String(fades.fadeOut) : "";
-    refreshFadeHint();
     syncSelectsFromPos();
-    state.caption = captionStyleFromSpec(spec.caption);
     syncCaptionControls();
     await setT(r.inPoint, true);
     drawOverlay(); // setT redraws the frame; ensure the overlay lands after it
@@ -4257,8 +4265,7 @@ export function mountEditor(root: HTMLElement): void {
     if (!data) return;
     if (data.outdir) outdirInput.value = data.outdir;
     if (Array.isArray(data.clips) && data.clips.length) {
-      state.clips = data.clips;
-      refreshManifest();
+      store.set({ clips: data.clips });
     }
     if (data.source) {
       srcInput.value = data.source;
