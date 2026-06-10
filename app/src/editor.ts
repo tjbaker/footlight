@@ -75,10 +75,8 @@ import {
   clamp,
   round3,
   roundEvenLocal,
-  shorten,
   fmtClock,
   errMsg,
-  safeParse,
   escapeHtml,
   type TextPosV,
   type TextPosH,
@@ -113,7 +111,6 @@ import {
   ICON_ACTIVITY,
   ICON_BRAND,
   ICON_CHECK,
-  ICON_COPY,
   ICON_DOWN,
   ICON_FOLDER,
   ICON_GEAR,
@@ -131,6 +128,7 @@ import {
   PLAY_GLYPH,
 } from "./icons.js";
 import { openHistoryModal } from "./views/history.js";
+import { buildQueueStrip } from "./views/queue.js";
 import {
   assistantSelection,
   renderOptions,
@@ -145,7 +143,7 @@ import {
   saveTheme,
 } from "./editor-prefs.js";
 import { snapToOnset } from "./editor-snap.js";
-import { clipDur, fmtUsd, ghostsFrom } from "./editor-format.js";
+import { fmtUsd, ghostsFrom } from "./editor-format.js";
 import { layoutPreviewCaptions, type PreviewCaptionLine } from "./editor-caption-preview.js";
 
 export function mountEditor(root: HTMLElement): void {
@@ -1972,38 +1970,25 @@ export function mountEditor(root: HTMLElement): void {
 
   renderWave();
 
-  // ===== filmstrip queue =====
-  const filmstrip = el("div", "fl-filmstrip");
-  const queueLabel = el("span", "fl-label");
-  queueLabel.style.alignSelf = "center";
-  queueLabel.innerHTML = `${escapeHtml(m.queue.queueLabel)} <span class="n">0</span>`;
-  const clipList = el("div");
-  clipList.style.display = "contents";
-  const addCard = el("div", "fl-strip-card add");
-  addCard.textContent = m.queue.addClip;
-  addCard.addEventListener("click", () => addClip());
-  const fsSpacer = el("span", "fl-spacer");
-  // Export the queue as a JSON manifest (re-imports via `footlight render`) — the
-  // single queue-out action (replaces the old copy-to-clipboard) and the safety
-  // net for Clear.
-  const exportBtn = button("", "fl-btn sm ghost", () => {
-    if (!state.clips.length) return;
-    void platform
-      .exportTextFile("footlight-manifest.json", serializeManifestJSON(state.clips))
-      .catch((err) => setOutput(errMsg(err), "err"));
+  // ===== filmstrip queue (views/queue.ts) =====
+  // The view owns the card rendering (reacting to `clips`); the editor supplies
+  // the thumbnail painter, the open/outdir hooks, and the add/export handlers.
+  // The render button + session autosave also react to `clips` — those stay as
+  // the editor's own store subscription below, not driven from the view.
+  const queueView = buildQueueStrip(store, {
+    setThumb: (elm, source, t) => void setThumb(elm, source, t),
+    openSpec: (spec, outdir) => void openSpec(spec, outdir),
+    getOutdir: () => outdirInput.value.trim(),
+    onAdd: () => addClip(),
+    onExportJson: () => {
+      if (!state.clips.length) return;
+      void platform
+        .exportTextFile("footlight-manifest.json", serializeManifestJSON(state.clips))
+        .catch((err) => setOutput(errMsg(err), "err"));
+    },
+    onExportCover: () => void doExportCover(),
   });
-  exportBtn.innerHTML = `${ICON_DOWN}${escapeHtml(m.queue.exportJson)}`;
-  exportBtn.style.alignSelf = "center";
-  exportBtn.title = m.queue.exportJsonTitle;
-  // Export the playhead frame, through the ACTIVE framing, as the clip's
-  // 1080×1920 PNG cover image (#166) — same framing precedence as addClip.
-  const coverBtn = button("", "fl-btn sm ghost", () => {
-    void doExportCover();
-  });
-  coverBtn.innerHTML = `${ICON_DOWN}${escapeHtml(m.queue.exportCover)}`;
-  coverBtn.style.alignSelf = "center";
-  coverBtn.title = m.queue.exportCoverTitle;
-  filmstrip.append(queueLabel, clipList, addCard, fsSpacer, coverBtn, exportBtn);
+  const filmstrip = queueView.element;
 
   /**
    * Cover-frame export (#166): build a spec from the CURRENT editor framing
@@ -3107,7 +3092,7 @@ export function mountEditor(root: HTMLElement): void {
     }
     if (any(changed, "hook", "title", "textPosition", "caption")) drawPreview();
     if (any(changed, "fadeIn", "fadeOut")) refreshFadeHint();
-    if (changed.has("clips")) refreshManifest();
+    if (changed.has("clips")) refreshQueueDependents();
   });
 
   /**
@@ -3746,85 +3731,14 @@ export function mountEditor(root: HTMLElement): void {
     nameInput.value = "";
   }
 
-  let dragFrom: number | null = null;
-
-  function refreshManifest(): void {
-    clipList.innerHTML = "";
-    state.clips.forEach((spec, i) => {
-      // Card is click-to-edit (re-opens the clip), drag-to-reorder, with
-      // duplicate + remove actions. The ✕/⧉ buttons stop propagation so they
-      // don't trigger the card's edit click.
-      const card = el("div", "fl-strip-card edit") as HTMLDivElement;
-      card.draggable = true;
-      card.title = m.queue.cardEditTitle;
-      const thumb = el("div", "fl-thumb");
-      void setThumb(thumb, spec.source_file, safeParse(spec.in_point));
-      const meta = el("div", "fl-clip-meta");
-      const name = el("div", "fl-clip-name");
-      name.textContent = spec.out_name || shorten(spec.source_file);
-      const sub = el("div", "fl-clip-sub");
-      const d = clipDur(spec);
-      const dur = d > 0 ? `${d.toFixed(1)}s` : `${spec.in_point}→${spec.out_point}`;
-      const framing = spec.cropPath?.length
-        ? m.framing.modeTrack
-        : spec.cropWindow
-          ? m.framing.modePunchIn
-          : (spec.crop_offset ?? m.framing.defaultOffset);
-      sub.innerHTML = `${dur} · <span style="color:var(--accent-2)">${escapeHtml(framing)}</span>`;
-      meta.append(name, sub);
-
-      const dup = el("button", "fl-clip-x") as HTMLButtonElement;
-      dup.innerHTML = ICON_COPY;
-      dup.title = m.queue.duplicateTitle;
-      dup.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        store.set({
-          clips: [
-            ...state.clips.slice(0, i + 1),
-            structuredClone(spec),
-            ...state.clips.slice(i + 1),
-          ],
-        });
-      });
-      const del = el("button", "fl-clip-x") as HTMLButtonElement;
-      del.textContent = "✕";
-      del.title = m.queue.removeTitle;
-      del.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        store.set({ clips: state.clips.filter((_, idx) => idx !== i) });
-      });
-
-      card.addEventListener(
-        "click",
-        () => void openSpec(spec, outdirInput.value.trim() || undefined),
-      );
-      // HTML5 drag-to-reorder.
-      card.addEventListener("dragstart", () => {
-        dragFrom = i;
-        card.classList.add("dragging");
-      });
-      card.addEventListener("dragend", () => {
-        dragFrom = null;
-        card.classList.remove("dragging");
-      });
-      card.addEventListener("dragover", (ev) => ev.preventDefault());
-      card.addEventListener("drop", (ev) => {
-        ev.preventDefault();
-        if (dragFrom == null || dragFrom === i) return;
-        const moved = state.clips[dragFrom];
-        if (moved) {
-          const without = state.clips.filter((_, idx) => idx !== dragFrom);
-          store.set({ clips: [...without.slice(0, i), moved, ...without.slice(i)] });
-        }
-      });
-
-      card.append(thumb, meta, dup, del);
-      clipList.append(card);
-    });
-    const total = state.clips.reduce((s, c) => s + clipDur(c), 0);
-    queueLabel.innerHTML = state.clips.length
-      ? `${escapeHtml(m.queue.queueLabel)} <span class="n">${state.clips.length}</span> · <span class="n">${fmtClock(total, false)}</span>`
-      : `${escapeHtml(m.queue.queueLabel)} <span class="n">0</span>`;
+  /**
+   * The render button's label/disabled state and the session autosave react to
+   * the queue too — but they live in the editor (the queue VIEW owns only the
+   * cards). Kept as a function so the clips subscription and the initial mount
+   * both call it; the queue cards render themselves via the view's own
+   * subscription.
+   */
+  function refreshQueueDependents(): void {
     renderBtn.textContent = state.clips.length
       ? `${m.queue.renderN} ${state.clips.length}`
       : m.topbar.render;
@@ -4217,7 +4131,7 @@ export function mountEditor(root: HTMLElement): void {
   // Initial readouts.
   refreshIO();
   refreshKeyframes();
-  refreshManifest();
+  refreshQueueDependents();
   refreshRecents();
   // NOTE: the keychain is read lazily (see `ensureApiKey`) on first AI use, not
   // here — launching the app must not trigger an OS keychain prompt.
