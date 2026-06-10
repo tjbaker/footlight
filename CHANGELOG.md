@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.8.0](https://github.com/tjbaker/footlight/compare/footlight-v0.7.1...footlight-v0.8.0) (2026-06-10)
+
+
+### Features
+
+* **app:** export the current frame as a 9:16 cover image ([#169](https://github.com/tjbaker/footlight/issues/169)) ([d816778](https://github.com/tjbaker/footlight/commit/d8167789cffe669a2d61ecf1e513607218a95983))
+* **app:** snap In/Out to detected audio onsets ([#168](https://github.com/tjbaker/footlight/issues/168)) ([1663d3f](https://github.com/tjbaker/footlight/commit/1663d3f2f8baf3d0ff9c01df021134c7832bd8c8))
+* **captions:** honor newlines in hook/title as line breaks ([#156](https://github.com/tjbaker/footlight/issues/156)) ([2262ff7](https://github.com/tjbaker/footlight/commit/2262ff73c077702e041cc2634cafa19a346dd097))
+* **engine:** animated punch-in via eased cropWindowPath ([#170](https://github.com/tjbaker/footlight/issues/170)) ([b716c2d](https://github.com/tjbaker/footlight/commit/b716c2dabcf701c1fc00373e8ae88066d9b2f698))
+* **engine:** per-clip audio/video fades and a loop-seam check ([#167](https://github.com/tjbaker/footlight/issues/167)) ([57e9e4a](https://github.com/tjbaker/footlight/commit/57e9e4a1f7938b18f2d04e770a89f04afb69f988))
+
+
+### Bug Fixes
+
+* **app:** retire the stale render-prefs gap note ([#161](https://github.com/tjbaker/footlight/issues/161)) ([e2241b0](https://github.com/tjbaker/footlight/commit/e2241b082aabc751866dcc393ead9089329f24ed))
+* **engine:** validate content_crop signs and fix fontsdir for root-level fonts ([#153](https://github.com/tjbaker/footlight/issues/153)) ([6e27b23](https://github.com/tjbaker/footlight/commit/6e27b23afe093f61ec5987204913254d718e3024))
+
+
+### Refactors
+
+* **app:** captions and queue clusters write through the EditorStore ([#179](https://github.com/tjbaker/footlight/issues/179)) ([d5a9a08](https://github.com/tjbaker/footlight/commit/d5a9a08a8e4f17b99984e1bdd5704d6ddbed1170))
+* **app:** EditorStore keystone — observable writes for the clip window ([#177](https://github.com/tjbaker/footlight/issues/177)) ([a1980bb](https://github.com/tjbaker/footlight/commit/a1980bb8e13c32f568c8a5729c0846acd1202215))
+* **app:** extract caption-preview layout, prefs, and formatting from editor.ts ([#125](https://github.com/tjbaker/footlight/issues/125) first pass) ([#160](https://github.com/tjbaker/footlight/issues/160)) ([a11ed51](https://github.com/tjbaker/footlight/commit/a11ed516ace74a96d403635922a9d309130f09df))
+* **app:** extract commit transitions and chat-context assembly from editor.ts ([#162](https://github.com/tjbaker/footlight/issues/162)) ([60a1332](https://github.com/tjbaker/footlight/commit/60a133213ae7a52e52937955199b4545cd2a6ca0))
+* **app:** framing cluster writes through the EditorStore ([#178](https://github.com/tjbaker/footlight/issues/178)) ([0560bfe](https://github.com/tjbaker/footlight/commit/0560bfee9db775ad3a3f0bc72d73976790445f9e))
+* DRY pass — shared framing emission, test harness, crop-width rule ([#172](https://github.com/tjbaker/footlight/issues/172)) ([d6eb482](https://github.com/tjbaker/footlight/commit/d6eb4825a147b7dafe3fc77048e02a228f4afbcf))
+
 ## [0.7.1](https://github.com/tjbaker/footlight/compare/footlight-v0.7.0...footlight-v0.7.1) (2026-06-08)
 
 
