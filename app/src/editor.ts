@@ -21,7 +21,6 @@
 
 import {
   TARGET_AR,
-  parseTimestamp,
   detectSwells,
   detectOnsets,
   coverOutName,
@@ -78,12 +77,9 @@ import {
   roundEvenLocal,
   shorten,
   fmtClock,
-  fmtTC,
   errMsg,
-  baseName,
   safeParse,
   escapeHtml,
-  kfCount,
   type TextPosV,
   type TextPosH,
 } from "./editor-util.js";
@@ -112,6 +108,29 @@ import {
 } from "./editor-fades.js";
 import { boxToRegionWindow, pushKeyframes, pushPreviewBox, describePush } from "./editor-push.js";
 import { createEditorStore, hasActiveTrack, clipLength, type EditorState } from "./editor-store.js";
+import { el, input, textarea, autosize, button, sectionHeader } from "./ui.js";
+import {
+  ICON_ACTIVITY,
+  ICON_BRAND,
+  ICON_CHECK,
+  ICON_COPY,
+  ICON_DOWN,
+  ICON_FOLDER,
+  ICON_GEAR,
+  ICON_HISTORY,
+  ICON_MOON,
+  ICON_NEXT_CUT,
+  ICON_PHONE,
+  ICON_PLUS,
+  ICON_PREV_CUT,
+  ICON_SEND,
+  ICON_SPARK,
+  ICON_SUN,
+  ICON_X,
+  PAUSE_GLYPH,
+  PLAY_GLYPH,
+} from "./icons.js";
+import { openHistoryModal } from "./views/history.js";
 import {
   assistantSelection,
   renderOptions,
@@ -126,14 +145,7 @@ import {
   saveTheme,
 } from "./editor-prefs.js";
 import { snapToOnset } from "./editor-snap.js";
-import {
-  clipDur,
-  fmtUsd,
-  ghostsFrom,
-  fmtClockTime,
-  dayLabel,
-  offsetMode,
-} from "./editor-format.js";
+import { clipDur, fmtUsd, ghostsFrom } from "./editor-format.js";
 import { layoutPreviewCaptions, type PreviewCaptionLine } from "./editor-caption-preview.js";
 
 export function mountEditor(root: HTMLElement): void {
@@ -4065,177 +4077,16 @@ export function mountEditor(root: HTMLElement): void {
   }
 
   /**
-   * Render-history modal (HANDOFF §5.5): past renders grouped by day, each row
-   * showing the clip name + offset-mode pill, source, an In→Out / dur / kf /
-   * output readout, and render time. Open rehydrates the editor via `openSpec`
-   * WITHOUT touching the session queue (`state.clips`); remove + clear all.
+   * Render-history modal — extracted to `views/history.ts` (#125 Phase 4).
+   * The view owns its DOM/behavior; the editor supplies only the platform and
+   * the `openSpec`/`setThumb` callbacks it can't build itself.
    */
-  async function openHistory(): Promise<void> {
-    const backdrop = el("div", "fl-modal-backdrop");
-    const modal = el("div", "fl-modal");
-    modal.setAttribute("role", "dialog");
-    modal.setAttribute("aria-label", m.history.ariaLabel);
-
-    // header: title + N renders · spacer · Clear all · close
-    const head = el("div", "fl-modal-h");
-    const titleWrap = el("div");
-    titleWrap.style.cssText = "display:flex; align-items:center; gap:11px;";
-    const title = el("span", "fl-label");
-    title.style.fontSize = "13px";
-    title.textContent = m.history.title;
-    const countPill = el("span", "fl-pill ghost");
-    titleWrap.append(title, countPill);
-    const clearBtn = button(m.history.clearAll, "fl-btn sm ghost danger", () => {
-      entries = [];
-      void save();
-      draw();
+  function openHistory(): Promise<void> {
+    return openHistoryModal({
+      platform,
+      openSpec: (spec, outdir) => void openSpec(spec, outdir),
+      setThumb: (elm, source, t) => void setThumb(elm, source, t),
     });
-    const closeBtn = button("", "fl-iconbtn");
-    closeBtn.innerHTML = ICON_X;
-    closeBtn.title = m.common.close;
-    head.append(titleWrap, el("span", "fl-spacer"), clearBtn, closeBtn);
-
-    // tools: filter field + "stored · local" chip
-    const tools = el("div", "fl-modal-tools");
-    const filterField = el("div", "fl-field");
-    filterField.style.flex = "1";
-    filterField.innerHTML = `<span class="ic">${ICON_SEARCH}</span>`;
-    const filterInput = input("text", m.history.filterPlaceholder);
-    filterField.append(filterInput);
-    const storedChip = el("span", "fl-rdchip");
-    storedChip.innerHTML = `<span class="lab">${escapeHtml(m.history.storedLabel)}</span><span class="val">${escapeHtml(m.history.storedValue)}</span>`;
-    tools.append(filterField, storedChip);
-    filterInput.addEventListener("input", () => draw());
-
-    const body = el("div", "fl-modal-body");
-    const empty = el("div", "hint");
-    empty.style.padding = "24px 8px";
-    empty.textContent = m.history.emptyHint;
-
-    const foot = el("div", "fl-modal-foot");
-    foot.innerHTML =
-      '<span class="idot in" style="background:var(--accent)"></span>' + m.history.footHtmlBody;
-
-    modal.append(head, tools, body, empty, foot);
-    backdrop.append(modal);
-    document.body.append(backdrop);
-
-    let entries: HistoryEntry[] = [];
-    const save = () => platform.saveHistory(entries).catch(() => undefined);
-
-    function histRow(entry: HistoryEntry): HTMLElement {
-      const row = el("div", "fl-hist");
-      const meta = el("div", "fl-hist-meta");
-      const top = el("div", "fl-hist-top");
-      const nm = el("span", "nm");
-      nm.textContent = entry.spec.out_name || shorten(entry.spec.source_file);
-      const mode = offsetMode(entry.spec);
-      const pill = el("span", mode.ghost ? "fl-pill ghost" : "fl-pill");
-      pill.textContent = mode.label;
-      top.append(nm, pill);
-      const src = el("div", "fl-hist-src");
-      src.textContent = baseName(entry.spec.source_file);
-      const read = el("div", "fl-readout");
-      const kf = kfCount(entry.spec);
-      let inT = "—";
-      let outT = "—";
-      let dur = "—";
-      try {
-        const a = parseTimestamp(entry.spec.in_point);
-        const b = parseTimestamp(entry.spec.out_point);
-        inT = fmtTC(a);
-        outT = fmtTC(b);
-        dur = `${(b - a).toFixed(2)}s`;
-      } catch {
-        /* leave dashes on an unparseable spec */
-      }
-      read.innerHTML =
-        `<span class="idot in"></span><span class="v">${inT}</span><span class="arrow">→</span>` +
-        `<span class="idot out"></span><span class="v">${outT}</span>` +
-        `<span class="sep">·</span><span class="k">${escapeHtml(m.clip.durKey)}</span><span class="v accent">${dur}</span>` +
-        (kf > 0
-          ? `<span class="sep">·</span><span class="k">kf</span><span class="v">${kf}</span>`
-          : "") +
-        `<span class="sep">·</span><span class="path">${escapeHtml(entry.outdir)}</span>`;
-      meta.append(top, src, read);
-
-      const side = el("div", "fl-hist-side");
-      const time = el("span", "fl-hist-time");
-      time.textContent = fmtClockTime(entry.ts);
-      const actions = el("div", "fl-hist-actions");
-      const openBtn = button(m.history.open, "fl-btn sm primary", () => {
-        dismiss();
-        void openSpec(entry.spec, entry.outdir);
-      });
-      const rm = button("", "fl-iconbtn sm rm");
-      rm.innerHTML = ICON_TRASH;
-      rm.title = m.history.removeTitle;
-      rm.addEventListener("click", () => {
-        entries = entries.filter((e) => e.id !== entry.id);
-        void save();
-        draw();
-      });
-      actions.append(openBtn, rm);
-      side.append(time, actions);
-
-      const thumb = el("div", "fl-thumb");
-      void setThumb(thumb, entry.spec.source_file, safeParse(entry.spec.in_point));
-      row.append(thumb, meta, side);
-      return row;
-    }
-
-    function draw(): void {
-      const q = filterInput.value.trim().toLowerCase();
-      const shown = q
-        ? entries.filter(
-            (e) =>
-              (e.spec.out_name || "").toLowerCase().includes(q) ||
-              e.spec.source_file.toLowerCase().includes(q),
-          )
-        : entries;
-      body.innerHTML = "";
-      countPill.textContent = `${entries.length} ${entries.length === 1 ? m.history.renderSingular : m.history.renderPlural}`;
-      clearBtn.style.display = entries.length ? "" : "none";
-      empty.style.display = entries.length ? "none" : "block";
-      let lastDay = "";
-      for (const entry of shown) {
-        const day = dayLabel(entry.ts);
-        if (day !== lastDay) {
-          lastDay = day;
-          const count = shown.filter((e) => dayLabel(e.ts) === day).length;
-          const div = el("div", "fl-hist-day");
-          div.innerHTML = `<span>${day}</span><span class="line"></span><span class="c">${count}</span>`;
-          body.append(div);
-        }
-        body.append(histRow(entry));
-      }
-      if (q && shown.length === 0 && entries.length) {
-        const none = el("div", "hint");
-        none.style.padding = "16px 8px";
-        none.textContent = m.history.noMatches;
-        body.append(none);
-      }
-    }
-
-    try {
-      entries = await platform.loadHistory();
-    } catch {
-      entries = [];
-    }
-    draw();
-
-    const dismiss = () => {
-      backdrop.remove();
-      document.removeEventListener("keydown", onKey);
-    };
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") dismiss();
-    }
-    closeBtn.addEventListener("click", dismiss);
-    backdrop.addEventListener("click", (e) => {
-      if (e.target === backdrop) dismiss();
-    });
-    document.addEventListener("keydown", onKey);
   }
 
   // ---------- session (project) persistence ----------
@@ -4375,96 +4226,5 @@ export function mountEditor(root: HTMLElement): void {
 
 // ---------- small helpers ----------
 
-function el(tag: string, cls?: string): HTMLElement {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  return e;
-}
-
-function input(type: string, placeholder: string): HTMLInputElement {
-  const i = document.createElement("input");
-  i.type = type;
-  i.placeholder = placeholder;
-  return i;
-}
-
-/** A single-row textarea that grows with its content (Enter = line break). */
-function textarea(placeholder: string): HTMLTextAreaElement {
-  const t = document.createElement("textarea");
-  t.placeholder = placeholder;
-  t.rows = 1;
-  return t;
-}
-
-/** Fit an auto-growing textarea's height to its content. */
-function autosize(t: HTMLTextAreaElement): void {
-  t.style.height = "auto";
-  t.style.height = `${t.scrollHeight}px`;
-}
-
-function button(label: string, cls?: string, onClick?: () => void): HTMLButtonElement {
-  const b = document.createElement("button");
-  b.textContent = label;
-  if (cls) b.className = cls;
-  if (onClick) b.addEventListener("click", onClick);
-  return b;
-}
-
 /** Max number of past renders kept in the history. */
 const HISTORY_CAP = 50;
-
-/** Build an inspector section header (`<div class="fl-sect-h"><span class="fl-label">…`). */
-function sectionHeader(text: string): HTMLElement {
-  const h = el("div", "fl-sect-h");
-  const label = el("span", "fl-label");
-  label.textContent = text;
-  h.append(label);
-  return h;
-}
-
-// The brand mark — "row of footlights" (three half-disc lamps, beams up).
-// currentColor → --accent via `.fl-lamp`; the same motif as the app icon.
-const ICON_BRAND =
-  '<svg class="fl-lamp" viewBox="14 12 72 68" fill="currentColor" aria-hidden="true"><g class="beam"><polygon points="27,66 37,66 44,20 20,20"/><polygon points="45,66 55,66 62,20 38,20"/><polygon points="63,66 73,66 80,20 56,20"/></g><rect x="20" y="69" width="60" height="5.5" rx="2.75"/><path d="M24.5,69 A7.5 7.5 0 0 1 39.5,69 Z"/><path d="M42.5,69 A7.5 7.5 0 0 1 57.5,69 Z"/><path d="M60.5,69 A7.5 7.5 0 0 1 75.5,69 Z"/></svg>';
-
-// Inline stroke/fill icons (1.8 stroke, matching the design's set).
-const ICON_GEAR =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2.5l1.3 2.4 2.7-.3 .6 2.6 2.4 1.3-1 2.5 1 2.5-2.4 1.3-.6 2.6-2.7-.3L12 21.5l-1.3-2.4-2.7.3-.6-2.6L5 15.5l1-2.5-1-2.5 2.4-1.3.6-2.6 2.7.3z" stroke-linejoin="round"/></svg>';
-const ICON_ACTIVITY =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h5M7 13h9" stroke-linecap="round"/></svg>';
-const ICON_SUN =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke-linecap="round"/></svg>';
-const ICON_MOON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 13.5A8 8 0 1110.5 4a6.5 6.5 0 009.5 9.5z" stroke-linejoin="round"/></svg>';
-const ICON_FOLDER =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>';
-const ICON_DOWN =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12M7 10l5 5 5-5M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const ICON_PLUS =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>';
-const ICON_COPY =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h8"/></svg>';
-const ICON_HISTORY =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/></svg>';
-const ICON_X =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg>';
-const ICON_PHONE =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="3" width="10" height="18" rx="2.2"/><path d="M11 18h2" stroke-linecap="round"/></svg>';
-const ICON_SEARCH =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>';
-const ICON_TRASH =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const ICON_PREV_CUT =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M18 6l-8 6 8 6z" fill="currentColor"/><path d="M6 5.5v13"/></svg>';
-const ICON_NEXT_CUT =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M6 6l8 6-8 6z" fill="currentColor"/><path d="M18 5.5v13"/></svg>';
-const PLAY_GLYPH = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7z"/></svg>';
-const PAUSE_GLYPH =
-  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
-// Spark (assistant), send (composer), check (proposal tick).
-const ICON_SPARK =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>';
-const ICON_SEND =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M12 5l7 7-7 7"/></svg>';
-const ICON_CHECK =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-9"/></svg>';
