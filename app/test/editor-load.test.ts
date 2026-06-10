@@ -32,116 +32,26 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// --- localStorage: Map-backed shim -------------------------------------------
-const store = new Map<string, string>();
-const localStorageMock = {
-  getItem: (k: string): string | null => (store.has(k) ? store.get(k)! : null),
-  setItem: (k: string, v: string): void => {
-    store.set(k, String(v));
-  },
-  removeItem: (k: string): void => {
-    store.delete(k);
-  },
-  clear: (): void => {
-    store.clear();
-  },
-  key: (i: number): string | null => [...store.keys()][i] ?? null,
-  get length(): number {
-    return store.size;
-  },
-};
-(globalThis as unknown as { localStorage: typeof localStorageMock }).localStorage =
-  localStorageMock;
+vi.mock("../src/platform/index.js", async () =>
+  (await import("./helpers/platform-mock.js")).platformModule);
 
-// --- window.matchMedia: initTheme() needs it on boot (jsdom lacks it) --------
-if (typeof window.matchMedia !== "function") {
-  window.matchMedia = ((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-    addListener: () => undefined,
-    removeListener: () => undefined,
-    dispatchEvent: () => false,
-  })) as unknown as typeof window.matchMedia;
-}
+import { platformMocks } from "./helpers/platform-mock.js";
+import {
+  installDomShims,
+  resetHarness,
+  flush,
+  pressKey,
+} from "./helpers/editor-harness.js";
 
-// --- HTMLCanvasElement.getContext: jsdom returns undefined; force null --------
-HTMLCanvasElement.prototype.getContext = (() =>
-  null) as unknown as typeof HTMLCanvasElement.prototype.getContext;
-
-// --- URL object-URL helpers: setT/frame plumbing touches them (jsdom lacks) --
-if (typeof URL.createObjectURL !== "function") {
-  (URL as unknown as { createObjectURL: (b: unknown) => string }).createObjectURL =
-    () => "blob:stub";
-}
-if (typeof URL.revokeObjectURL !== "function") {
-  (URL as unknown as { revokeObjectURL: (u: string) => void }).revokeObjectURL =
-    () => undefined;
-}
-
-// --- platform: mocked wholesale; `probe` returns a real-ish source -----------
-const probeMock = vi.fn(async () => ({
-  width: 1920,
-  height: 1080,
-  duration: 30,
-  cropdetect: null as string | null,
-}));
-vi.mock("../src/platform/index.js", () => {
-  const platform = {
-    platformName: "web" as const,
-    supportsFilePicker: false, // → the editor renders the "Load" button + Enter loads
-    extractFrame: vi.fn(async () => "data:image/png;base64,AAAA"),
-    probe: probeMock,
-    scenes: vi.fn(async () => [] as number[]),
-    loudness: vi.fn(async () => ({ display: [] as number[], detect: [] as number[] })),
-    track: vi.fn(async () => []),
-    listFonts: vi.fn(async () => []),
-    listUserFonts: vi.fn(async () => []),
-    render: vi.fn(async () => ({ ok: true, log: "" })),
-    defaultOutdir: vi.fn(async () => ""),
-    checkOutdir: vi.fn(async () => ({ ok: true, resolved: "" })),
-    exportTextFile: vi.fn(async () => false),
-    openExternal: vi.fn(async () => undefined),
-    pickSourceFile: vi.fn(async () => null),
-    pickDirectory: vi.fn(async () => null),
-    videoSrc: vi.fn(async () => "blob:x"),
-    loadHistory: vi.fn(async () => []),
-    saveHistory: vi.fn(async () => undefined),
-    loadSession: vi.fn(async () => null),
-    saveSession: vi.fn(async () => undefined),
-    getSecret: vi.fn(async () => null),
-    setSecret: vi.fn(async () => undefined),
-    deleteSecret: vi.fn(async () => undefined),
-  };
-  return {
-    platform,
-    platformName: platform.platformName,
-    isTauri: () => false,
-  };
-});
-
+installDomShims();
 // Import AFTER the mocks/shims above are installed.
 const { mountEditor } = await import("../src/editor.js");
 
-/** Flush microtasks so the editor's async load/bootstrap promises settle. */
-async function flush(times = 8): Promise<void> {
-  for (let i = 0; i < times; i++) await Promise.resolve();
-}
 
-/** Dispatch a key on `window` (not an INPUT) so the editor's global keydown
- *  transport sees it — it ignores events whose target is an INPUT/TEXTAREA. */
-function pressKey(key: string, init: KeyboardEventInit = {}): void {
-  window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, ...init }));
-}
 
 describe("editor source-load + In/Out flow (jsdom)", () => {
   beforeEach(() => {
-    store.clear();
-    document.body.innerHTML = "";
-    document.documentElement.removeAttribute("data-theme");
-    probeMock.mockClear();
+    resetHarness();
   });
 
   async function mountAndLoad(): Promise<{ root: HTMLElement; srcInput: HTMLInputElement }> {
@@ -165,7 +75,7 @@ describe("editor source-load + In/Out flow (jsdom)", () => {
   it("loads a source: probe is called and the dims/duration readout updates", async () => {
     const { root } = await mountAndLoad();
 
-    expect(probeMock).toHaveBeenCalledWith("/abs/path/to/clip.mp4");
+    expect(platformMocks.probe).toHaveBeenCalledWith("/abs/path/to/clip.mp4");
 
     // dimsLine swaps "Not loaded." for the readgrid carrying dims + duration + AR.
     const readgrid = root.querySelector(".fl-readgrid");

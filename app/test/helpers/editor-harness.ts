@@ -62,6 +62,15 @@ export function installDomShims(): void {
     (URL as unknown as { revokeObjectURL: (u: string) => void }).revokeObjectURL =
       () => undefined;
   }
+  // Pointer capture: jsdom lacks it; the crop/timeline drag handlers call it.
+  Element.prototype.setPointerCapture = () => undefined;
+  Element.prototype.releasePointerCapture = () => undefined;
+  // Media playback: jsdom's <video>.play() returns undefined (not a Promise)
+  // and logs "not implemented"; the transport code does `video.play().catch(…)`.
+  HTMLMediaElement.prototype.play = (() =>
+    Promise.resolve()) as unknown as typeof HTMLMediaElement.prototype.play;
+  HTMLMediaElement.prototype.pause = (() =>
+    undefined) as unknown as typeof HTMLMediaElement.prototype.pause;
 }
 
 /** Fresh DOM + storage + platform-mock defaults; call in beforeEach. */

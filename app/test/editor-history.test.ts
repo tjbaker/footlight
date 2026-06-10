@@ -43,61 +43,21 @@
 /** @vitest-environment jsdom */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("../src/platform/index.js", async () =>
+  (await import("./helpers/platform-mock.js")).platformModule);
+
+import { platformMocks } from "./helpers/platform-mock.js";
+import {
+  installDomShims,
+  resetHarness,
+  flush,
+} from "./helpers/editor-harness.js";
+
+installDomShims();
 import type { HistoryEntry } from "../src/platform/types.js";
 import type { ClipSpec } from "@manifest";
 
-// --- localStorage: Map-backed shim -------------------------------------------
-const store = new Map<string, string>();
-const localStorageMock = {
-  getItem: (k: string): string | null => (store.has(k) ? store.get(k)! : null),
-  setItem: (k: string, v: string): void => {
-    store.set(k, String(v));
-  },
-  removeItem: (k: string): void => {
-    store.delete(k);
-  },
-  clear: (): void => {
-    store.clear();
-  },
-  key: (i: number): string | null => [...store.keys()][i] ?? null,
-  get length(): number {
-    return store.size;
-  },
-};
-(globalThis as unknown as { localStorage: typeof localStorageMock }).localStorage =
-  localStorageMock;
-
-// --- window.matchMedia: initTheme() needs it on boot (jsdom lacks it) --------
-if (typeof window.matchMedia !== "function") {
-  window.matchMedia = ((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-    addListener: () => undefined,
-    removeListener: () => undefined,
-    dispatchEvent: () => false,
-  })) as unknown as typeof window.matchMedia;
-}
-
-// --- HTMLCanvasElement.getContext: jsdom returns undefined; force null --------
-HTMLCanvasElement.prototype.getContext = (() =>
-  null) as unknown as typeof HTMLCanvasElement.prototype.getContext;
-
-// --- URL object-URL helpers: setT/frame plumbing touches them (jsdom lacks) --
-if (typeof URL.createObjectURL !== "function") {
-  (URL as unknown as { createObjectURL: (b: unknown) => string }).createObjectURL =
-    () => "blob:stub";
-}
-if (typeof URL.revokeObjectURL !== "function") {
-  (URL as unknown as { revokeObjectURL: (u: string) => void }).revokeObjectURL =
-    () => undefined;
-}
-
-// --- the mocked history: 4 entries, all framing modes, today + yesterday -----
-// Stable epoch-ms anchors so the day-divider labels are deterministic:
-// `dayLabel` compares start-of-day to *now*, so derive from Date.now().
 const NOW = Date.now();
 const DAY = 86_400_000;
 
@@ -164,63 +124,16 @@ const ENTRY_TRACK: HistoryEntry = {
 
 const HISTORY: HistoryEntry[] = [ENTRY_FIXED, ENTRY_KEYFRAMES, ENTRY_PUNCHIN, ENTRY_TRACK];
 
-const loadHistoryMock = vi.fn(async (): Promise<HistoryEntry[]> => HISTORY.map((e) => ({ ...e })));
-const saveHistoryMock = vi.fn(async (_entries: HistoryEntry[]): Promise<void> => undefined);
-const probeMock = vi.fn(async () => ({
-  width: 1920,
-  height: 1080,
-  duration: 30,
-  cropdetect: null as string | null,
-}));
-
-vi.mock("../src/platform/index.js", () => {
-  const platform = {
-    platformName: "web" as const,
-    supportsFilePicker: false,
-    extractFrame: vi.fn(async () => "data:image/png;base64,AAAA"),
-    probe: probeMock,
-    scenes: vi.fn(async () => [] as number[]),
-    loudness: vi.fn(async () => ({ display: [] as number[], detect: [] as number[] })),
-    track: vi.fn(async () => []),
-    listFonts: vi.fn(async () => []),
-    listUserFonts: vi.fn(async () => []),
-    render: vi.fn(async () => ({ ok: true, log: "" })),
-    defaultOutdir: vi.fn(async () => ""),
-    checkOutdir: vi.fn(async () => ({ ok: true, resolved: "" })),
-    exportTextFile: vi.fn(async () => false),
-    openExternal: vi.fn(async () => undefined),
-    pickSourceFile: vi.fn(async () => null),
-    pickDirectory: vi.fn(async () => null),
-    videoSrc: vi.fn(async () => "blob:x"),
-    loadHistory: loadHistoryMock,
-    saveHistory: saveHistoryMock,
-    loadSession: vi.fn(async () => null),
-    saveSession: vi.fn(async () => undefined),
-    getSecret: vi.fn(async () => null),
-    setSecret: vi.fn(async () => undefined),
-    deleteSecret: vi.fn(async () => undefined),
-  };
-  return { platform, platformName: platform.platformName, isTauri: () => false };
-});
-
-// Import AFTER the mocks/shims above are installed.
 const { mountEditor } = await import("../src/editor.js");
 const { messages } = await import("../src/i18n/index.js");
 const m = messages.editor;
 
-/** Flush microtasks so the editor's async load/bootstrap promises settle. */
-async function flush(times = 12): Promise<void> {
-  for (let i = 0; i < times; i++) await Promise.resolve();
-}
 
 describe("editor render-history modal (jsdom)", () => {
   beforeEach(() => {
-    store.clear();
-    document.body.innerHTML = "";
-    document.documentElement.removeAttribute("data-theme");
-    loadHistoryMock.mockClear();
-    saveHistoryMock.mockClear();
-    probeMock.mockClear();
+    resetHarness();
+    // This suite's platform default: a populated history (the harness default is []).
+    platformMocks.loadHistory.mockImplementation(async () => HISTORY.map((e) => ({ ...e })));
   });
 
   /** Mount the editor and open the History modal from the top-bar button. */
@@ -245,7 +158,7 @@ describe("editor render-history modal (jsdom)", () => {
 
   it("loads persisted history and lists one row per entry", async () => {
     const { modal } = await mountAndOpenHistory();
-    expect(loadHistoryMock).toHaveBeenCalled();
+    expect(platformMocks.loadHistory).toHaveBeenCalled();
 
     const rows = modal.querySelectorAll(".fl-hist");
     expect(rows.length).toBe(HISTORY.length);
@@ -327,7 +240,7 @@ describe("editor render-history modal (jsdom)", () => {
     expect(document.querySelector(".fl-modal-backdrop")).toBeNull();
 
     // openSpec → load() probed the entry's source.
-    expect(probeMock).toHaveBeenCalledWith("/abs/footage/solo.mp4");
+    expect(platformMocks.probe).toHaveBeenCalledWith("/abs/footage/solo.mp4");
 
     // The source path field now carries the entry's source.
     const srcInput = root.querySelector<HTMLInputElement>(".fl-field.path input");
@@ -359,7 +272,6 @@ describe("editor render-history modal (jsdom)", () => {
 
   it("removing a single entry persists the shortened history", async () => {
     const { modal } = await mountAndOpenHistory();
-    saveHistoryMock.mockClear();
 
     const openerRow = [...modal.querySelectorAll<HTMLElement>(".fl-hist")].find(
       (r) => r.querySelector(".fl-hist-top .nm")?.textContent === "opener",
@@ -371,8 +283,8 @@ describe("editor render-history modal (jsdom)", () => {
     await flush();
 
     // saveHistory was called with the list minus the removed entry.
-    expect(saveHistoryMock).toHaveBeenCalled();
-    const lastArg = saveHistoryMock.mock.calls.at(-1)![0];
+    expect(platformMocks.saveHistory).toHaveBeenCalled();
+    const lastArg = platformMocks.saveHistory.mock.calls.at(-1)![0];
     expect(lastArg.map((e) => e.id)).not.toContain("h-fixed");
     expect(lastArg.length).toBe(HISTORY.length - 1);
 
@@ -382,7 +294,6 @@ describe("editor render-history modal (jsdom)", () => {
 
   it("Clear all empties the list and persists []", async () => {
     const { modal } = await mountAndOpenHistory();
-    saveHistoryMock.mockClear();
 
     const clearBtn = [...modal.querySelectorAll<HTMLButtonElement>("button")].find(
       (b) => b.textContent === m.history.clearAll,
@@ -391,8 +302,8 @@ describe("editor render-history modal (jsdom)", () => {
     clearBtn!.click();
     await flush();
 
-    expect(saveHistoryMock).toHaveBeenCalled();
-    expect(saveHistoryMock.mock.calls.at(-1)![0]).toEqual([]);
+    expect(platformMocks.saveHistory).toHaveBeenCalled();
+    expect(platformMocks.saveHistory.mock.calls.at(-1)![0]).toEqual([]);
 
     // No rows remain; the empty-state hint becomes visible.
     expect(modal.querySelectorAll(".fl-hist").length).toBe(0);

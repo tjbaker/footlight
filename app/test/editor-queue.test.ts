@@ -40,55 +40,21 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+vi.mock("../src/platform/index.js", async () =>
+  (await import("./helpers/platform-mock.js")).platformModule);
+
+import { platformMocks } from "./helpers/platform-mock.js";
+import {
+  installDomShims,
+  resetHarness,
+  flush,
+  pressKey,
+  setValue,
+} from "./helpers/editor-harness.js";
+
+installDomShims();
+
 // --- localStorage: Map-backed shim -------------------------------------------
-const store = new Map<string, string>();
-const localStorageMock = {
-  getItem: (k: string): string | null => (store.has(k) ? store.get(k)! : null),
-  setItem: (k: string, v: string): void => {
-    store.set(k, String(v));
-  },
-  removeItem: (k: string): void => {
-    store.delete(k);
-  },
-  clear: (): void => {
-    store.clear();
-  },
-  key: (i: number): string | null => [...store.keys()][i] ?? null,
-  get length(): number {
-    return store.size;
-  },
-};
-(globalThis as unknown as { localStorage: typeof localStorageMock }).localStorage =
-  localStorageMock;
-
-// --- window.matchMedia: initTheme() needs it on boot (jsdom lacks it) --------
-if (typeof window.matchMedia !== "function") {
-  window.matchMedia = ((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-    addListener: () => undefined,
-    removeListener: () => undefined,
-    dispatchEvent: () => false,
-  })) as unknown as typeof window.matchMedia;
-}
-
-// --- HTMLCanvasElement.getContext: jsdom returns undefined; force null --------
-HTMLCanvasElement.prototype.getContext = (() =>
-  null) as unknown as typeof HTMLCanvasElement.prototype.getContext;
-
-// --- URL object-URL helpers: setT/frame plumbing touches them (jsdom lacks) --
-if (typeof URL.createObjectURL !== "function") {
-  (URL as unknown as { createObjectURL: (b: unknown) => string }).createObjectURL =
-    () => "blob:stub";
-}
-if (typeof URL.revokeObjectURL !== "function") {
-  (URL as unknown as { revokeObjectURL: (u: string) => void }).revokeObjectURL =
-    () => undefined;
-}
-
 // --- window.location.reload: clearAll() calls it; jsdom throws on navigation --
 const reloadMock = vi.fn();
 Object.defineProperty(window, "location", {
@@ -97,62 +63,9 @@ Object.defineProperty(window, "location", {
 });
 
 // --- platform: mocked wholesale; `probe` returns a real-ish source -----------
-const probeMock = vi.fn(async () => ({
-  width: 1920,
-  height: 1080,
-  duration: 30,
-  cropdetect: null as string | null,
-}));
-const renderMock = vi.fn(async () => ({ ok: true, log: "done" }));
-const exportTextFileMock = vi.fn(async () => true);
-const saveSessionMock = vi.fn(async () => undefined);
-vi.mock("../src/platform/index.js", () => {
-  const platform = {
-    platformName: "web" as const,
-    supportsFilePicker: false, // → the editor renders the "Load" button + Enter loads
-    extractFrame: vi.fn(async () => "data:image/png;base64,AAAA"),
-    probe: probeMock,
-    scenes: vi.fn(async () => [] as number[]),
-    loudness: vi.fn(async () => ({ display: [] as number[], detect: [] as number[] })),
-    track: vi.fn(async () => []),
-    listFonts: vi.fn(async () => []),
-    listUserFonts: vi.fn(async () => []),
-    render: renderMock,
-    defaultOutdir: vi.fn(async () => "/tmp/out"),
-    checkOutdir: vi.fn(async () => ({ ok: true, resolved: "/tmp/out" })),
-    exportTextFile: exportTextFileMock,
-    openExternal: vi.fn(async () => undefined),
-    pickSourceFile: vi.fn(async () => null),
-    pickDirectory: vi.fn(async () => null),
-    videoSrc: vi.fn(async () => "blob:x"),
-    loadHistory: vi.fn(async () => []),
-    saveHistory: vi.fn(async () => undefined),
-    loadSession: vi.fn(async () => null),
-    saveSession: saveSessionMock,
-    getSecret: vi.fn(async () => null),
-    setSecret: vi.fn(async () => undefined),
-    deleteSecret: vi.fn(async () => undefined),
-  };
-  return {
-    platform,
-    platformName: platform.platformName,
-    isTauri: () => false,
-  };
-});
-
-// Import AFTER the mocks/shims above are installed.
 const { mountEditor } = await import("../src/editor.js");
 
-/** Flush microtasks so the editor's async load/bootstrap promises settle. */
-async function flush(times = 8): Promise<void> {
-  for (let i = 0; i < times; i++) await Promise.resolve();
-}
 
-/** Dispatch a key on `window` (not an INPUT) so the editor's global keydown
- *  transport sees it — it ignores events whose target is an INPUT/TEXTAREA. */
-function pressKey(key: string, init: KeyboardEventInit = {}): void {
-  window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, ...init }));
-}
 
 interface Mounted {
   root: HTMLElement;
@@ -207,13 +120,11 @@ function addCardOf(root: HTMLElement): HTMLElement {
 
 describe("editor queue + render flow (jsdom)", () => {
   beforeEach(() => {
-    store.clear();
-    document.body.innerHTML = "";
-    document.documentElement.removeAttribute("data-theme");
-    probeMock.mockClear();
-    renderMock.mockClear();
-    exportTextFileMock.mockClear();
-    saveSessionMock.mockClear();
+    resetHarness();
+    // This suite's platform defaults differ from the harness's: a render log
+    // the activity panel shows, and a confirmed text-file export.
+    platformMocks.render.mockResolvedValue({ ok: true, log: "done" });
+    platformMocks.exportTextFile.mockResolvedValue(true);
     reloadMock.mockClear();
   });
 
@@ -285,10 +196,9 @@ describe("editor queue + render flow (jsdom)", () => {
     expect(queueCards()).toHaveLength(1);
 
     // Re-edit calls openSpec → load() → probe again with the card's source_file.
-    probeMock.mockClear();
     queueCards()[0]!.click();
     await flush();
-    expect(probeMock).toHaveBeenCalledWith("/abs/path/to/clip.mp4");
+    expect(platformMocks.probe).toHaveBeenCalledWith("/abs/path/to/clip.mp4");
     // The source field reflects the re-opened clip's source.
     const srcInput = root.querySelector<HTMLInputElement>(".fl-field.path input");
     expect(srcInput!.value).toBe("/abs/path/to/clip.mp4");
@@ -308,8 +218,8 @@ describe("editor queue + render flow (jsdom)", () => {
     exportBtn!.click();
     await flush();
 
-    expect(exportTextFileMock).toHaveBeenCalledTimes(1);
-    const [filename, manifest] = exportTextFileMock.mock.calls[0] as unknown as [
+    expect(platformMocks.exportTextFile).toHaveBeenCalledTimes(1);
+    const [filename, manifest] = platformMocks.exportTextFile.mock.calls[0] as unknown as [
       string,
       string,
     ];
@@ -333,8 +243,8 @@ describe("editor queue + render flow (jsdom)", () => {
     renderBtn().click();
     await flush();
 
-    expect(renderMock).toHaveBeenCalledTimes(1);
-    const [manifestJson, opts] = renderMock.mock.calls[0] as unknown as [
+    expect(platformMocks.render).toHaveBeenCalledTimes(1);
+    const [manifestJson, opts] = platformMocks.render.mock.calls[0] as unknown as [
       string,
       { outdir: string },
     ];
@@ -373,8 +283,8 @@ describe("editor queue + render flow (jsdom)", () => {
     await flush();
 
     // clearAll() persists an empty-queue session, then reloads (stubbed).
-    expect(saveSessionMock).toHaveBeenCalled();
-    const session = saveSessionMock.mock.calls.at(-1)![0] as unknown as {
+    expect(platformMocks.saveSession).toHaveBeenCalled();
+    const session = platformMocks.saveSession.mock.calls.at(-1)![0] as unknown as {
       clips: unknown[];
       source: string;
     };
