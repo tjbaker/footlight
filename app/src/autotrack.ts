@@ -90,7 +90,7 @@ export function saveAutoTrackSettings(s: AutoTrackSettings): void {
  * the key is preserved for the next attempt. A no-op when there is no legacy key.
  */
 export async function migrateLegacyApiKey(platform: FootlightPlatform): Promise<void> {
-  let raw: string | null = null;
+  let raw: string | null;
   try {
     raw = localStorage.getItem(STORAGE_KEY);
   } catch {

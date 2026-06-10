@@ -91,7 +91,8 @@ describe("GeminiTracker.boxFromGemini (pure, no network)", () => {
 
 describe("GeminiTracker.track (offline, mocked fetch)", () => {
   beforeEach(() => {
-    vi.restoreAllMocks?.() ?? vi.clearAllMocks();
+    if (vi.restoreAllMocks) vi.restoreAllMocks();
+    else vi.clearAllMocks();
   });
   afterEach(() => {
     delete (globalThis as { fetch?: unknown }).fetch;

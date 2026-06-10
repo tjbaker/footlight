@@ -409,7 +409,7 @@ async function handleCheckOutdir(outdir, res, repoRoot) {
 
 /** GET /history — the persisted render history; [] if missing or malformed. */
 async function handleLoadHistory(res, historyPath) {
-  let entries = [];
+  let entries;
   try {
     entries = JSON.parse(await readFile(historyPath, "utf8"));
   } catch {
@@ -428,7 +428,7 @@ async function handleSaveHistory(body, res, historyPath) {
 
 /** GET /session — the persisted working session; null if missing or malformed. */
 async function handleLoadSession(res, sessionPath) {
-  let data = null;
+  let data;
   try {
     data = JSON.parse(await readFile(sessionPath, "utf8"));
   } catch {

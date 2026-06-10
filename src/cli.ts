@@ -411,7 +411,7 @@ function parseJsonManifest(text: string): RenderItem[] {
   try {
     parsed = JSON.parse(text);
   } catch (err) {
-    throw new Error(`manifest is not valid JSON: ${errMsg(err)}`);
+    throw new Error(`manifest is not valid JSON: ${errMsg(err)}`, { cause: err });
   }
   if (!Array.isArray(parsed)) {
     throw new Error("JSON manifest must be an array of clip specs");

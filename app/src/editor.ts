@@ -4256,7 +4256,7 @@ export function mountEditor(root: HTMLElement): void {
 
   /** On launch, restore the last session: outdir, queue, and re-load the source. */
   async function restoreSession(): Promise<void> {
-    let data: SessionData | null = null;
+    let data: SessionData | null;
     try {
       data = await platform.loadSession();
     } catch {

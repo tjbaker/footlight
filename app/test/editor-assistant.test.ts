@@ -45,13 +45,7 @@ vi.mock("../src/platform/index.js", async () =>
   (await import("./helpers/platform-mock.js")).platformModule);
 
 import { platformMocks } from "./helpers/platform-mock.js";
-import {
-  installDomShims,
-  resetHarness,
-  flush,
-  pressKey,
-  setValue,
-} from "./helpers/editor-harness.js";
+import { installDomShims, resetHarness, flush } from "./helpers/editor-harness.js";
 
 installDomShims();
 

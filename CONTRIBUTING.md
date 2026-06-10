@@ -59,6 +59,9 @@ the right install command for your platform.
   tests that reuse the original's fixtures.
 - **Formatting is Prettier's job**: run `npm run format` in the package you
   touched (CI enforces `format:check` in both).
+- **Linting is ESLint's job**: one root config covers both packages — run
+  `npm run lint` at the repo root (CI enforces it). Recommended rules only;
+  style belongs to Prettier, types to `tsc`.
 - Keep changes focused and tested.
 
 ## Pull request expectations

@@ -32,13 +32,18 @@
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "format": "prettier --write src/**/*.ts test/**/*.ts",
-    "format:check": "prettier --check src/**/*.ts test/**/*.ts"
+    "format:check": "prettier --check src/**/*.ts test/**/*.ts",
+    "lint": "eslint src test app/src app/test app/dev-server"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^25.9.2",
     "@vitest/coverage-v8": "^4.1.8",
+    "eslint": "^10.4.1",
+    "globals": "^17.6.0",
     "prettier": "3.6.2",
     "typescript": "^5.5.0",
+    "typescript-eslint": "^8.61.0",
     "vitest": "^4.1.8"
   }
 }
