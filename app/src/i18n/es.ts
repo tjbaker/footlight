@@ -154,8 +154,12 @@ export const es: Messages = {
             ],
           },
           {
+            kind: "p",
+            text: "Empuje (acercamiento animado): encuadra la caja donde el clip debe ABRIR y haz clic en Fijar inicio, luego encuadra donde debe TERMINAR y haz clic en Fijar final — el renderizado transiciona suavemente entre ambas a lo largo del clip (el empuje lento hacia el sujeto). Una caja fantasma discontinua previsualiza la ventana mientras te desplazas; ✕ borra el empuje. Un empuje tiene prioridad sobre cualquier otro encuadre de ese clip.",
+          },
+          {
             kind: "tip",
-            text: "El zoom amplía el origen, así que los acercamientos muy grandes suavizan la imagen. Mantente moderado a menos que el origen sea de alta resolución.",
+            text: "El zoom amplía el origen, así que los acercamientos muy grandes suavizan la imagen. Mantente moderado a menos que el origen sea de alta resolución — y lo mismo aplica a donde termina un empuje.",
           },
         ],
       },
@@ -621,7 +625,16 @@ export const es: Messages = {
       modeTrack: "seguimiento",
       modePunchIn: "acercamiento",
       modeSchedule: "programación",
+      modePush: "empuje",
       defaultOffset: "centro",
+      pushLabel: "Empuje",
+      pushSetStart: "Fijar inicio",
+      pushSetStartTitle:
+        "Captura la caja actual como la ventana INICIAL del empuje — el encuadre con el que abre el clip.",
+      pushSetEnd: "Fijar final",
+      pushSetEndTitle:
+        "Captura la caja actual como la ventana FINAL del empuje — el renderizado transiciona suavemente del inicio al final a lo largo del clip (el empuje lento).",
+      pushClearTitle: "Borra el empuje — vuelve a un encuadre estático.",
     },
     captions: {
       header: "Subtítulos",

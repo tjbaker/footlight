@@ -154,8 +154,12 @@ export const en: Messages = {
             ],
           },
           {
+            kind: "p",
+            text: "Push (animated punch-in): frame the box where the clip should OPEN and click Set start, then frame where it should LAND and click Set end — the render eases smoothly between the two across the clip (the slow push toward the subject). A dashed ghost box previews the eased window as you scrub; ✕ clears the push. A push takes precedence over every other framing on that clip.",
+          },
+          {
             kind: "tip",
-            text: "Zoom magnifies the source, so very large punch-ins soften the image. Stay modest unless the source is high-resolution.",
+            text: "Zoom magnifies the source, so very large punch-ins soften the image. Stay modest unless the source is high-resolution — and the same goes for where a push lands.",
           },
         ],
       },
@@ -620,7 +624,16 @@ export const en: Messages = {
       modeTrack: "track",
       modePunchIn: "punch-in",
       modeSchedule: "schedule",
+      modePush: "push",
       defaultOffset: "center",
+      pushLabel: "Push",
+      pushSetStart: "Set start",
+      pushSetStartTitle:
+        "Capture the current box as the push's START window — the framing the clip opens on.",
+      pushSetEnd: "Set end",
+      pushSetEndTitle:
+        "Capture the current box as the push's END window — the render eases from start to end across the clip (the slow push).",
+      pushClearTitle: "Clear the push — back to a static framing.",
     },
     captions: {
       header: "Captions",

@@ -109,7 +109,13 @@ import {
   fadesFit,
   loopSeamTimes,
 } from "./editor-fades.js";
-import { createInitialEditorState, hasActiveTrack } from "./editor-store.js";
+import {
+  boxToRegionWindow,
+  pushKeyframes,
+  pushPreviewBox,
+  describePush,
+} from "./editor-push.js";
+import { createInitialEditorState, hasActiveTrack, clipLength } from "./editor-store.js";
 import {
   assistantSelection,
   renderOptions,
@@ -593,6 +599,50 @@ export function mountEditor(root: HTMLElement): void {
   const cropReadout = el("div", "fl-readout");
   cropReadout.textContent = m.framing.loadASource;
   framingSect.append(cropReadout);
+
+  // Animated punch-in ("push", #163): capture the drawn box twice — as the
+  // start and end windows — and the render eases between them over the clip.
+  const pushRow = el("div", "fl-rowg");
+  pushRow.style.marginTop = "8px";
+  const pushLab = el("span", "fl-rowlab");
+  pushLab.textContent = m.framing.pushLabel;
+  const pushReadout = el("span", "hint");
+  const capturePushWindow = () =>
+    state.cropBox && state.dims
+      ? boxToRegionWindow(state.cropBox, contentOrigin(), currentRegion())
+      : null;
+  function refreshPushReadout(): void {
+    pushReadout.textContent = describePush(state.push);
+    pushClearBtn.style.display = state.push.start || state.push.end ? "" : "none";
+  }
+  const pushStartBtn = button(m.framing.pushSetStart, "fl-btn sm ghost", () => {
+    const w = capturePushWindow();
+    if (!w) return;
+    state.push.start = w;
+    refreshPushReadout();
+    refreshIO();
+    drawOverlay();
+  });
+  pushStartBtn.title = m.framing.pushSetStartTitle;
+  const pushEndBtn = button(m.framing.pushSetEnd, "fl-btn sm ghost", () => {
+    const w = capturePushWindow();
+    if (!w) return;
+    state.push.end = w;
+    refreshPushReadout();
+    refreshIO();
+    drawOverlay();
+  });
+  pushEndBtn.title = m.framing.pushSetEndTitle;
+  const pushClearBtn = button("✕", "fl-btn sm ghost", () => {
+    state.push = { start: null, end: null };
+    refreshPushReadout();
+    refreshIO();
+    drawOverlay();
+  });
+  pushClearBtn.title = m.framing.pushClearTitle;
+  pushRow.append(pushLab, pushStartBtn, pushEndBtn, pushClearBtn, pushReadout);
+  framingSect.append(pushRow);
+  refreshPushReadout();
   // content-crop omitted from the UI (engine still supports it via the manifest);
   // contentReadout stays so the inert content-crop code paths keep compiling.
   const contentReadout = el("div", "hint");
@@ -2489,6 +2539,19 @@ export function mountEditor(root: HTMLElement): void {
       ctx.moveTo(bx + bw / 2, by);
       ctx.lineTo(bx + bw / 2, by + bh);
       ctx.stroke();
+      // Animated-push ghost (#163): the eased window at the playhead, dashed,
+      // so the push's motion is visible while scrubbing (the solid box stays
+      // the editable capture target).
+      const pushKfs = pushKeyframes(state.push, clipLength(state));
+      if (pushKfs) {
+        const rel = Math.max(0, state.t - (state.inPoint ?? 0));
+        const g = pushPreviewBox(pushKfs, rel, contentOrigin());
+        ctx.strokeStyle = "#7ab8ff";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 5]);
+        ctx.strokeRect(g.x * s, g.y * s, g.w * s, g.h * s);
+        ctx.setLineDash([]);
+      }
       // Corner handles signal the box is resizable into a punch-in (hidden while
       // an AI track owns the framing).
       if (cropInteractive()) {
@@ -2694,16 +2757,18 @@ export function mountEditor(root: HTMLElement): void {
    */
   function cropWindowSpec(): ReturnType<typeof cropBoxToWindow> | null {
     if (!state.cropBox || !state.dims) return null;
-    const region = currentRegion();
-    let box = state.cropBox;
-    if (state.contentMode && state.contentBox) {
-      box = {
-        ...state.cropBox,
-        x: state.cropBox.x - state.contentBox.x,
-        y: state.cropBox.y - state.contentBox.y,
-      };
-    }
-    return cropWindowSpecPure(box, region);
+    const o = contentOrigin();
+    const box = o
+      ? { ...state.cropBox, x: state.cropBox.x - o.x, y: state.cropBox.y - o.y }
+      : state.cropBox;
+    return cropWindowSpecPure(box, currentRegion());
+  }
+
+  /** Content-box origin when content mode is active (source ↔ region shift). */
+  function contentOrigin(): { x: number; y: number } | null {
+    return state.contentMode && state.contentBox
+      ? { x: state.contentBox.x, y: state.contentBox.y }
+      : null;
   }
 
   /** Cursor hinting the move/resize/draw affordance under the pointer. */
@@ -2896,13 +2961,15 @@ export function mountEditor(root: HTMLElement): void {
     durVal.textContent = dur;
     // The framing mode this clip would render with (mirrors addClip's precedence).
     offsetVal.textContent =
-      hasActiveTrack(state)
-        ? m.framing.modeTrack
-        : cropWindowSpec()
-          ? m.framing.modePunchIn
-          : state.keyframes.length
-            ? m.framing.modeSchedule
-            : currentOffset();
+      state.push.start && state.push.end
+        ? m.framing.modePush
+        : hasActiveTrack(state)
+          ? m.framing.modeTrack
+          : cropWindowSpec()
+            ? m.framing.modePunchIn
+            : state.keyframes.length
+              ? m.framing.modeSchedule
+              : currentOffset();
     const valEl = ioChip.querySelector(".val");
     if (valEl) valEl.textContent = dur;
     renderRegion();
@@ -3529,7 +3596,13 @@ export function mountEditor(root: HTMLElement): void {
       out_point: state.outPoint.toFixed(3),
     };
     const win = cropWindowSpec();
-    if (hasActiveTrack(state)) {
+    const pushKfs = pushKeyframes(state.push, state.outPoint - state.inPoint);
+    if (pushKfs) {
+      // Animated punch-in (#163) — the render's highest framing precedence.
+      // Keep a "center" fallback so the row stays valid if the path is stripped.
+      spec.cropWindowPath = pushKfs;
+      spec.crop_offset = "center";
+    } else if (hasActiveTrack(state)) {
       // AI tracking takes precedence over crop_offset (SPEC §6.9). Keep a
       // "center" fallback so the row is still valid if the path is stripped.
       spec.cropPath = state.cropPath!.map((k) => ({ t: k.t, x: k.x }));
@@ -3851,6 +3924,17 @@ export function mountEditor(root: HTMLElement): void {
     state.cropBox = r.cropBox;
     state.keyframes = r.keyframes;
     state.cropPath = r.cropPath;
+    // Animated push (#163): rehydrate the captured endpoints from the path's
+    // first/last keyframes (v1 authors exactly two; extra mid-keyframes from a
+    // hand-written manifest still restore as their endpoints).
+    if (r.cropWindowPath?.length) {
+      const sorted = [...r.cropWindowPath].sort((a, b) => a.t - b.t);
+      const strip = (k: (typeof sorted)[number]) => ({ x: k.x, y: k.y, w: k.w, h: k.h });
+      state.push = { start: strip(sorted[0]!), end: strip(sorted[sorted.length - 1]!) };
+    } else {
+      state.push = { start: null, end: null };
+    }
+    refreshPushReadout();
     nameInput.value = r.name;
     // Caption fields aren't part of specToEditorState (they live untouched in
     // the manifest module); read them straight off the spec for round-trip.

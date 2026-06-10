@@ -133,6 +133,10 @@ The CLI is also available directly after `make build` — see **CLI usage** belo
 - **Frame** with the orange 9:16 box — drag to reposition, drag a **corner to
   punch in / zoom**, double-click to reset. A live **9:16 output preview** (with
   optional social safe-area guides) shows the actual vertical result as you frame.
+- **Push (animated punch-in):** frame where the clip should open, **Set start**;
+  frame where it should land, **Set end** — the render eases smoothly between the
+  two across the clip, the slow push toward the subject. A dashed ghost previews
+  the eased window as you scrub.
 - **Moving crop:** drop **keyframes** for a time-keyed schedule that hard-switches
   the crop at cuts.
 - **Auto-track** (optional, BYOK): AI subject tracking builds a smooth eased crop
@@ -245,10 +249,12 @@ to a clean loop.
 
 **JSON manifests.** Pass a `.json` array of the same clip objects instead of a CSV
 to use fields CSV can't express: **`cropWindow`** (an explicit 9:16
-punch-in/zoom window), **`cropPath`** (an eased subject-tracking crop path), and a
+punch-in/zoom window), **`cropWindowPath`** (an **animated punch-in** — crop-window
+keyframes `{t,x,y,w,h}` smoothstep-eased across the clip, the "slow push toward
+the subject"), **`cropPath`** (an eased subject-tracking crop path), and a
 per-clip **`caption`** style object (see [Captions](#captions-optional)).
-The GUI writes these for you; render precedence is `cropPath` → `cropWindow` →
-`crop_offset`.
+The GUI writes these for you; render precedence is `cropWindowPath` → `cropPath`
+→ `cropWindow` → `crop_offset`.
 
 ### Why `crop_offset` is per-clip
 
