@@ -1,11 +1,15 @@
 // Copyright 2026 Trevor Baker, all rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The editor's state shape + a fresh-state factory + pure selectors, lifted out
- * of the `mountEditor()` closure (#125, Phase 3 foundation). This is the home for
- * the eventual EditorStore; for now it owns the `EditorState` type, a testable
- * `createInitialEditorState()`, and the derived-state predicates that were
- * scattered inline. Nothing here mutates or touches the DOM — data in, data out.
+ * The editor's state shape, fresh-state factory, pure selectors — and the
+ * `EditorStore` itself (#125, Phase 3): one mutable state object, an explicit
+ * `set(patch)` mutator that emits the CHANGED KEYS to subscribers, and
+ * `onChange` subscriptions. The store is the keystone the views hang off:
+ * writes go through `set` so renders react to state instead of being invoked
+ * by every call site by hand. Migration is strangler-style — `store.state`
+ * stays directly readable (and, during the transition, writable) so untouched
+ * closure code keeps working while clusters move onto `set`.
+ * Nothing here touches the DOM — the listeners do.
  */
 
 import type { Box, Dims, ClipSpec, CropKeyframe } from "@manifest";
@@ -164,4 +168,52 @@ export function clampTrimOut(outSec: number, inPoint: number, duration: number):
  */
 export function keyframeFromCommit(t: number, x: number): CropKeyframe {
   return { t: round3(t), offset: String(Math.round(x)) };
+}
+
+// ---- the EditorStore (#125 Phase 3) ----
+
+/** Called after a `set` lands, with the keys whose values actually changed. */
+export type EditorStoreListener = (changed: ReadonlySet<keyof EditorState>) => void;
+
+/** The editor's state container: explicit writes, observable changes. */
+export interface EditorStore {
+  /** The live state. Read freely; during the strangler migration legacy code
+   *  may still write fields directly (those writes don't notify). */
+  readonly state: EditorState;
+  /**
+   * Apply a patch. Only keys whose values differ (`Object.is`) are written;
+   * listeners run once per call, after the whole patch, with the changed-key
+   * set. A patch that changes nothing emits nothing.
+   */
+  set(patch: Partial<EditorState>): void;
+  /** Subscribe to changes; returns the unsubscribe function. */
+  onChange(listener: EditorStoreListener): () => void;
+}
+
+/** Build the store around a fresh (or supplied) state object. */
+export function createEditorStore(initial?: EditorState): EditorStore {
+  const state = initial ?? createInitialEditorState();
+  const listeners = new Set<EditorStoreListener>();
+
+  return {
+    state,
+    set(patch: Partial<EditorState>): void {
+      const changed = new Set<keyof EditorState>();
+      for (const key of Object.keys(patch) as Array<keyof EditorState>) {
+        const next = patch[key];
+        if (!Object.is(state[key], next)) {
+          (state as unknown as Record<string, unknown>)[key] = next;
+          changed.add(key);
+        }
+      }
+      if (changed.size === 0) return;
+      for (const fn of [...listeners]) fn(changed);
+    },
+    onChange(listener: EditorStoreListener): () => void {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
 }

@@ -299,7 +299,9 @@ describe("end-to-end: MockTracker -> path -> eased expr -> ffmpeg", () => {
       { encoding: "utf8" },
     ).trim();
     expect(probe).toBe("1080,1920");
-  });
+    // Real ffmpeg encode: the 5s vitest default is too tight on a loaded CI
+    // runner (same allowance as croppath.test.ts's render check).
+  }, 30_000);
 });
 
 describe("GeminiTracker.boxFromGemini (no network)", () => {
