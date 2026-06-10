@@ -7,9 +7,10 @@
  * predicates (track ownership, clip window) match the inline logic they replaced.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   createInitialEditorState,
+  createEditorStore,
   hasActiveTrack,
   isCropInteractive,
   hasClipWindow,
@@ -117,5 +118,68 @@ describe("keyframeFromCommit (addCropKeyframe math)", () => {
   it("ms-rounds the time and stores x as an integer offset string", () => {
     expect(keyframeFromCommit(1.23456, 440.7)).toEqual({ t: 1.235, offset: "441" });
     expect(keyframeFromCommit(2, -3.4)).toEqual({ t: 2, offset: "-3" });
+  });
+});
+
+describe("createEditorStore (#125 Phase 3)", () => {
+  it("applies a patch and emits exactly the keys whose values changed", () => {
+    const store = createEditorStore();
+    const seen: Array<ReadonlySet<string>> = [];
+    store.onChange((changed) => seen.push(changed));
+
+    store.set({ inPoint: 1.5, outPoint: 4, hook: "" }); // hook already "" → unchanged
+    expect(store.state.inPoint).toBe(1.5);
+    expect(store.state.outPoint).toBe(4);
+    expect(seen).toHaveLength(1);
+    expect([...seen[0]!].sort()).toEqual(["inPoint", "outPoint"]);
+  });
+
+  it("emits once per set() call, after the whole patch is applied", () => {
+    const store = createEditorStore();
+    let inAtEmit: number | null = -1;
+    let outAtEmit: number | null = -1;
+    store.onChange(() => {
+      inAtEmit = store.state.inPoint;
+      outAtEmit = store.state.outPoint;
+    });
+    store.set({ inPoint: 2, outPoint: 6 });
+    expect(inAtEmit).toBe(2);
+    expect(outAtEmit).toBe(6);
+  });
+
+  it("a no-op patch emits nothing", () => {
+    const store = createEditorStore();
+    const listener = vi.fn();
+    store.onChange(listener);
+    store.set({});
+    store.set({ t: store.state.t, source: store.state.source });
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("unsubscribe stops a listener without affecting others", () => {
+    const store = createEditorStore();
+    const a = vi.fn();
+    const b = vi.fn();
+    const offA = store.onChange(a);
+    store.onChange(b);
+    offA();
+    store.set({ t: 9 });
+    expect(a).not.toHaveBeenCalled();
+    expect(b).toHaveBeenCalledTimes(1);
+  });
+
+  it("identity matters, not deep equality (a fresh array IS a change)", () => {
+    const store = createEditorStore();
+    const listener = vi.fn();
+    store.onChange(listener);
+    store.set({ sceneCuts: [] }); // new array, same contents as initial
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("wraps a supplied state object without copying it", () => {
+    const s = createInitialEditorState();
+    const store = createEditorStore(s);
+    store.set({ duration: 30 });
+    expect(s.duration).toBe(30);
   });
 });

@@ -116,7 +116,7 @@ import {
   pushPreviewBox,
   describePush,
 } from "./editor-push.js";
-import { createInitialEditorState, hasActiveTrack, clipLength } from "./editor-store.js";
+import { createEditorStore, hasActiveTrack, clipLength } from "./editor-store.js";
 import {
   assistantSelection,
   renderOptions,
@@ -142,7 +142,11 @@ import {
 import { layoutPreviewCaptions, type PreviewCaptionLine } from "./editor-caption-preview.js";
 
 export function mountEditor(root: HTMLElement): void {
-  const state = createInitialEditorState();
+  // The EditorStore (#125 Phase 3): `state` stays directly readable everywhere;
+  // migrated clusters WRITE through `store.set`, and renders subscribe to the
+  // changes instead of being invoked by hand at every mutation site.
+  const store = createEditorStore();
+  const state = store.state;
 
   const autoTrack: AutoTrackSettings = loadAutoTrackSettings();
   // The BYOK Gemini key lives in the OS keychain (via `secretStore`), not in the
@@ -482,14 +486,12 @@ export function mountEditor(root: HTMLElement): void {
   // (±150 ms); OFF (the default) it is the identity — the point stays exactly
   // where the user put it.
   const setInBtn = button("", "fl-btn", () => {
-    state.inPoint = snapT(state.t);
-    refreshIO();
+    store.set({ inPoint: snapT(state.t) });
   });
   setInBtn.innerHTML = `<span class="idot in"></span>${escapeHtml(m.clip.setIn)}`;
   setInBtn.title = m.clip.setInTitle;
   const setOutBtn = button("", "fl-btn", () => {
-    state.outPoint = snapT(state.t);
-    refreshIO();
+    store.set({ outPoint: snapT(state.t) });
   });
   setOutBtn.innerHTML = `<span class="idot out"></span>${escapeHtml(m.clip.setOut)}`;
   setOutBtn.title = m.clip.setOutTitle;
@@ -1597,14 +1599,12 @@ export function mountEditor(root: HTMLElement): void {
   /** Nudge the selected In/Out marker by `delta` seconds (keyboard). */
   function nudgeMarker(delta: number): boolean {
     if (selectedMarker === "in" && state.inPoint != null) {
-      state.inPoint = round3(clamp(state.inPoint + delta, 0, state.outPoint ?? state.duration));
-      refreshIO();
+      store.set({ inPoint: round3(clamp(state.inPoint + delta, 0, state.outPoint ?? state.duration)) });
       seek(state.inPoint);
       return true;
     }
     if (selectedMarker === "out" && state.outPoint != null) {
-      state.outPoint = round3(clamp(state.outPoint + delta, state.inPoint ?? 0, state.duration));
-      refreshIO();
+      store.set({ outPoint: round3(clamp(state.outPoint + delta, state.inPoint ?? 0, state.duration)) });
       seek(state.outPoint);
       return true;
     }
@@ -1642,17 +1642,16 @@ export function mountEditor(root: HTMLElement): void {
     if (tlDrag === "region") {
       if (!tlMoved && Math.abs(e.clientX - tlDownX) < 3) return; // not yet a drag
       tlMoved = true;
-      state.inPoint = round3(Math.min(regionAnchor, t));
-      state.outPoint = round3(Math.max(regionAnchor, t));
-      refreshIO();
+      store.set({
+        inPoint: round3(Math.min(regionAnchor, t)),
+        outPoint: round3(Math.max(regionAnchor, t)),
+      });
       seek(t);
     } else if (tlDrag === "in") {
-      state.inPoint = round3(clamp(t, 0, state.outPoint ?? state.duration));
-      refreshIO();
+      store.set({ inPoint: round3(clamp(t, 0, state.outPoint ?? state.duration)) });
       seek(t);
     } else if (tlDrag === "out") {
-      state.outPoint = round3(clamp(t, state.inPoint ?? 0, state.duration));
-      refreshIO();
+      store.set({ outPoint: round3(clamp(t, state.inPoint ?? 0, state.duration)) });
       seek(t);
     }
   });
@@ -1667,13 +1666,16 @@ export function mountEditor(root: HTMLElement): void {
       // Onset snap happens at RELEASE only (never mid-drag), so the magnet
       // assists the gesture without fighting the hand. With the toggle off,
       // the release leaves the user's point exactly where they put it.
+      const snapped: { inPoint?: number; outPoint?: number } = {};
       if ((tlDrag === "in" || tlDrag === "region") && state.inPoint != null) {
-        state.inPoint = round3(clamp(snapT(state.inPoint), 0, state.outPoint ?? state.duration));
+        snapped.inPoint = round3(clamp(snapT(state.inPoint), 0, state.outPoint ?? state.duration));
       }
       if ((tlDrag === "out" || tlDrag === "region") && state.outPoint != null) {
-        state.outPoint = round3(clamp(snapT(state.outPoint), state.inPoint ?? 0, state.duration));
+        snapped.outPoint = round3(
+          clamp(snapT(state.outPoint), snapped.inPoint ?? state.inPoint ?? 0, state.duration),
+        );
       }
-      refreshIO();
+      store.set(snapped);
     }
     tlDrag = null;
   };
@@ -1823,8 +1825,7 @@ export function mountEditor(root: HTMLElement): void {
             setSelectedMarker("in");
           }
         } else {
-          state.inPoint = snapT(state.t); // identity unless onset snap is ON
-          refreshIO();
+          store.set({ inPoint: snapT(state.t) }); // identity unless onset snap is ON
           setSelectedMarker("in");
         }
         break;
@@ -1836,8 +1837,7 @@ export function mountEditor(root: HTMLElement): void {
             setSelectedMarker("out");
           }
         } else {
-          state.outPoint = snapT(state.t); // identity unless onset snap is ON
-          refreshIO();
+          store.set({ outPoint: snapT(state.t) }); // identity unless onset snap is ON
           setSelectedMarker("out");
         }
         break;
@@ -2189,10 +2189,12 @@ export function mountEditor(root: HTMLElement): void {
     try {
       const p = await platform.probe(source);
       state.source = source;
-      state.dims = { width: p.width, height: p.height };
-      state.duration = p.duration;
-      state.cropdetect = p.cropdetect;
-      state.t = Math.min(state.t, p.duration);
+      store.set({
+        dims: { width: p.width, height: p.height },
+        duration: p.duration,
+        cropdetect: p.cropdetect,
+        t: Math.min(state.t, p.duration),
+      });
       dimsLine.innerHTML =
         '<div class="fl-readgrid">' +
         `<div><span class="k">${escapeHtml(m.source.dimKey)}</span><span class="v">${p.width}×${p.height}</span></div>` +
@@ -2259,7 +2261,7 @@ export function mountEditor(root: HTMLElement): void {
   async function setT(t: number, immediate = false): Promise<void> {
     if (!state.dims) return;
     t = clamp(t, 0, state.duration);
-    state.t = t;
+    store.set({ t });
     tLabel.textContent = `${t.toFixed(3)}s`;
     stageTimeTag.textContent = `t = ${t.toFixed(3)}s`;
     movePlayhead();
@@ -2454,7 +2456,7 @@ export function mountEditor(root: HTMLElement): void {
   video.addEventListener("ended", () => setShuttle(0));
   video.addEventListener("timeupdate", () => {
     if (!videoMode) return;
-    state.t = video.currentTime;
+    store.set({ t: video.currentTime });
     tLabel.textContent = `${state.t.toFixed(3)}s`;
     stageTimeTag.textContent = `t = ${state.t.toFixed(3)}s`;
     movePlayhead();
@@ -3011,6 +3013,16 @@ export function mountEditor(root: HTMLElement): void {
     renderKf(); // keyframe positions are clip-relative to In
     void refreshLoopSeam(); // the seam frames track In/Out while the panel is open
   }
+
+  // Phase 3 (#125): the In/Out readout renders REACTIVELY — any `store.set`
+  // touching the clip window triggers it, so mutation sites no longer call
+  // refreshIO() by hand. (Direct legacy writes don't notify; they keep their
+  // manual calls until their cluster migrates.)
+  store.onChange((changed) => {
+    if (changed.has("inPoint") || changed.has("outPoint") || changed.has("duration")) {
+      refreshIO();
+    }
+  });
 
   /**
    * Drawn-box x for the AI track preview at the current time. The cropPath x is
@@ -3926,8 +3938,7 @@ export function mountEditor(root: HTMLElement): void {
     await load();
     if (!state.dims) return; // load failed — the error is already surfaced
     const r = specToEditorState(spec, state.dims);
-    state.inPoint = r.inPoint;
-    state.outPoint = r.outPoint;
+    store.set({ inPoint: r.inPoint, outPoint: r.outPoint });
     state.contentMode = r.contentMode;
     state.contentBox = r.contentBox;
     state.cropBox = r.cropBox;
