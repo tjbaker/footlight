@@ -39,6 +39,10 @@ export interface ClipRow {
   title?: string;
   /** Vertical placement of the caption block: `top` | `center` | `bottom`. */
   text_position?: string;
+  /** Fade-in length in seconds (video from black + audio from silence). */
+  fade_in?: string;
+  /** Fade-out length in seconds (video to black + audio to silence). */
+  fade_out?: string;
   [key: string]: string | undefined;
 }
 
@@ -93,6 +97,33 @@ export const DEFAULT_RENDER_OPTIONS: RenderOptions = {
   preset: "medium",
   audioBitrate: "copy",
 };
+
+/**
+ * The AAC bitrate forced when a clip has a fade but the render is set to the
+ * default lossless `-c:a copy` (SPEC: issue #165's decide-once rule). An
+ * `afade` must decode and re-encode the audio — a stream copy cannot fade —
+ * so rather than silently dropping the audio fade (mismatched A/V fades feel
+ * broken) or failing the clip, the engine re-encodes that clip's audio at this
+ * bitrate and the callers surface it (CLI log note, GUI hint, README).
+ */
+export const FADE_AUDIO_BITRATE = "256k";
+
+/**
+ * Parse a per-clip fade length (seconds) from its manifest field. Empty/absent
+ * means no fade (0). Anything non-numeric, non-finite, or negative is an error —
+ * better to fail the row early than emit a garbage `fade` filter.
+ */
+export function parseFadeSeconds(value: string | undefined | null, field: string): number {
+  const v = (value ?? "").trim();
+  if (!v) return 0;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new Error(
+      `${field} must be a non-negative number of seconds, got ${JSON.stringify(value)}`,
+    );
+  }
+  return n;
+}
 
 /** Parse `HH:MM:SS`, `MM:SS`, or plain seconds into float seconds. */
 export function parseTimestamp(value: string): number {
@@ -356,6 +387,13 @@ function num(n: number): string {
 export interface BuiltCommand {
   args: string[];
   outPath: string;
+  /**
+   * True when the row has a `fade_in`/`fade_out` but the render asked for the
+   * default lossless `-c:a copy`: an `afade` cannot ride a stream copy, so the
+   * clip's audio was re-encoded to AAC at `FADE_AUDIO_BITRATE` instead. Callers
+   * surface this (CLI log note / GUI hint) so the change is never silent.
+   */
+  forcedAudioReencode: boolean;
 }
 
 /** Options for building an ffmpeg command. */
@@ -417,8 +455,10 @@ function joinPath(dir: string, name: string): string {
  *
  * The filter chain: optional content-crop first, then the 9:16 crop (with an
  * `if()` x-expression for multi-segment schedules), scale to 1080x1920,
- * setsar=1, H.264 encode, and lossless audio copy by default. Dimensions are
- * passed in (already probed) so this stays pure.
+ * setsar=1, optional burned captions, optional per-clip fades (last, so the
+ * captions fade with the video), and lossless audio copy by default — except
+ * when a fade forces an AAC re-encode (see `FADE_AUDIO_BITRATE`). Dimensions
+ * are passed in (already probed) so this stays pure.
  */
 export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand {
   const source = row.source_file.trim();
@@ -429,6 +469,20 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
   if (duration <= 0) {
     throw new Error(`out_point (${end}s) must be after in_point (${start}s)`);
   }
+
+  // Per-clip fades (issue #165). The clip duration is known at build time, so
+  // both fades resolve to fixed start times here. Validate early: a fade pair
+  // longer than the clip would push the fade-out's start before 0 / overlap the
+  // fade-in and render garbage, so it is a manifest error, not a clamp.
+  const fadeIn = parseFadeSeconds(row.fade_in, "fade_in");
+  const fadeOut = parseFadeSeconds(row.fade_out, "fade_out");
+  if (fadeIn + fadeOut > duration) {
+    throw new Error(
+      `fades are longer than the clip: fade_in (${num(fadeIn)}s) + fade_out (${num(fadeOut)}s) ` +
+        `exceed the clip duration (${num(duration)}s) — shorten the fades or widen In/Out`,
+    );
+  }
+  const hasFade = fadeIn > 0 || fadeOut > 0;
 
   const [iw, ih] = opts.dims;
 
@@ -522,15 +576,38 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
     }
     filters.push(sub);
   }
+  // Per-clip fades go LAST — after the burned captions — so the captions fade
+  // in/out with the video instead of floating at full opacity over a black
+  // frame (the polished look). Times are clip-relative: `-ss` before `-i`
+  // resets timestamps to 0, so the fade-in starts at 0 and the fade-out at
+  // duration − length.
+  if (fadeIn > 0) filters.push(`fade=t=in:st=0:d=${f3(fadeIn)}`);
+  if (fadeOut > 0) filters.push(`fade=t=out:st=${f3(duration - fadeOut)}:d=${f3(fadeOut)}`);
   const vf = filters.join(",");
 
   // Audio: default to a lossless stream copy (same codec, bitrate and sample
   // rate as the source) so we never re-compress or resample. Pass a bitrate
   // (e.g. 256k) only if a re-encode is actually needed.
+  //
+  // THE FADE/COPY RULE (issue #165, decided once): a fade needs a matching
+  // `afade`, and `afade` cannot ride a stream copy — the audio must be decoded
+  // and re-encoded. When a clip has a fade and the render asked for "copy",
+  // force an AAC re-encode at FADE_AUDIO_BITRATE for THAT clip and report it
+  // via `forcedAudioReencode` (the CLI logs a note; the GUI hints at it).
+  // Fading only the video was rejected: a hard audio cut under a video fade
+  // reads as broken, and silently ignoring the fade is worse.
+  const forcedAudioReencode = hasFade && opts.audioBitrate === "copy";
+  const audioBitrate = forcedAudioReencode ? FADE_AUDIO_BITRATE : opts.audioBitrate;
   const audioArgs =
-    opts.audioBitrate === "copy"
+    audioBitrate === "copy"
       ? ["-c:a", "copy"]
-      : ["-c:a", "aac", "-b:a", opts.audioBitrate];
+      : ["-c:a", "aac", "-b:a", audioBitrate];
+
+  // Matching audio fades (same lengths/times as the video's).
+  const afades: string[] = [];
+  if (fadeIn > 0) afades.push(`afade=t=in:st=0:d=${f3(fadeIn)}`);
+  if (fadeOut > 0) afades.push(`afade=t=out:st=${f3(duration - fadeOut)}:d=${f3(fadeOut)}`);
+  const audioFilterArgs = afades.length > 0 ? ["-af", afades.join(",")] : [];
 
   const args = [
     "-hide_banner",
@@ -554,13 +631,14 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
     String(opts.crf),
     "-pix_fmt",
     "yuv420p",
+    ...audioFilterArgs,
     ...audioArgs,
     "-movflags",
     "+faststart",
     outPath,
   ];
 
-  return { args, outPath };
+  return { args, outPath, forcedAudioReencode };
 }
 
 /** Vertical placement of the burned caption block in the 1080×1920 frame. */

@@ -82,6 +82,10 @@ export const es: Messages = {
             text: "El In y el Out marcan el inicio y el final del clip. Defínelos de tres maneras: arrastrando sobre la línea de tiempo de volumen (lo más rápido), haciendo clic en Marcar In / Marcar Out en el fotograma actual, o pulsando I / O. La lectura muestra in / out / duración; los tiempos de fotogramas clave y de seguimiento automático se miden desde el In.",
           },
           {
+            kind: "p",
+            text: "Fundido de entrada / Fundido de salida (segundos, junto a la lectura de In/Out) funden el video del clip desde/hacia negro y su audio desde/hacia silencio — los subtítulos incrustados se funden con la imagen. Un fundido obliga a recodificar el audio de ese clip como AAC 256k, porque una copia de audio sin pérdidas no puede fundirse. El interruptor Unión del bucle muestra el primer y el último fotograma del clip lado a lado, para que recortes hasta un bucle visualmente limpio (el último fotograma corta directo al primero cuando el clip se repite).",
+          },
+          {
             kind: "tip",
             text: "Haz clic en un marcador de In o Out en la línea de tiempo para seleccionarlo, luego ajústalo fotograma a fotograma con ← / → (mantén Shift para ±0,1s).",
           },
@@ -589,6 +593,19 @@ export const es: Messages = {
       outKey: "out",
       durKey: "dur",
       offsetKey: "desplazamiento",
+      fadeInLabel: "Fundido de entrada",
+      fadeInTitle:
+        "Funde el clip desde negro (y el audio desde silencio) durante estos segundos.",
+      fadeOutLabel: "Fundido de salida",
+      fadeOutTitle:
+        "Funde el clip hacia negro (y el audio hacia silencio) durante estos segundos.",
+      fadeAudioHint:
+        "Los fundidos recodifican el audio de este clip (AAC 256k) — una copia sin pérdidas no puede fundirse.",
+      loopSeam: "Unión del bucle",
+      loopSeamTitle:
+        "Muestra el primer y el último fotograma del clip lado a lado para comprobar cómo hace bucle (último → primero).",
+      loopSeamInLabel: "Fotograma In",
+      loopSeamOutLabel: "Fotograma Out",
     },
     framing: {
       header: "Encuadre",
@@ -804,6 +821,7 @@ export const es: Messages = {
       outAfterIn: "El Out debe ir después del In.",
       addAtLeastOne: "Añade al menos un clip a la cola.",
       previewPlayerFailed: "el reproductor de vista previa no pudo cargar este origen",
+      fadesTooLong: "Los fundidos duran más que el clip — acórtalos o amplía el In/Out.",
     },
     common: {
       close: "Cerrar",

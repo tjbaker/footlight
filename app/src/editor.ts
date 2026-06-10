@@ -95,6 +95,13 @@ import {
 } from "./editor-offset.js";
 import { assembleAssistantContext, sampleChatStills } from "./editor-chat-context.js";
 import { applyCommitToState } from "./editor-commit.js";
+import {
+  parseFadeField,
+  fadesToSpec,
+  fadesFromSpec,
+  fadesFit,
+  loopSeamTimes,
+} from "./editor-fades.js";
 import { createInitialEditorState, hasActiveTrack } from "./editor-store.js";
 import {
   assistantSelection,
@@ -494,6 +501,78 @@ export function mountEditor(root: HTMLElement): void {
     readCell(kSpan(m.clip.offsetKey), offsetVal),
   );
   clipSect.append(ioRow, ioGrid);
+
+  // Per-clip fades (#165): two small numeric fields. A fade forces that clip's
+  // audio to re-encode (an afade can't ride `-c:a copy`), so the hint shows
+  // whenever any fade is set.
+  const fadeRow = el("div", "fl-rowg");
+  fadeRow.style.marginTop = "8px";
+  const mkFadeInput = (label: string, title: string, set: (v: number) => void): HTMLInputElement => {
+    const lab = el("span", "fl-rowlab");
+    lab.textContent = label;
+    const inp = input("number", "0");
+    inp.title = title;
+    inp.min = "0";
+    inp.step = "0.1";
+    inp.classList.add("mono");
+    inp.style.maxWidth = "70px";
+    inp.addEventListener("input", () => {
+      set(parseFadeField(inp.value));
+      refreshFadeHint();
+    });
+    fadeRow.append(lab, inp);
+    return inp;
+  };
+  const fadeInInput = mkFadeInput(m.clip.fadeInLabel, m.clip.fadeInTitle, (v) => (state.fadeIn = v));
+  const fadeOutInput = mkFadeInput(m.clip.fadeOutLabel, m.clip.fadeOutTitle, (v) => (state.fadeOut = v));
+  const fadeHint = el("div", "hint");
+  fadeHint.textContent = m.clip.fadeAudioHint;
+  fadeHint.style.display = "none";
+  function refreshFadeHint(): void {
+    fadeHint.style.display = state.fadeIn > 0 || state.fadeOut > 0 ? "" : "none";
+  }
+
+  // Loop-seam check (#165): the clip's LAST frame next to its In frame — the
+  // exact join the viewer sees when the clip loops (last → first).
+  const seamPanel = el("div", "fl-loopseam");
+  seamPanel.style.cssText = "display:none; gap:6px; margin-top:8px;";
+  const mkSeamCell = (label: string): { wrap: HTMLElement; img: HTMLImageElement } => {
+    const wrap = el("div");
+    wrap.style.cssText = "flex:1; min-width:0;";
+    const img = document.createElement("img");
+    img.alt = label;
+    img.style.cssText = "width:100%; display:block; border-radius:4px;";
+    const cap = el("div", "hint");
+    cap.textContent = label;
+    wrap.append(img, cap);
+    return { wrap, img };
+  };
+  const seamOut = mkSeamCell(m.clip.loopSeamOutLabel);
+  const seamIn = mkSeamCell(m.clip.loopSeamInLabel);
+  seamPanel.append(seamOut.wrap, seamIn.wrap); // out first — the loop reads out → in
+  let seamOpen = false;
+  const seamBtn = button(m.clip.loopSeam, "fl-btn sm ghost", () => {
+    seamOpen = !seamOpen;
+    seamBtn.classList.toggle("primary", seamOpen);
+    seamPanel.style.display = seamOpen ? "flex" : "none";
+    void refreshLoopSeam();
+  });
+  seamBtn.title = m.clip.loopSeamTitle;
+  async function refreshLoopSeam(): Promise<void> {
+    if (!seamOpen || !state.source || state.inPoint == null || state.outPoint == null) return;
+    const { inT, outT } = loopSeamTimes(state.inPoint, state.outPoint, state.fps);
+    try {
+      const [outUrl, inUrl] = await Promise.all([
+        extractCached(state.source, outT),
+        extractCached(state.source, inT),
+      ]);
+      seamOut.img.src = outUrl;
+      seamIn.img.src = inUrl;
+    } catch {
+      /* best-effort: a failed frame leaves the previous image in place */
+    }
+  }
+  clipSect.append(fadeRow, fadeHint, seamBtn, seamPanel);
 
   const framingSect = el("div", "fl-sect");
   framingSect.append(sectionHeader(m.framing.header));
@@ -2710,6 +2789,7 @@ export function mountEditor(root: HTMLElement): void {
     if (valEl) valEl.textContent = dur;
     renderRegion();
     renderKf(); // keyframe positions are clip-relative to In
+    void refreshLoopSeam(); // the seam frames track In/Out while the panel is open
   }
 
   /**
@@ -3320,6 +3400,10 @@ export function mountEditor(root: HTMLElement): void {
     if (state.inPoint == null || state.outPoint == null)
       return flashErr(m.errors.setInOut);
     if (state.outPoint <= state.inPoint) return flashErr(m.errors.outAfterIn);
+    // Mirror the engine's early fade validation so the queue never holds a clip
+    // the render would reject.
+    if (!fadesFit({ fadeIn: state.fadeIn, fadeOut: state.fadeOut }, state.outPoint - state.inPoint))
+      return flashErr(m.errors.fadesTooLong);
 
     const spec: ClipSpec = {
       source_file: state.source,
@@ -3356,6 +3440,8 @@ export function mountEditor(root: HTMLElement): void {
     const title = state.title.trim();
     if (hook) spec.hook = hook;
     if (title) spec.title = title;
+    // Per-clip fades (#165) — sparse: a clip without fades carries neither field.
+    Object.assign(spec, fadesToSpec({ fadeIn: state.fadeIn, fadeOut: state.fadeOut }));
     // Omit the default (bottom-center, stored as "bottom") to keep manifests clean.
     if ((hook || title) && state.textPosition !== "bottom") spec.text_position = state.textPosition;
     // Per-clip caption style (omitting engine defaults). Only meaningful with text.
@@ -3660,6 +3746,12 @@ export function mountEditor(root: HTMLElement): void {
     titleCapInput.value = state.title;
     autosize(hookInput);
     autosize(titleCapInput);
+    const fades = fadesFromSpec(spec);
+    state.fadeIn = fades.fadeIn;
+    state.fadeOut = fades.fadeOut;
+    fadeInInput.value = fades.fadeIn > 0 ? String(fades.fadeIn) : "";
+    fadeOutInput.value = fades.fadeOut > 0 ? String(fades.fadeOut) : "";
+    refreshFadeHint();
     syncSelectsFromPos();
     state.caption = captionStyleFromSpec(spec.caption);
     syncCaptionControls();

@@ -82,6 +82,10 @@ export const en: Messages = {
             text: "In and Out mark the clip's start and end. Set them three ways: drag across the loudness timeline (quickest), click Set In / Set Out at the current frame, or press I / O. The readout shows in / out / duration; keyframe and auto-track times are measured from In.",
           },
           {
+            kind: "p",
+            text: "Fade in / Fade out (seconds, next to the In/Out readout) fade the clip's video from/to black and its audio from/to silence — burned captions fade with the picture. A fade forces that clip's audio to re-encode as AAC 256k, since a lossless audio copy cannot fade. The Loop seam toggle shows the clip's first and last frames side by side, so you can trim to a visually clean loop (the last frame cuts straight back to the first when the clip loops).",
+          },
+          {
             kind: "tip",
             text: "Click an In or Out marker on the timeline to select it, then nudge it a frame at a time with ← / → (hold Shift for ±0.1s).",
           },
@@ -589,6 +593,18 @@ export const en: Messages = {
       outKey: "out",
       durKey: "dur",
       offsetKey: "offset",
+      fadeInLabel: "Fade in",
+      fadeInTitle:
+        "Fade the clip in from black (and the audio up from silence) over this many seconds.",
+      fadeOutLabel: "Fade out",
+      fadeOutTitle:
+        "Fade the clip out to black (and the audio down to silence) over this many seconds.",
+      fadeAudioHint: "Fades re-encode this clip's audio (AAC 256k) — a lossless copy can't fade.",
+      loopSeam: "Loop seam",
+      loopSeamTitle:
+        "Show the clip's first and last frames side by side to check how it loops (last → first).",
+      loopSeamInLabel: "In frame",
+      loopSeamOutLabel: "Out frame",
     },
     framing: {
       header: "Framing",
@@ -804,6 +820,7 @@ export const en: Messages = {
       outAfterIn: "Out must be after In.",
       addAtLeastOne: "Add at least one clip to the queue.",
       previewPlayerFailed: "the preview player could not load this source",
+      fadesTooLong: "Fades are longer than the clip — shorten them or widen In/Out.",
     },
     common: {
       close: "Close",

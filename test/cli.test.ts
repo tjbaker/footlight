@@ -161,6 +161,88 @@ describe("render JSON manifest (dry-run)", () => {
     expect(stdout).not.toContain("x='"); // no eased/scheduled expression
   });
 
+  it("fades: emits fade/afade filters, forces the AAC re-encode, and logs the note", () => {
+    const dir = tmp();
+    const src = join(dir, "src.mp4");
+    execFileSync("ffmpeg", [
+      "-hide_banner", "-loglevel", "error", "-y",
+      "-f", "lavfi", "-i", "testsrc=size=1920x1080:rate=30:duration=2",
+      "-frames:v", "30", src,
+    ]);
+
+    const manifest: ClipSpec[] = [
+      {
+        source_file: src,
+        in_point: "0",
+        out_point: "2",
+        crop_offset: "center",
+        fade_in: 0.25,
+        fade_out: 0.5,
+      },
+    ];
+    const manifestPath = join(dir, "m.json");
+    writeFileSync(manifestPath, serializeManifestJSON(manifest));
+
+    const { stdout, code } = runCli([
+      "render", manifestPath, "--outdir", join(dir, "out"), "--dry-run",
+    ]);
+    expect(code).toBe(0);
+
+    // Video fades last in -vf; matching afades in -af.
+    expect(stdout).toContain("fade=t=in:st=0:d=0.250");
+    expect(stdout).toContain("fade=t=out:st=1.500:d=0.500");
+    expect(stdout).toContain("-af afade=t=in:st=0:d=0.250,afade=t=out:st=1.500:d=0.500");
+    // THE AUDIO RULE: default --audio-bitrate copy is overridden, audibly noted.
+    expect(stdout).toContain("-c:a aac -b:a 256k");
+    expect(stdout).not.toContain("-c:a copy");
+    expect(stdout).toContain("note: fades need an audio re-encode");
+  });
+
+  it("fades: a real (non-dry-run) faded render encodes and the output has AAC audio", () => {
+    const dir = tmp();
+    const src = join(dir, "src.mp4");
+    // A tiny real source WITH an audio track (the fade rule re-encodes audio).
+    execFileSync("ffmpeg", [
+      "-hide_banner", "-loglevel", "error", "-y",
+      "-f", "lavfi", "-i", "testsrc=size=1920x1080:rate=30:duration=2",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+      "-shortest", "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac", src,
+    ]);
+
+    const manifest: ClipSpec[] = [
+      {
+        source_file: src,
+        in_point: "0",
+        out_point: "1.5",
+        crop_offset: "center",
+        out_name: "fade_smoke",
+        fade_in: 0.25,
+        fade_out: 0.25,
+      },
+    ];
+    const manifestPath = join(dir, "m.json");
+    writeFileSync(manifestPath, serializeManifestJSON(manifest));
+
+    const outdir = join(dir, "out");
+    const { stdout, code } = runCli([
+      "render", manifestPath, "--outdir", outdir, "--crf", "35", "--preset", "ultrafast",
+    ]);
+    expect(code).toBe(0);
+    expect(stdout).toContain("note: fades need an audio re-encode");
+
+    // The rendered file exists and its audio stream is AAC (re-encoded, not copied).
+    const codec = execFileSync(
+      "ffprobe",
+      [
+        "-v", "error", "-select_streams", "a:0",
+        "-show_entries", "stream=codec_name", "-of", "csv=p=0",
+        join(outdir, "fade_smoke.mp4"),
+      ],
+      { encoding: "utf8" },
+    ).trim();
+    expect(codec).toBe("aac");
+  });
+
   it("errors on a malformed JSON manifest", () => {
     const dir = tmp();
     const manifestPath = join(dir, "bad.json");

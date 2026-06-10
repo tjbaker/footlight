@@ -244,6 +244,18 @@ export interface EditorMessages {
     outKey: string;
     durKey: string;
     offsetKey: string;
+    /** Per-clip fade controls (issue #165). */
+    fadeInLabel: string;
+    fadeInTitle: string;
+    fadeOutLabel: string;
+    fadeOutTitle: string;
+    /** Shown when any fade is set: fades force an AAC audio re-encode. */
+    fadeAudioHint: string;
+    /** Loop-seam check: toggle label/tooltip + the two frame captions. */
+    loopSeam: string;
+    loopSeamTitle: string;
+    loopSeamInLabel: string;
+    loopSeamOutLabel: string;
   };
   /** Framing section + crop readouts. */
   framing: {
@@ -466,6 +478,8 @@ export interface EditorMessages {
     outAfterIn: string;
     addAtLeastOne: string;
     previewPlayerFailed: string;
+    /** The fades don't fit: fade_in + fade_out exceed the clip duration. */
+    fadesTooLong: string;
   };
   /** Shared, reused short labels. */
   common: {
