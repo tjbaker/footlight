@@ -306,6 +306,7 @@ export const en: Messages = {
               "Click a card to re-open that clip for editing; drag cards to reorder.",
               "Duplicate a card for a second framing of the same moment; ✕ removes it.",
               "Export JSON saves the queue as a manifest you can keep or feed to the CLI (footlight render).",
+              "Export cover saves the current frame — through the active framing, exactly as the render would crop it — as a 1080×1920 PNG, ready to upload as the post's cover image.",
               "Clear resets the workspace — source, queue, and framing — to start fresh; export first if you want to keep the queue.",
             ],
           },
@@ -768,6 +769,9 @@ export const en: Messages = {
       addClip: "+ add clip",
       exportJson: "Export JSON",
       exportJsonTitle: "Save the queue as a JSON manifest (re-imports via footlight render)",
+      exportCover: "Export cover",
+      exportCoverTitle:
+        "Save the current frame, through the active framing, as a 1080×1920 PNG cover image.",
       renderN: "Render",
       cardEditTitle: "Click to re-open this clip for editing · drag to reorder",
       duplicateTitle: "Duplicate (e.g. a second framing of this moment)",
@@ -792,6 +796,7 @@ export const en: Messages = {
       noScenes: "No scene cuts detected (threshold 0.4).",
       stagedForRender:
         "Assistant staged the queue for render. Press Render when you're ready — I never encode automatically.",
+      coverExported: "Cover image saved.",
       copied: "✓ Copied",
       copyFailed: "Copy failed",
       copyIdle: "⧉ Copy",

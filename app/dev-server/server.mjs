@@ -14,6 +14,8 @@
  *   GET  /probe?source=<path>          -> JSON {width,height,duration,cropdetect}
  *   GET  /scenes?source=<path>         -> JSON number[]  (scene-cut seconds)
  *   GET  /loudness?source=<path>       -> JSON number[]  (normalized 0..1 envelope)
+ *   POST /cover    (?source=&t=, body = ClipSpec JSON) -> image/png (the frame
+ *                                         at t through the clip's active framing)
  *   POST /track    (body = track request JSON)     -> JSON TrackSample[]
  *   POST /render   (body = manifest JSON, ?outdir=) -> JSON {ok, log}
  *   GET  /check-outdir   (?outdir=<path>) -> JSON {ok, resolved, error?}
@@ -51,6 +53,7 @@ import {
   bucketLufs,
   bucketLoudness,
   onsetEnvelope,
+  coverFrameArgs,
   LOUDNESS_BUCKETS,
 } from "../../dist/core.js";
 
@@ -129,6 +132,68 @@ async function handleFrame(source, t, res) {
   }
   res.writeHead(200, {
     "Content-Type": "image/jpeg",
+    "Content-Length": result.stdout.length,
+    "Cache-Control": "no-store",
+  });
+  res.end(result.stdout);
+}
+
+/**
+ * POST /cover — export the frame at source time `t` through the posted
+ * ClipSpec's ACTIVE framing as a 1080×1920 PNG (issue #166). Probes the source
+ * dimensions, builds the shared `coverFrameArgs` command (which evaluates the
+ * crop offset AT t — fixed offset, schedule segment, eased cropPath, or
+ * punch-in cropWindow), and streams the PNG from ffmpeg's stdout — the same
+ * pattern as `handleFrame`, but through the clip's render crop math.
+ */
+async function handleCover(source, t, body, res) {
+  let spec;
+  try {
+    spec = JSON.parse(body || "{}");
+  } catch {
+    sendText(res, 400, "cover spec is not valid JSON");
+    return;
+  }
+
+  const probe = await run("ffprobe", ffprobeStreamArgs(source));
+  if (probe.code !== 0) {
+    sendText(res, 500, `ffprobe failed: ${probe.stderr}`);
+    return;
+  }
+  let info;
+  try {
+    info = parseProbe(probe.stdout);
+  } catch {
+    sendText(res, 500, "ffprobe returned unparseable output");
+    return;
+  }
+
+  const row = {
+    source_file: source,
+    in_point: spec.in_point ?? "0",
+    out_point: spec.out_point ?? "0",
+    crop_offset: spec.crop_offset,
+    content_crop: spec.content_crop,
+  };
+  let args;
+  try {
+    args = coverFrameArgs(row, Number(t), {
+      dims: [info.width, info.height],
+      cropPath: spec.cropPath,
+      cropWindow: spec.cropWindow,
+    });
+  } catch (err) {
+    sendText(res, 400, `bad cover spec: ${err?.message ?? err}`);
+    return;
+  }
+
+  const result = await run("ffmpeg", args, { collectStdoutBinary: true });
+  if (result.code !== 0 || result.stdout.length === 0) {
+    sendText(res, 500, `cover export failed: ${result.stderr || "no output"}`);
+    return;
+  }
+  res.writeHead(200, {
+    "Content-Type": "image/png",
     "Content-Length": result.stdout.length,
     "Cache-Control": "no-store",
   });
@@ -537,6 +602,16 @@ export function createRequestListener({
         const source = url.searchParams.get("source");
         if (!source) return sendText(res, 400, "missing source");
         return await handleVideo(source, req, res);
+      }
+
+      if (req.method === "POST" && url.pathname === "/cover") {
+        const source = url.searchParams.get("source");
+        const t = url.searchParams.get("t") || "0";
+        if (!source) return sendText(res, 400, "missing source");
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const body = Buffer.concat(chunks).toString("utf8");
+        return await handleCover(source, t, body, res);
       }
 
       if (req.method === "POST" && url.pathname === "/track") {

@@ -449,3 +449,60 @@ describe("static / no-network capabilities", () => {
     expect(await webPlatform.pickDirectory()).toBeNull();
   });
 });
+
+describe("exportCover", () => {
+  // The cover spec the editor sends — framing fields only matter to the server.
+  const spec = {
+    source_file: "/v/show.mp4",
+    in_point: "10.000",
+    out_point: "20.000",
+    crop_offset: "center",
+  } as Parameters<typeof webPlatform.exportCover>[2];
+
+  it("POSTs the spec JSON to /cover with source+t and downloads the PNG", async () => {
+    // The happy path touches the DOM download dance — stub the pieces.
+    const clicked: Array<{ href: string; download: string }> = [];
+    const fakeAnchor = {
+      href: "",
+      download: "",
+      click(): void {
+        clicked.push({ href: this.href, download: this.download });
+      },
+      remove(): void {},
+    };
+    (globalThis as Record<string, unknown>).document = {
+      createElement: () => fakeAnchor,
+      body: { appendChild: () => undefined },
+    };
+    const urlAny = URL as unknown as Record<string, unknown>;
+    const hadCreate = "createObjectURL" in URL;
+    urlAny.createObjectURL = () => "blob:cover";
+    urlAny.revokeObjectURL = () => undefined;
+
+    try {
+      fetchMock.mockResolvedValue(
+        ok({ blob: async () => ({ size: 3 }) as unknown as Blob }),
+      );
+      const saved = await webPlatform.exportCover("/v/show.mp4", 12.5, spec, "x_cover.png");
+      expect(saved).toBe(true);
+
+      const [url, init] = fetchMock.mock.calls.at(-1)! as [string, RequestInit];
+      expect(url).toBe(
+        `${BASE}/cover?source=${encodeURIComponent("/v/show.mp4")}&t=12.5`,
+      );
+      expect(init.method).toBe("POST");
+      expect(JSON.parse(String(init.body))).toEqual(spec);
+      expect(clicked).toEqual([{ href: "blob:cover", download: "x_cover.png" }]);
+    } finally {
+      delete (globalThis as Record<string, unknown>).document;
+      if (!hadCreate) delete urlAny.createObjectURL;
+    }
+  });
+
+  it("throws with the server detail on a non-OK response", async () => {
+    fetchMock.mockResolvedValueOnce(fail(400, "bad cover spec"));
+    await expect(
+      webPlatform.exportCover("/v.mp4", 0, spec, "c.png"),
+    ).rejects.toThrow(/cover failed \(400\): bad cover spec/);
+  });
+});

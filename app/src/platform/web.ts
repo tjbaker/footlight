@@ -8,6 +8,7 @@
  * toolchain.
  */
 
+import type { ClipSpec } from "@manifest";
 import type {
   FootlightPlatform,
   FontInfo,
@@ -137,6 +138,39 @@ export const webPlatform: FootlightPlatform = {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
+  },
+
+  // Cover-frame export (issue #166): the dev server probes the source, runs the
+  // engine's `coverFrameArgs` at t with the spec's active framing, and streams
+  // the 1080×1920 PNG back; we download it like exportTextFile does (the browser
+  // owns where it lands, so a successful response resolves true).
+  async exportCover(
+    source: string,
+    t: number,
+    spec: ClipSpec,
+    suggestedName: string,
+  ): Promise<boolean> {
+    const url = `${BASE}/cover?source=${encodeURIComponent(source)}&t=${encodeURIComponent(
+      String(t),
+    )}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(spec),
+    });
+    if (!res.ok) {
+      throw new Error(`cover failed (${res.status}): ${await res.text()}`);
+    }
+    const blob = await res.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objUrl;
+    a.download = suggestedName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objUrl), 1000);
     return true;
   },
 

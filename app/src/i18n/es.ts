@@ -306,6 +306,7 @@ export const es: Messages = {
               "Haz clic en una tarjeta para reabrir ese clip y editarlo; arrastra las tarjetas para reordenarlas.",
               "Duplica una tarjeta para un segundo encuadre del mismo momento; ✕ la elimina.",
               "Exportar JSON guarda la cola como un manifiesto que puedes conservar o pasar a la CLI (footlight render).",
+              "Exportar portada guarda el fotograma actual — con el encuadre activo, exactamente como lo recortaría el renderizado — como un PNG de 1080×1920, listo para subir como portada de la publicación.",
               "Borrar restablece el espacio de trabajo — origen, cola y encuadre — para empezar de cero; exporta primero si quieres conservar la cola.",
             ],
           },
@@ -769,6 +770,9 @@ export const es: Messages = {
       addClip: "+ añadir clip",
       exportJson: "Exportar JSON",
       exportJsonTitle: "Guarda la cola como un manifiesto JSON (se reimporta con footlight render)",
+      exportCover: "Exportar portada",
+      exportCoverTitle:
+        "Guarda el fotograma actual, con el encuadre activo, como una imagen de portada PNG de 1080×1920.",
       renderN: "Renderizar",
       cardEditTitle: "Haz clic para reabrir este clip y editarlo · arrastra para reordenar",
       duplicateTitle: "Duplicar (p. ej. un segundo encuadre de este momento)",
@@ -793,6 +797,7 @@ export const es: Messages = {
       noScenes: "No se detectaron cortes de escena (umbral 0,4).",
       stagedForRender:
         "El asistente preparó la cola para renderizar. Pulsa Renderizar cuando estés listo — nunca codifico automáticamente.",
+      coverExported: "Imagen de portada guardada.",
       copied: "✓ Copiado",
       copyFailed: "Copia fallida",
       copyIdle: "⧉ Copiar",

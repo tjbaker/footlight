@@ -306,6 +306,7 @@ export const ptBR: Messages = {
               "Clique em um cartão para reabrir aquele clipe para edição; arraste os cartões para reordenar.",
               "Duplique um cartão para um segundo enquadramento do mesmo momento; ✕ o remove.",
               "Exportar JSON salva a fila como um manifesto que você pode guardar ou usar na CLI (footlight render).",
+              "Exportar capa salva o quadro atual — com o enquadramento ativo, exatamente como a renderização o cortaria — como um PNG de 1080×1920, pronto para enviar como capa da publicação.",
               "Limpar redefine o espaço de trabalho — origem, fila e enquadramento — para começar do zero; exporte primeiro se quiser manter a fila.",
             ],
           },
@@ -769,6 +770,9 @@ export const ptBR: Messages = {
       addClip: "+ adicionar clipe",
       exportJson: "Exportar JSON",
       exportJsonTitle: "Salva a fila como um manifesto JSON (reimporta via footlight render)",
+      exportCover: "Exportar capa",
+      exportCoverTitle:
+        "Salva o quadro atual, com o enquadramento ativo, como uma imagem de capa PNG de 1080×1920.",
       renderN: "Renderizar",
       cardEditTitle: "Clique para reabrir este clipe para edição · arraste para reordenar",
       duplicateTitle: "Duplicar (ex.: um segundo enquadramento deste momento)",
@@ -793,6 +797,7 @@ export const ptBR: Messages = {
       noScenes: "Nenhum corte de cena detectado (limite 0,4).",
       stagedForRender:
         "O assistente preparou a fila para renderização. Pressione Renderizar quando estiver pronto — eu nunca codifico automaticamente.",
+      coverExported: "Imagem de capa salva.",
       copied: "✓ Copiado",
       copyFailed: "A cópia falhou",
       copyIdle: "⧉ Copiar",
