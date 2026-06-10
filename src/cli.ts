@@ -33,6 +33,7 @@ import {
   type ClipRow,
   type CropPathKeyframe,
   type CropWindowSpec,
+  type CropWindowKeyframe,
   DEFAULT_RENDER_OPTIONS,
 } from "./engine.js";
 import type { ClipSpec, CaptionStyle } from "./manifest.js";
@@ -134,6 +135,8 @@ interface RenderItem {
   row: ClipRow;
   cropPath?: CropPathKeyframe[];
   cropWindow?: CropWindowSpec;
+  /** Animated punch-in keyframes (JSON manifest); highest framing precedence. */
+  cropWindowPath?: CropWindowKeyframe[];
   /** Per-clip caption styling (JSON manifest); merged over the render-wide flags. */
   caption?: CaptionStyle;
 }
@@ -322,6 +325,7 @@ async function cmdRender(argv: string[]): Promise<number> {
           dims,
           cropPath,
           cropWindow: items[i]!.cropWindow,
+          cropWindowPath: items[i]!.cropWindowPath,
           burnCaptions,
           ...(captionAssPath ? { captionAssPath } : {}),
           ...(clipFontFile ? { captionFontFile: clipFontFile } : {}),
@@ -450,7 +454,26 @@ function parseJsonManifest(text: string): RenderItem[] {
       cropWindow = { x, y, w, h };
     }
 
-    return { row, cropPath, cropWindow, caption };
+    let cropWindowPath: CropWindowKeyframe[] | undefined;
+    if (spec.cropWindowPath !== undefined) {
+      if (!Array.isArray(spec.cropWindowPath)) {
+        throw new Error(`clip [${i}] cropWindowPath must be an array of {t,x,y,w,h}`);
+      }
+      cropWindowPath = spec.cropWindowPath.map((kf, k) => {
+        const raw = kf as Partial<Record<"t" | "x" | "y" | "w" | "h", unknown>>;
+        const t = Number(raw.t);
+        const x = Number(raw.x);
+        const y = Number(raw.y);
+        const w = Number(raw.w);
+        const h = Number(raw.h);
+        if (![t, x, y, w, h].every((n) => Number.isFinite(n))) {
+          throw new Error(`clip [${i}] cropWindowPath[${k}] needs numeric t, x, y, w, h`);
+        }
+        return { t, x, y, w, h };
+      });
+    }
+
+    return { row, cropPath, cropWindow, cropWindowPath, caption };
   });
 }
 
