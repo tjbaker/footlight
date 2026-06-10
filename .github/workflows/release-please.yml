@@ -18,5 +18,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v5
+        id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+      # release-please bumps app/src-tauri/Cargo.toml's version but cannot
+      # reliably edit the [[package]] entry in Cargo.lock (its jsonpath updater
+      # can't target a workspace member by name), which left the lockfile stale
+      # and broke the `cargo test --locked` CI job on main. Sync it on the
+      # release PR branch ourselves — deterministic, no cargo needed.
+      - if: ${{ steps.release.outputs.prs_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: release-please--branches--main--components--footlight
+        run: |
+          git clone --branch "$BRANCH" --depth 1 \
+            "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" repo
+          cd repo
+          VERSION=$(node -p "require('./package.json').version")
+          python3 - "$VERSION" <<'PY'
+          import re, sys, pathlib
+          version = sys.argv[1]
+          p = pathlib.Path("app/src-tauri/Cargo.lock")
+          s = p.read_text()
+          s2 = re.sub(r'(name = "footlight"\nversion = )"[^"]*"', r'\1"%s"' % version, s, count=1)
+          p.write_text(s2)
+          print("changed" if s2 != s else "unchanged")
+          PY
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "chore: sync Cargo.lock to the release version"
+            git push origin "$BRANCH"
+          fi

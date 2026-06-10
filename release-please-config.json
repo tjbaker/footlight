@@ -7,8 +7,7 @@
       "extra-files": [
         { "type": "json", "path": "app/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "app/src-tauri/tauri.conf.json", "jsonpath": "$.version" },
-        { "type": "toml", "path": "app/src-tauri/Cargo.toml", "jsonpath": "$.package.version" },
-        { "type": "toml", "path": "app/src-tauri/Cargo.lock", "jsonpath": "$.package[?(@.name=='footlight')].version" }
+        { "type": "toml", "path": "app/src-tauri/Cargo.toml", "jsonpath": "$.package.version" }
       ]
     }
   },
