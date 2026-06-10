@@ -129,6 +129,7 @@ import {
 } from "./icons.js";
 import { openHistoryModal } from "./views/history.js";
 import { buildQueueStrip } from "./views/queue.js";
+import { buildActivityPanel } from "./views/activity.js";
 import {
   assistantSelection,
   renderOptions,
@@ -152,6 +153,29 @@ export function mountEditor(root: HTMLElement): void {
   // changes instead of being invoked by hand at every mutation site.
   const store = createEditorStore();
   const state = store.state;
+
+  const isTauri = platformName === "tauri";
+
+  // Activity / Output panel (views/activity.ts) — built EARLY so the top bar's
+  // activity toggle, the theme toggle (pushTheme), and every `setOutput` call
+  // site can reference its handles. The toggle BUTTON stays here; the view
+  // reflects its open / has-output state back via onToggleState.
+  const activityToggle = button("", "fl-iconbtn");
+  activityToggle.innerHTML = ICON_ACTIVITY;
+  activityToggle.title = m.topbar.activityTitle;
+  const activity = buildActivityPanel({
+    isTauri,
+    onToggleState: (s) => {
+      activityToggle.classList.toggle("on", s.on);
+      activityToggle.classList.toggle("has-output", s.hasOutput);
+    },
+  });
+  activityToggle.addEventListener("click", () => {
+    if (isTauri) void activity.toggleNative();
+    else activity.setOpen(!activity.isOpen());
+  });
+  const setOutput = activity.setOutput;
+  const setOutDir = activity.setOutDir;
 
   const autoTrack: AutoTrackSettings = loadAutoTrackSettings();
   // The BYOK Gemini key lives in the OS keychain (via `secretStore`), not in the
@@ -187,12 +211,6 @@ export function mountEditor(root: HTMLElement): void {
   const actions = el("div", "fl-actions");
   const renderBtn = button(m.topbar.render, "fl-btn primary", doRender);
   renderBtn.title = m.topbar.renderTitle;
-  const activityToggle = button("", "fl-iconbtn", () => {
-    if (isTauri) void toggleNativeActivity();
-    else setActivityOpen(activityPanel.hidden);
-  });
-  activityToggle.innerHTML = ICON_ACTIVITY;
-  activityToggle.title = m.topbar.activityTitle;
   const historyBtn = button("", "fl-iconbtn", () => void openHistory());
   historyBtn.innerHTML = ICON_HISTORY;
   historyBtn.title = m.topbar.historyTitle;
@@ -240,7 +258,7 @@ export function mountEditor(root: HTMLElement): void {
     document.documentElement.setAttribute("data-theme", next);
     saveTheme(next);
     refreshThemeIcon();
-    void pushTheme(); // keep the separate Activity window's theme in sync
+    void activity.pushTheme(); // keep the separate Activity window's theme in sync
   }
   refreshThemeIcon();
 
@@ -2030,39 +2048,10 @@ export function mountEditor(root: HTMLElement): void {
   appEl.append(topbar, main, timeline, filmstrip);
   root.append(appEl);
 
-  // Activity / Output — a toggleable floating window so render,
-  // scene-detect and auto-track output is available on demand without taking
-  // permanent space in the main UI. Hidden by default; auto-opens on errors.
-  const activityPanel = el("div", "activity");
-  activityPanel.hidden = true;
-  const activityHead = el("div", "activity-head");
-  const activityTitle = el("div", "activity-title");
-  activityTitle.textContent = m.activity.title;
-  const outDirLine = el("div", "hint");
-  const copyLogBtn = button(m.activity.copy, "iconbtn", () => void copyLog());
-  copyLogBtn.title = m.activity.copyTitle;
-  const closeActivityBtn = button("✕", "iconbtn", () => setActivityOpen(false));
-  closeActivityBtn.title = m.activity.closeTitle;
-  activityHead.append(activityTitle, outDirLine, copyLogBtn, closeActivityBtn);
-  const logPre = document.createElement("pre");
-  logPre.className = "log";
-  logPre.textContent = m.activity.placeholder;
-  activityPanel.append(activityHead, logPre);
-
-  // Always-visible toggle (bottom-right) that shows/hides the activity window.
-  // On the native app the Activity log is a SEPARATE OS window (created in Rust);
-  // on the web build it's the in-app floating panel above. lastOutput is the
-  // shared data model, replayed to the native window when it opens.
-  const isTauri = platformName === "tauri";
-  let lastOutput: { text: string; kind: "" | "ok" | "err"; outDir: string } = {
-    text: m.activity.placeholder,
-    kind: "",
-    outDir: "",
-  };
-
-  // The Activity toggle lives in the top bar (created above). On the web build the
-  // floating panel mounts to the body; on Tauri it's a separate OS window (no panel).
-  if (!isTauri) document.body.append(activityPanel);
+  // The Activity / Output panel (views/activity.ts, built at the top of
+  // mountEditor). On the web build its floating panel mounts to the body; on
+  // Tauri the log is a separate OS window (no panel to mount).
+  if (!isTauri) document.body.append(activity.element);
 
   // ---- drag-and-drop to load ----
   // Native Tauri gives us real filesystem paths via its dragDrop event; the web
@@ -2107,110 +2096,6 @@ export function mountEditor(root: HTMLElement): void {
         srcInput.focus();
       }
     });
-  }
-
-  function setActivityOpen(open: boolean): void {
-    activityPanel.hidden = !open;
-    activityToggle.classList.toggle("on", open);
-    if (open) activityToggle.classList.remove("has-output");
-  }
-
-  /** Toggle the native Activity window open/closed; sync the button to its state. */
-  async function toggleNativeActivity(): Promise<void> {
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      const visible = await invoke<boolean>("toggle_activity_window");
-      activityToggle.classList.toggle("on", visible);
-      activityToggle.classList.remove("has-output");
-      if (visible) await pushActivity();
-    } catch {
-      /* ignore */
-    }
-  }
-
-  /** Reveal the native Activity window (used to surface failures). */
-  async function showNativeActivity(): Promise<void> {
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("show_activity_window");
-      activityToggle.classList.add("on");
-      activityToggle.classList.remove("has-output");
-      await pushActivity();
-    } catch {
-      /* ignore */
-    }
-  }
-
-  /** Emit the current output to the native Activity window (Tauri only). */
-  async function pushActivity(): Promise<void> {
-    if (!isTauri) return;
-    try {
-      const { emit } = await import("@tauri-apps/api/event");
-      await emit("activity-log", lastOutput);
-    } catch {
-      /* ignore */
-    }
-  }
-
-  /** Push the current theme to the native Activity window so it matches. */
-  async function pushTheme(): Promise<void> {
-    if (!isTauri) return;
-    try {
-      const { emit } = await import("@tauri-apps/api/event");
-      await emit("theme", document.documentElement.getAttribute("data-theme") || "light");
-    } catch {
-      /* ignore */
-    }
-  }
-
-  // Native window events: when the Activity window signals ready, replay the
-  // latest output AND the current theme; clear the toggle's "on" state when the
-  // user closes the window from its own control.
-  if (isTauri) {
-    void (async () => {
-      try {
-        const { listen } = await import("@tauri-apps/api/event");
-        await listen("activity-ready", () => {
-          void pushActivity();
-          void pushTheme();
-        });
-        await listen("activity-hidden", () => activityToggle.classList.remove("on"));
-      } catch {
-        /* ignore */
-      }
-    })();
-  }
-
-  // Drag the activity window by its header (resize is native via CSS `resize`).
-  {
-    let dragging = false;
-    let offX = 0;
-    let offY = 0;
-    activityHead.addEventListener("pointerdown", (e) => {
-      if ((e.target as HTMLElement).closest("button")) return; // let header buttons work
-      const rect = activityPanel.getBoundingClientRect();
-      offX = e.clientX - rect.left;
-      offY = e.clientY - rect.top;
-      // Switch from bottom/right anchoring to absolute left/top so it follows.
-      activityPanel.style.left = `${rect.left}px`;
-      activityPanel.style.top = `${rect.top}px`;
-      activityPanel.style.right = "auto";
-      activityPanel.style.bottom = "auto";
-      dragging = true;
-      activityHead.setPointerCapture(e.pointerId);
-    });
-    activityHead.addEventListener("pointermove", (e) => {
-      if (!dragging) return;
-      activityPanel.style.left = `${clamp(e.clientX - offX, 0, window.innerWidth - 80)}px`;
-      activityPanel.style.top = `${clamp(e.clientY - offY, 0, window.innerHeight - 40)}px`;
-    });
-    const endDrag = (e: PointerEvent) => {
-      if (!dragging) return;
-      dragging = false;
-      activityHead.releasePointerCapture(e.pointerId);
-    };
-    activityHead.addEventListener("pointerup", endDrag);
-    activityHead.addEventListener("pointercancel", endDrag);
   }
 
   // ---------- behavior ----------
@@ -3747,37 +3632,6 @@ export function mountEditor(root: HTMLElement): void {
   }
 
   /** Write to the shared Output panel (render / scene-detect / auto-track). */
-  function setOutput(text: string, kind: "" | "ok" | "err" = ""): void {
-    lastOutput = { text, kind, outDir: "" };
-    if (isTauri) {
-      void pushActivity();
-      if (kind === "err") void showNativeActivity(); // surface failures
-      return;
-    }
-    // Web build: the in-app floating panel.
-    outDirLine.textContent = "";
-    logPre.className = kind ? `log ${kind}` : "log";
-    logPre.textContent = text;
-    if (kind === "err") setActivityOpen(true);
-    else if (activityPanel.hidden) activityToggle.classList.add("has-output");
-  }
-
-  /** Attach the resolved output directory ("Clips written to …") to the log. */
-  function setOutDir(dir: string): void {
-    lastOutput = { ...lastOutput, outDir: dir };
-    if (isTauri) {
-      void pushActivity();
-      return;
-    }
-    outDirLine.textContent = "";
-    if (dir) {
-      outDirLine.append(document.createTextNode(m.activity.clipsWrittenTo));
-      const s = el("span", "stat");
-      s.textContent = dir;
-      outDirLine.append(s);
-    }
-  }
-
   async function doRender(): Promise<void> {
     if (!state.clips.length) return flashErr(m.errors.addAtLeastOne);
     const outdir = outdirInput.value.trim() || (await platform.defaultOutdir());
@@ -3835,44 +3689,6 @@ export function mountEditor(root: HTMLElement): void {
     } catch (err) {
       setOutput(errMsg(err), "err");
     }
-  }
-
-  /** Copy `text` to the clipboard, flashing brief confirmation on `btn`. */
-  async function copyToClipboard(text: string, btn: HTMLButtonElement): Promise<void> {
-    if (!text.trim()) return;
-    const idle = btn.textContent || m.activity.copyIdle;
-    const done = (ok: boolean) => {
-      btn.textContent = ok ? m.activity.copied : m.activity.copyFailed;
-      window.setTimeout(() => {
-        btn.textContent = idle;
-      }, 1200);
-    };
-    try {
-      await navigator.clipboard.writeText(text);
-      done(true);
-    } catch {
-      // Fallback for webviews without async-clipboard access.
-      try {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.append(ta);
-        ta.select();
-        const ok = document.execCommand("copy");
-        ta.remove();
-        done(ok);
-      } catch {
-        done(false);
-      }
-    }
-  }
-
-  /** Copy the Output panel log. */
-  function copyLog(): void {
-    const text = logPre.textContent ?? "";
-    if (text === m.activity.placeholder) return;
-    void copyToClipboard(text, copyLogBtn);
   }
 
   async function doScenes(): Promise<void> {
