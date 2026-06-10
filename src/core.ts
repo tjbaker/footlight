@@ -479,8 +479,13 @@ export function buildEasedCropWindowFilters(
   const canvasW = `trunc(${srcW}*${TARGET_W}/(${wExpr})/2)*2`;
   const canvasH = `trunc(${srcH}*${TARGET_H}/(${hExpr})/2)*2`;
   filters.push(`scale=w='${canvasW}':h='${canvasH}':eval=frame:flags=lanczos`);
-  const cropX = `min(max((${xExpr})*${TARGET_W}/(${wExpr}),0),iw-${TARGET_W})`;
-  const cropY = `min(max((${yExpr})*${TARGET_H}/(${hExpr}),0),ih-${TARGET_H})`;
+  // Clamp the per-frame crop position against the CANVAS-SIZE EXPRESSION, not
+  // crop's iw/ih: those link constants bind at filter-configure time (the first
+  // frame's size) and do NOT track the per-frame resize, which froze the clamp
+  // at 0 — verified empirically. The canvas formula is pure `t`, so re-stating
+  // it keeps the whole position per-frame-correct.
+  const cropX = `min(max((${xExpr})*${TARGET_W}/(${wExpr}),0),(${canvasW})-${TARGET_W})`;
+  const cropY = `min(max((${yExpr})*${TARGET_H}/(${hExpr}),0),(${canvasH})-${TARGET_H})`;
   filters.push(`crop=${TARGET_W}:${TARGET_H}:x='${cropX}':y='${cropY}'`);
   return filters;
 }
