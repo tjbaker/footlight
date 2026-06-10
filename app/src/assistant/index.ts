@@ -82,10 +82,7 @@ export function createAssistant(opts: CreateAssistantOpts): Assistant {
   const models = resolveModels(opts.selection);
   const platform = opts.platform ?? defaultPlatform;
   const model = makeAssistantModel(models.assistant);
-  const vision = new RealVisionRunner(
-    platform,
-    opts.mock !== undefined ? { mock: opts.mock } : {},
-  );
+  const vision = new RealVisionRunner(platform, opts.mock !== undefined ? { mock: opts.mock } : {});
   return {
     model,
     vision,

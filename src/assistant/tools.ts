@@ -27,10 +27,7 @@ import type { ProposedAction, ToolName } from "./types.js";
 /** Minimal JSON-schema fragment describing a tool's parameters (for function-calling). */
 export interface JsonSchema {
   type: "object";
-  properties: Record<
-    string,
-    { type: "number" | "string" | "boolean"; description: string }
-  >;
+  properties: Record<string, { type: "number" | "string" | "boolean"; description: string }>;
   required: string[];
   additionalProperties: false;
 }
@@ -42,10 +39,12 @@ export interface ToolSpec {
   paramSchema: JsonSchema;
 }
 
-const obj = (
-  properties: JsonSchema["properties"],
-  required: string[],
-): JsonSchema => ({ type: "object", properties, required, additionalProperties: false });
+const obj = (properties: JsonSchema["properties"], required: string[]): JsonSchema => ({
+  type: "object",
+  properties,
+  required,
+  additionalProperties: false,
+});
 
 /** The full tool surface, in a stable order. */
 export const TOOLS: readonly ToolSpec[] = [
@@ -93,7 +92,10 @@ export const TOOLS: readonly ToolSpec[] = [
     paramSchema: obj(
       {
         t: { type: "number", description: "Clip-relative time of the frame to analyze, seconds." },
-        subjectHint: { type: "string", description: "Optional subject description, e.g. 'the guitarist'." },
+        subjectHint: {
+          type: "string",
+          description: "Optional subject description, e.g. 'the guitarist'.",
+        },
       },
       ["t"],
     ),
@@ -103,21 +105,26 @@ export const TOOLS: readonly ToolSpec[] = [
     description:
       "Track a moving subject across one continuous shot and build an eased crop path. Single shot only (no cuts inside).",
     paramSchema: obj(
-      { subjectHint: { type: "string", description: "Subject to follow, e.g. 'the person playing guitar'." } },
+      {
+        subjectHint: {
+          type: "string",
+          description: "Subject to follow, e.g. 'the person playing guitar'.",
+        },
+      },
       ["subjectHint"],
     ),
   },
   {
     name: "trim",
     description: "Adjust only the Out point (trim the tail) to a clip-relative time in seconds.",
-    paramSchema: obj(
-      { outSec: { type: "number", description: "New Out point, seconds." } },
-      ["outSec"],
-    ),
+    paramSchema: obj({ outSec: { type: "number", description: "New Out point, seconds." } }, [
+      "outSec",
+    ]),
   },
   {
     name: "render",
-    description: "Stage the queue for render. Never encodes on its own — the human confirms render manually.",
+    description:
+      "Stage the queue for render. Never encodes on its own — the human confirms render manually.",
     paramSchema: obj({}, []),
   },
 ] as const;
@@ -133,9 +140,7 @@ export const DETERMINISTIC_TOOLS: ReadonlySet<ToolName> = new Set([
 ]);
 
 /** Lookup a tool spec by name. */
-export const TOOL_BY_NAME: ReadonlyMap<ToolName, ToolSpec> = new Map(
-  TOOLS.map((t) => [t.name, t]),
-);
+export const TOOL_BY_NAME: ReadonlyMap<ToolName, ToolSpec> = new Map(TOOLS.map((t) => [t.name, t]));
 
 // ---- crop math (mirrors the engine / manifest exactly) ----
 
@@ -236,9 +241,15 @@ export function interpretTool(
       };
     }
     case "detectScenes":
-      return { display: { fn: name, detail: "detect scene cuts" }, commit: { kind: "detectScenes" } };
+      return {
+        display: { fn: name, detail: "detect scene cuts" },
+        commit: { kind: "detectScenes" },
+      };
     case "render":
-      return { display: { fn: name, detail: "stage queue for render" }, commit: { kind: "render" } };
+      return {
+        display: { fn: name, detail: "stage queue for render" },
+        commit: { kind: "render" },
+      };
     case "suggestCropForFrame":
     case "trackSubject":
       throw new Error(

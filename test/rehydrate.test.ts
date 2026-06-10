@@ -58,10 +58,7 @@ describe("specToEditorState", () => {
   it("cropWindow with content_crop -> contentMode and cropBox offset by origin", () => {
     // content_crop is W:H:X:Y -> 1600x900 region at (160, 90).
     const cropWindow = { x: 100, y: 50, w: 506, h: 900 };
-    const r = specToEditorState(
-      spec({ cropWindow, content_crop: "1600:900:160:90" }),
-      dims,
-    );
+    const r = specToEditorState(spec({ cropWindow, content_crop: "1600:900:160:90" }), dims);
     expect(r.contentMode).toBe(true);
     expect(r.contentBox).toEqual({ x: 160, y: 90, w: 1600, h: 900 });
     // cropBox shifted into source-pixel coords by the content origin.
@@ -74,10 +71,7 @@ describe("specToEditorState", () => {
   });
 
   it("schedule crop_offset -> keyframes parsed, box from first offset", () => {
-    const r = specToEditorState(
-      spec({ crop_offset: "0=center; 14.5=440" }),
-      dims,
-    );
+    const r = specToEditorState(spec({ crop_offset: "0=center; 14.5=440" }), dims);
     expect(r.cropPath).toBeNull();
     expect(r.keyframes.length).toBe(2);
     expect(r.keyframes[0]).toEqual({ t: 0, offset: "center" });

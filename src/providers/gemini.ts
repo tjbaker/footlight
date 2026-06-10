@@ -47,8 +47,7 @@ export class GeminiTracker implements VisionTracker {
 
   constructor(opts: GeminiTrackerOpts = {}) {
     this.model = opts.model ?? "gemini-2.5-pro";
-    this.apiBase =
-      opts.apiBase ?? "https://generativelanguage.googleapis.com/v1beta";
+    this.apiBase = opts.apiBase ?? "https://generativelanguage.googleapis.com/v1beta";
   }
 
   /**
@@ -57,10 +56,7 @@ export class GeminiTracker implements VisionTracker {
    * without any network. Values are clamped to the region and ordered so w/h
    * are non-negative even if the model returns swapped corners.
    */
-  static boxFromGemini(
-    norm: [number, number, number, number],
-    region: Dims,
-  ): Box {
+  static boxFromGemini(norm: [number, number, number, number], region: Dims): Box {
     const [ymin, xmin, ymax, xmax] = norm;
     const x0 = (Math.min(xmin, xmax) / GEMINI_SCALE) * region.width;
     const x1 = (Math.max(xmin, xmax) / GEMINI_SCALE) * region.width;
@@ -101,9 +97,7 @@ export class GeminiTracker implements VisionTracker {
       );
     }
 
-    const url = `${this.apiBase}/models/${encodeURIComponent(
-      this.model,
-    )}:generateContent`;
+    const url = `${this.apiBase}/models/${encodeURIComponent(this.model)}:generateContent`;
 
     // Prompt first, then each frame as a timestamp label followed by its image.
     const parts: unknown[] = [{ text: this.prompt(req) }];
@@ -135,9 +129,7 @@ export class GeminiTracker implements VisionTracker {
     if (!res.ok) {
       const detail = await safeText(res);
       throw new Error(
-        `GeminiTracker: HTTP ${res.status} ${res.statusText}${
-          detail ? ` — ${detail}` : ""
-        }`,
+        `GeminiTracker: HTTP ${res.status} ${res.statusText}${detail ? ` — ${detail}` : ""}`,
       );
     }
 
@@ -168,10 +160,7 @@ export class GeminiTracker implements VisionTracker {
       if (nums.some((n) => !Number.isFinite(n))) continue;
       out.push({
         t,
-        box: GeminiTracker.boxFromGemini(
-          nums as [number, number, number, number],
-          region,
-        ),
+        box: GeminiTracker.boxFromGemini(nums as [number, number, number, number], region),
       });
     }
     return out.sort((a, b) => a.t - b.t);

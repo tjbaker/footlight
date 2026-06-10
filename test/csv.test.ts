@@ -20,7 +20,7 @@ describe("parseCsv", () => {
 
   it("handles quoted fields with commas and a schedule", () => {
     const text =
-      'source_file,in_point,out_point,crop_offset,notes\n' +
+      "source_file,in_point,out_point,crop_offset,notes\n" +
       'c.mp4,0,30,"0=center; 14.5=440","cuts to piano, then back"\n';
     const rows = parseCsv(text);
     expect(rows[0]!.crop_offset).toBe("0=center; 14.5=440");
@@ -28,9 +28,7 @@ describe("parseCsv", () => {
   });
 
   it("handles escaped quotes and CRLF", () => {
-    const text =
-      'source_file,out_name\r\n' +
-      'd.mp4,"say ""hi"""\r\n';
+    const text = "source_file,out_name\r\n" + 'd.mp4,"say ""hi"""\r\n';
     const rows = parseCsv(text);
     expect(rows[0]!.out_name).toBe('say "hi"');
   });

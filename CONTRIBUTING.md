@@ -53,6 +53,12 @@ the right install command for your platform.
   only fs/subprocess code goes in `src/engine.ts`. See `CLAUDE.md` for the full
   architecture conventions (SPDX headers, even-dimension crop math, the
   two-backend app split).
+- **DRY by delegation**: reuse an existing pure helper rather than restating its
+  logic; the only sanctioned duplication is a documented mirror that cannot
+  import its source (the Rust shell, `manifest.ts`'s inverse math), pinned by
+  tests that reuse the original's fixtures.
+- **Formatting is Prettier's job**: run `npm run format` in the package you
+  touched (CI enforces `format:check` in both).
 - Keep changes focused and tested.
 
 ## Pull request expectations

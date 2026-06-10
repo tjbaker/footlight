@@ -25,6 +25,7 @@ jobs:
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npm ci
+      - run: npm run format:check
       - run: npm run build
       - run: npm run coverage
       - name: Upload coverage to Codecov
@@ -82,6 +83,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm ci
+        working-directory: app
+      - run: npm run format:check
         working-directory: app
       - run: npx tsc --noEmit
         working-directory: app

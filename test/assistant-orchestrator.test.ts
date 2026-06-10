@@ -87,7 +87,9 @@ describe("orchestrator + MockAssistant (deterministic intents)", () => {
 });
 
 describe("orchestrator robustness", () => {
-  const scripted = (...toolCalls: { name: string; args: Record<string, unknown> }[]): AssistantModel => ({
+  const scripted = (
+    ...toolCalls: { name: string; args: Record<string, unknown> }[]
+  ): AssistantModel => ({
     name: "scripted",
     async turn() {
       return { text: "ok", toolCalls: toolCalls as never };

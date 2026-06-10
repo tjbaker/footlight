@@ -62,10 +62,7 @@ export const tauriPlatform: FootlightPlatform = {
     return invoke<TrackSample[]>("track", { req });
   },
 
-  async render(
-    manifestJson: string,
-    opts?: RenderOptions,
-  ): Promise<{ ok: boolean; log: string }> {
+  async render(manifestJson: string, opts?: RenderOptions): Promise<{ ok: boolean; log: string }> {
     return invoke<{ ok: boolean; log: string }>("render", {
       manifestJson,
       outdir: opts?.outdir ?? null,

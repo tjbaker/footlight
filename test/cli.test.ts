@@ -18,10 +18,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  serializeManifestJSON,
-  type ClipSpec,
-} from "../src/manifest.js";
+import { serializeManifestJSON, type ClipSpec } from "../src/manifest.js";
 import { computeCrop } from "../src/engine.js";
 import type { TrackSample } from "../src/providers/types.js";
 
@@ -85,9 +82,7 @@ describe("serializeManifestJSON round-trip", () => {
   });
 
   it("emits pretty JSON with a trailing newline", () => {
-    const json = serializeManifestJSON([
-      { source_file: "x.mp4", in_point: "0", out_point: "1" },
-    ]);
+    const json = serializeManifestJSON([{ source_file: "x.mp4", in_point: "0", out_point: "1" }]);
     expect(json.endsWith("\n")).toBe(true);
     expect(json).toContain("\n  "); // two-space indented
   });
@@ -100,9 +95,17 @@ describe("render JSON manifest (dry-run)", () => {
     // generated source so probeDimensions succeeds.
     const src = join(dir, "src.mp4");
     execFileSync("ffmpeg", [
-      "-hide_banner", "-loglevel", "error", "-y",
-      "-f", "lavfi", "-i", "testsrc=size=1920x1080:rate=30:duration=2",
-      "-frames:v", "30", src,
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc=size=1920x1080:rate=30:duration=2",
+      "-frames:v",
+      "30",
+      src,
     ]);
 
     const manifest: ClipSpec[] = [
@@ -121,7 +124,11 @@ describe("render JSON manifest (dry-run)", () => {
     writeFileSync(manifestPath, serializeManifestJSON(manifest));
 
     const { stdout, code } = runCli([
-      "render", manifestPath, "--outdir", join(dir, "out"), "--dry-run",
+      "render",
+      manifestPath,
+      "--outdir",
+      join(dir, "out"),
+      "--dry-run",
     ]);
     expect(code).toBe(0);
 
@@ -139,9 +146,17 @@ describe("render JSON manifest (dry-run)", () => {
     const dir = tmp();
     const src = join(dir, "src.mp4");
     execFileSync("ffmpeg", [
-      "-hide_banner", "-loglevel", "error", "-y",
-      "-f", "lavfi", "-i", "testsrc=size=1920x1080:rate=30:duration=2",
-      "-frames:v", "30", src,
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc=size=1920x1080:rate=30:duration=2",
+      "-frames:v",
+      "30",
+      src,
     ]);
 
     const manifest: ClipSpec[] = [
@@ -151,7 +166,11 @@ describe("render JSON manifest (dry-run)", () => {
     writeFileSync(manifestPath, serializeManifestJSON(manifest));
 
     const { stdout, code } = runCli([
-      "render", manifestPath, "--outdir", join(dir, "out"), "--dry-run",
+      "render",
+      manifestPath,
+      "--outdir",
+      join(dir, "out"),
+      "--dry-run",
     ]);
     expect(code).toBe(0);
 
@@ -165,9 +184,17 @@ describe("render JSON manifest (dry-run)", () => {
     const dir = tmp();
     const src = join(dir, "src.mp4");
     execFileSync("ffmpeg", [
-      "-hide_banner", "-loglevel", "error", "-y",
-      "-f", "lavfi", "-i", "testsrc=size=1920x1080:rate=30:duration=2",
-      "-frames:v", "30", src,
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc=size=1920x1080:rate=30:duration=2",
+      "-frames:v",
+      "30",
+      src,
     ]);
 
     const manifest: ClipSpec[] = [
@@ -184,7 +211,11 @@ describe("render JSON manifest (dry-run)", () => {
     writeFileSync(manifestPath, serializeManifestJSON(manifest));
 
     const { stdout, code } = runCli([
-      "render", manifestPath, "--outdir", join(dir, "out"), "--dry-run",
+      "render",
+      manifestPath,
+      "--outdir",
+      join(dir, "out"),
+      "--dry-run",
     ]);
     expect(code).toBe(0);
 
@@ -203,10 +234,26 @@ describe("render JSON manifest (dry-run)", () => {
     const src = join(dir, "src.mp4");
     // A tiny real source WITH an audio track (the fade rule re-encodes audio).
     execFileSync("ffmpeg", [
-      "-hide_banner", "-loglevel", "error", "-y",
-      "-f", "lavfi", "-i", "testsrc=size=1920x1080:rate=30:duration=2",
-      "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
-      "-shortest", "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac", src,
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc=size=1920x1080:rate=30:duration=2",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=440:duration=2",
+      "-shortest",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-c:a",
+      "aac",
+      src,
     ]);
 
     const manifest: ClipSpec[] = [
@@ -225,7 +272,14 @@ describe("render JSON manifest (dry-run)", () => {
 
     const outdir = join(dir, "out");
     const { stdout, code } = runCli([
-      "render", manifestPath, "--outdir", outdir, "--crf", "35", "--preset", "ultrafast",
+      "render",
+      manifestPath,
+      "--outdir",
+      outdir,
+      "--crf",
+      "35",
+      "--preset",
+      "ultrafast",
     ]);
     expect(code).toBe(0);
     expect(stdout).toContain("note: fades need an audio re-encode");
@@ -234,8 +288,14 @@ describe("render JSON manifest (dry-run)", () => {
     const codec = execFileSync(
       "ffprobe",
       [
-        "-v", "error", "-select_streams", "a:0",
-        "-show_entries", "stream=codec_name", "-of", "csv=p=0",
+        "-v",
+        "error",
+        "-select_streams",
+        "a:0",
+        "-show_entries",
+        "stream=codec_name",
+        "-of",
+        "csv=p=0",
         join(outdir, "fade_smoke.mp4"),
       ],
       { encoding: "utf8" },
@@ -337,16 +397,20 @@ describe("render flag validation (issue: fail fast, not per-clip at ffmpeg time)
     // source must really exist (mirrors the dry-run suite above).
     const src = join(dir, "src.mp4");
     execFileSync("ffmpeg", [
-      "-hide_banner", "-loglevel", "error", "-y",
-      "-f", "lavfi", "-i", "testsrc=size=1920x1080:rate=30:duration=1",
-      "-frames:v", "5", src,
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc=size=1920x1080:rate=30:duration=1",
+      "-frames:v",
+      "5",
+      src,
     ]);
     const p = join(dir, "m.csv");
-    writeFileSync(
-      p,
-      `source_file,in_point,out_point,crop_offset\n${src},0,0.1,center\n`,
-      "utf8",
-    );
+    writeFileSync(p, `source_file,in_point,out_point,crop_offset\n${src},0,0.1,center\n`, "utf8");
     return p;
   }
 
@@ -359,9 +423,7 @@ describe("render flag validation (issue: fail fast, not per-clip at ffmpeg time)
   });
 
   it("rejects an unknown --preset, listing the valid x264 set", () => {
-    const { code, stderr } = runCli([
-      "render", manifest(), "--dry-run", "--preset", "warpspeed",
-    ]);
+    const { code, stderr } = runCli(["render", manifest(), "--dry-run", "--preset", "warpspeed"]);
     expect(code).toBe(1);
     expect(stderr).toContain("--preset must be one of");
     expect(stderr).toContain("ultrafast");
@@ -369,7 +431,11 @@ describe("render flag validation (issue: fail fast, not per-clip at ffmpeg time)
   });
 
   it("accepts the boundary CRFs and every x264 preset name", () => {
-    for (const ok of [["--crf", "0"], ["--crf", "51"], ["--preset", "veryslow"]]) {
+    for (const ok of [
+      ["--crf", "0"],
+      ["--crf", "51"],
+      ["--preset", "veryslow"],
+    ]) {
       const { code, stderr } = runCli(["render", manifest(), "--dry-run", ...ok]);
       expect(code, ok.join(" ")).toBe(0);
       expect(stderr).toBe("");

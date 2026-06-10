@@ -124,7 +124,10 @@ export interface AssistantModel {
  */
 export interface VisionRunner {
   /** Propose a 9:16 crop for one frame -> a subject box in working-region px. */
-  suggestCropForFrame(args: { t: number; subjectHint?: string }, ctx: AssistantContext): Promise<Box>;
+  suggestCropForFrame(
+    args: { t: number; subjectHint?: string },
+    ctx: AssistantContext,
+  ): Promise<Box>;
   /** Track a subject across the shot -> located samples (fed to `samplesToCropPath`). */
   trackSubject(args: { subjectHint: string }, ctx: AssistantContext): Promise<TrackSample[]>;
 }

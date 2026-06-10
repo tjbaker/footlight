@@ -153,26 +153,20 @@ describe("GeminiTracker.track (offline, mocked fetch)", () => {
     }).track(req());
 
     const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toBe(
-      "https://proxy.example/v9/models/gemini-flash-x:generateContent",
-    );
+    expect(url).toBe("https://proxy.example/v9/models/gemini-flash-x:generateContent");
   });
 
   it("throws when apiKey is missing", async () => {
     const fetchMock = okFetch(geminiResponse("[]"));
     globalThis.fetch = fetchMock as unknown as typeof fetch;
-    await expect(
-      new GeminiTracker().track(req({ apiKey: "" })),
-    ).rejects.toThrow(/apiKey/);
+    await expect(new GeminiTracker().track(req({ apiKey: "" }))).rejects.toThrow(/apiKey/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("throws when no frames are provided", async () => {
     const fetchMock = okFetch(geminiResponse("[]"));
     globalThis.fetch = fetchMock as unknown as typeof fetch;
-    await expect(
-      new GeminiTracker().track(req({ frames: [] })),
-    ).rejects.toThrow(/frames/);
+    await expect(new GeminiTracker().track(req({ frames: [] }))).rejects.toThrow(/frames/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -231,13 +225,9 @@ describe("GeminiTracker.track (offline, mocked fetch)", () => {
 
   it("tolerates ```json fences / stray prose around the array", async () => {
     globalThis.fetch = okFetch(
-      geminiResponse(
-        'Here you go:\n```json\n[{"t": 0, "box_2d": [0, 0, 200, 100]}]\n```',
-      ),
+      geminiResponse('Here you go:\n```json\n[{"t": 0, "box_2d": [0, 0, 200, 100]}]\n```'),
     ) as unknown as typeof fetch;
     const samples = await new GeminiTracker().track(req());
-    expect(samples).toEqual([
-      { t: 0, box: { x: 0, y: 0, w: 192, h: 216 } },
-    ]);
+    expect(samples).toEqual([{ t: 0, box: { x: 0, y: 0, w: 192, h: 216 } }]);
   });
 });

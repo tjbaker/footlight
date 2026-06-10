@@ -51,8 +51,7 @@ export class GeminiAssistant implements AssistantModel {
 
   constructor(opts: GeminiAssistantOpts = {}) {
     this.model = opts.model ?? "gemini-2.5-flash";
-    this.apiBase =
-      opts.apiBase ?? "https://generativelanguage.googleapis.com/v1beta";
+    this.apiBase = opts.apiBase ?? "https://generativelanguage.googleapis.com/v1beta";
   }
 
   async turn(req: {
@@ -67,9 +66,7 @@ export class GeminiAssistant implements AssistantModel {
       throw new Error("GeminiAssistant: apiKey is required (BYOK; opt-in).");
     }
 
-    const url = `${this.apiBase}/models/${encodeURIComponent(
-      this.model,
-    )}:generateContent`;
+    const url = `${this.apiBase}/models/${encodeURIComponent(this.model)}:generateContent`;
 
     const body = buildGenerateContentBody(req);
 
@@ -87,9 +84,7 @@ export class GeminiAssistant implements AssistantModel {
     if (!res.ok) {
       const detail = await safeText(res);
       throw new Error(
-        `GeminiAssistant: HTTP ${res.status} ${res.statusText}${
-          detail ? ` — ${detail}` : ""
-        }`,
+        `GeminiAssistant: HTTP ${res.status} ${res.statusText}${detail ? ` — ${detail}` : ""}`,
       );
     }
 
@@ -258,7 +253,7 @@ function systemPreamble(ctx: AssistantContext): string {
     "keyframe, content crop, scene detection, or render), you MUST emit that tool",
     "call in the SAME reply. Describing the edit in prose alone does NOTHING — the",
     "human can only Accept a tool call, never a sentence. So don't end with \"let's",
-    "set …\" or \"I'll apply …\" without the call; make the call. Keep any prose short",
+    'set …" or "I\'ll apply …" without the call; make the call. Keep any prose short',
     "(explain WHY), but the decision must arrive as the tool call.",
     "You work from project STATE (In/Out, duration, scene cuts, loudness swells —",
     "all below) and NEVER from audio.",

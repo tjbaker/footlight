@@ -33,7 +33,9 @@ function nearestSwell(ctx: AssistantContext, t: number): Grounding | undefined {
   return {
     kind: "swell",
     t: best.t,
-    detail: best.label ? `loudness swell "${best.label}" @ ${best.t}s` : `loudness swell @ ${best.t}s`,
+    detail: best.label
+      ? `loudness swell "${best.label}" @ ${best.t}s`
+      : `loudness swell @ ${best.t}s`,
   };
 }
 
@@ -54,10 +56,7 @@ function subjectFrom(message: string): string {
 export class MockAssistant implements AssistantModel {
   readonly name = "mock";
 
-  async turn(req: {
-    message: string;
-    context: AssistantContext;
-  }): Promise<ModelTurn> {
+  async turn(req: { message: string; context: AssistantContext }): Promise<ModelTurn> {
     const m = req.message.toLowerCase();
     const ctx = req.context;
     const toolCalls: ToolCall[] = [];
@@ -96,13 +95,13 @@ export class MockAssistant implements AssistantModel {
       const g = nearestSwell(ctx, inSec);
       if (g) grounding.push(g);
     } else {
-      text = "Tell me a moment or a framing and I'll propose it — e.g. \"track the guitarist\" or \"trim the tail.\"";
+      text =
+        'Tell me a moment or a framing and I\'ll propose it — e.g. "track the guitarist" or "trim the tail."';
     }
 
     // A deterministic, plausible usage so the cost/usage UI is exercisable offline
     // (~4 chars/token; each still bills ~258 input tokens, mirroring Gemini images).
-    const promptTokens =
-      700 + Math.ceil(req.message.length / 4) + (ctx.stills?.length ?? 0) * 258;
+    const promptTokens = 700 + Math.ceil(req.message.length / 4) + (ctx.stills?.length ?? 0) * 258;
     const outputTokens = 16 + Math.ceil(text.length / 4);
     const usage: Usage = { promptTokens, outputTokens, totalTokens: promptTokens + outputTokens };
 
@@ -118,7 +117,10 @@ export class MockVisionRunner implements VisionRunner {
     return new MockTracker({ region: ctx.region }).boxAt(args.t);
   }
 
-  async trackSubject(_args: { subjectHint: string }, ctx: AssistantContext): Promise<TrackSample[]> {
+  async trackSubject(
+    _args: { subjectHint: string },
+    ctx: AssistantContext,
+  ): Promise<TrackSample[]> {
     const shotStart = ctx.inSec ?? 0;
     const shotEnd = ctx.outSec ?? shotStart + 3;
     const tracker = new MockTracker({ region: ctx.region, shotStart, shotEnd });

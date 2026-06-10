@@ -576,7 +576,11 @@ export function createRequestListener({
       // (GEMINI_API_KEY / FOOTLIGHT_GEMINI_API_KEY), or "" if unset. Lets `make gui`
       // pick up a key from your shell without pasting it into the GUI. Dev-only.
       if (req.method === "GET" && url.pathname === "/env-key") {
-        const key = (process.env.GEMINI_API_KEY || process.env.FOOTLIGHT_GEMINI_API_KEY || "").trim();
+        const key = (
+          process.env.GEMINI_API_KEY ||
+          process.env.FOOTLIGHT_GEMINI_API_KEY ||
+          ""
+        ).trim();
         return sendText(res, 200, key);
       }
 
@@ -695,8 +699,7 @@ export function createDevServer(config = {}) {
 
 // Start listening only when executed directly (`node dev-server/server.mjs`,
 // i.e. `npm run dev:server`) — importing this module must NOT bind the port.
-const runAsScript =
-  process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const runAsScript = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (runAsScript) {
   createDevServer().listen(PORT, () => {
     console.log(`Footlight dev backend listening on http://localhost:${PORT}`);

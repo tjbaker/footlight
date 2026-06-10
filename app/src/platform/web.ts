@@ -77,10 +77,7 @@ export const webPlatform: FootlightPlatform = {
     return (await res.json()) as TrackSample[];
   },
 
-  async render(
-    manifestJson: string,
-    opts?: RenderOptions,
-  ): Promise<{ ok: boolean; log: string }> {
+  async render(manifestJson: string, opts?: RenderOptions): Promise<{ ok: boolean; log: string }> {
     const q = new URLSearchParams();
     if (opts?.outdir) q.set("outdir", opts.outdir);
     if (opts?.crf != null) q.set("crf", String(opts.crf));

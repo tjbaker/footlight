@@ -74,8 +74,5 @@ export function priceForModel(model: string): ModelPrice | null {
 export function estimateCostUsd(usage: Usage, model: string): number | null {
   const price = priceForModel(model);
   if (!price) return null;
-  return (
-    (usage.promptTokens * price.inputPerM + usage.outputTokens * price.outputPerM) /
-    1_000_000
-  );
+  return (usage.promptTokens * price.inputPerM + usage.outputTokens * price.outputPerM) / 1_000_000;
 }

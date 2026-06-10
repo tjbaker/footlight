@@ -418,9 +418,11 @@ export const es: Messages = {
       defaults: "Valores predeterminados",
       destination: "Destino",
       destinationBrowse: "Examinar…",
-      destinationHint: "Carpeta de salida predeterminada para los clips renderizados. Rellena previamente el destino del editor.",
+      destinationHint:
+        "Carpeta de salida predeterminada para los clips renderizados. Rellena previamente el destino del editor.",
       trackingInterval: "Intervalo de seguimiento",
-      trackingIntervalHint: "Cadencia de muestreo predeterminada de la IA — más amplia significa menos fotogramas, así que más barato.",
+      trackingIntervalHint:
+        "Cadencia de muestreo predeterminada de la IA — más amplia significa menos fotogramas, así que más barato.",
       session: "Sesión",
       autosave: "Guardar y restaurar sesión automáticamente",
       autosaveHint: "Recuerda tu origen, cola y destino, y los restaura en el próximo inicio.",
@@ -430,7 +432,8 @@ export const es: Messages = {
 
     rendering: {
       title: "Renderizado",
-      subtitle: "Valores predeterminados para cada renderización — cada uno corresponde a un parámetro de footlight render.",
+      subtitle:
+        "Valores predeterminados para cada renderización — cada uno corresponde a un parámetro de footlight render.",
       quality: "Calidad (CRF)",
       qualityNearLossless: "casi sin pérdidas",
       qualityHigh: "alta (predeterminada)",
@@ -444,12 +447,12 @@ export const es: Messages = {
       audio: "Audio",
       audioCopy: "Copiar (sin pérdidas)",
       audioReencode: "Recodificar AAC",
-      audioCopyHint:
-        "La pista de origen pasa sin tocarse — el origen es tu techo de calidad.",
+      audioCopyHint: "La pista de origen pasa sin tocarse — el origen es tu techo de calidad.",
       audioReencodeHint: "Solo para un corte de audio exacto al fotograma en un tiempo fuerte.",
       bitrate: "Tasa de bits",
       dryRun: "Mostrar el comando de ffmpeg antes de renderizar",
-      dryRunHint: "Imprime la invocación exacta de ffmpeg para que puedas inspeccionarla o copiarla.",
+      dryRunHint:
+        "Imprime la invocación exacta de ffmpeg para que puedas inspeccionarla o copiarla.",
       captions: "Subtítulos",
       burnCaptions: "Incrustar subtítulos en el video",
       burnCaptionsHint:
@@ -463,7 +466,8 @@ export const es: Messages = {
 
     ai: {
       title: "IA y modelos",
-      subtitle: "Opcional, trae tu propia clave. Un solo modelo multimodal hace tanto el seguimiento como el asistente.",
+      subtitle:
+        "Opcional, trae tu propia clave. Un solo modelo multimodal hace tanto el seguimiento como el asistente.",
       provider: "Proveedor",
       providerGemini: "Google Gemini",
       providerClaude: "Anthropic Claude",
@@ -509,7 +513,8 @@ export const es: Messages = {
 
     shortcuts: {
       title: "Atajos",
-      subtitle: "Las combinaciones de teclas. Pulsa ? en cualquier momento para ver la superposición.",
+      subtitle:
+        "Las combinaciones de teclas. Pulsa ? en cualquier momento para ver la superposición.",
     },
 
     about: {
@@ -530,7 +535,8 @@ export const es: Messages = {
       noSource: "ningún origen cargado",
       render: "Renderizar",
       renderTitle: "Codificar cada clip de la cola a H.264 1080×1920.",
-      activityTitle: "Mostrar la salida de renderizado, detección de escenas y seguimiento automático",
+      activityTitle:
+        "Mostrar la salida de renderizado, detección de escenas y seguimiento automático",
       historyTitle: "Historial — reabre una renderización anterior para ajustarla y recodificarla",
       previewHide: "Ocultar la vista previa de salida 9:16",
       previewShow: "Mostrar la vista previa de salida 9:16",
@@ -543,7 +549,8 @@ export const es: Messages = {
     },
     stage: {
       sourceTag: "ORIGEN",
-      overlayTitle: "Arrastra para reencuadrar · arrastra una esquina para acercar / hacer zoom · doble clic para restablecer",
+      overlayTitle:
+        "Arrastra para reencuadrar · arrastra una esquina para acercar / hacer zoom · doble clic para restablecer",
       previewHeadTitle: "Arrastra para mover · desactiva la vista previa en la barra superior",
       guides: "guías",
       guidesTitle:
@@ -563,7 +570,8 @@ export const es: Messages = {
       frameAlt: "fotograma actual",
     },
     transport: {
-      playTitle: "Reproduce con audio para encontrar tu In/Out de oído — Marcar In/Out funciona mientras se reproduce",
+      playTitle:
+        "Reproduce con audio para encontrar tu In/Out de oído — Marcar In/Out funciona mientras se reproduce",
       inOut: "in→out",
     },
     tabs: {
@@ -587,7 +595,8 @@ export const es: Messages = {
       cropdetectNone:
         "cropdetect: no se detectaron barras negras (el pillarbox de color/difuminado le es invisible — examina el cuadro a ojo).",
       enterPath: "Introduce una ruta absoluta a un archivo de origen, luego haz clic en Cargar.",
-      dropHint: "Arrastrar y soltar carga archivos en la app de escritorio — pega la ruta absoluta arriba.",
+      dropHint:
+        "Arrastrar y soltar carga archivos en la app de escritorio — pega la ruta absoluta arriba.",
     },
     clip: {
       header: "Clip",
@@ -600,11 +609,9 @@ export const es: Messages = {
       durKey: "dur",
       offsetKey: "desplazamiento",
       fadeInLabel: "Fundido de entrada",
-      fadeInTitle:
-        "Funde el clip desde negro (y el audio desde silencio) durante estos segundos.",
+      fadeInTitle: "Funde el clip desde negro (y el audio desde silencio) durante estos segundos.",
       fadeOutLabel: "Fundido de salida",
-      fadeOutTitle:
-        "Funde el clip hacia negro (y el audio hacia silencio) durante estos segundos.",
+      fadeOutTitle: "Funde el clip hacia negro (y el audio hacia silencio) durante estos segundos.",
       fadeAudioHint:
         "Los fundidos recodifican el audio de este clip (AAC 256k) — una copia sin pérdidas no puede fundirse.",
       loopSeam: "Unión del bucle",
@@ -639,9 +646,11 @@ export const es: Messages = {
     captions: {
       header: "Subtítulos",
       hookPlaceholder: "gancho (línea grande, opcional)",
-      hookTitle: "La línea grande de subtítulo incrustada sobre el clip (cuando la incrustación está activada). Enter añade un salto de línea.",
+      hookTitle:
+        "La línea grande de subtítulo incrustada sobre el clip (cuando la incrustación está activada). Enter añade un salto de línea.",
       titlePlaceholder: "título (línea secundaria, opcional)",
-      titleTitle: "La línea secundaria de subtítulo, mostrada bajo el gancho. Enter añade un salto de línea.",
+      titleTitle:
+        "La línea secundaria de subtítulo, mostrada bajo el gancho. Enter añade un salto de línea.",
       posVTitle: "Posición vertical del subtítulo.",
       posHTitle: "Posición horizontal del subtítulo.",
       posTop: "Arriba",
@@ -671,12 +680,15 @@ export const es: Messages = {
     keyframes: {
       header: "Recorte en movimiento — fotogramas clave",
       add: "Añadir fotograma clave",
-      addTitle: "Registra el tiempo + la posición del recuadro actuales como un punto de cambio de recorte.",
+      addTitle:
+        "Registra el tiempo + la posición del recuadro actuales como un punto de cambio de recorte.",
       clear: "Borrar",
       schedulePrefix: "programación: ",
       scheduleNone: "programación: (ninguna)",
-      scheduleNoKeyframes: "programación: (sin fotogramas clave — usa el desplazamiento actual del recuadro)",
-      needIn: "Define el punto In antes de añadir fotogramas clave (los tiempos de los fotogramas clave son relativos al clip).",
+      scheduleNoKeyframes:
+        "programación: (sin fotogramas clave — usa el desplazamiento actual del recuadro)",
+      needIn:
+        "Define el punto In antes de añadir fotogramas clave (los tiempos de los fotogramas clave son relativos al clip).",
     },
     add: {
       header: "Añadir a la cola",
@@ -691,7 +703,8 @@ export const es: Messages = {
       intervalPlaceholder: "0.75",
       intervalLabel: "intervalo (s)",
       autoTrack: "Seguimiento automático",
-      autoTrackTitle: "Sigue al sujeto a lo largo de la toma In/Out y crea una trayectoria de recorte atenuada.",
+      autoTrackTitle:
+        "Sigue al sujeto a lo largo de la toma In/Out y crea una trayectoria de recorte atenuada.",
       clearTrack: "Borrar seguimiento",
       clearTrackTitle: "Descarta la trayectoria seguida; vuelve al encuadre manual.",
       statusNone: "seguimiento: (ninguno — crop_offset manual en uso)",
@@ -736,7 +749,8 @@ export const es: Messages = {
         "cada propuesta se previsualiza antes de cambiar nada.",
       youLabel: "tú",
       assistantLabel: "asistente",
-      needSource: "Carga un origen primero, luego podré leer sus fotogramas y proponer un encuadre.",
+      needSource:
+        "Carga un origen primero, luego podré leer sus fotogramas y proponer un encuadre.",
       needKey:
         "Necesito una clave de API de Gemini para leer fotogramas. Añade una en Ajustes → IA y modelos (se almacena en el llavero de tu SO, nunca en archivos del proyecto), luego pregúntame de nuevo.",
       turnFailedPrefix: "Lo siento — ese turno falló: ",
@@ -758,7 +772,8 @@ export const es: Messages = {
       renderStaged:
         "El asistente preparó la cola para renderizar. Pulsa Renderizar cuando estés listo — nunca codifico automáticamente.",
       trackFromAssistantPrefix: "seguimiento: ACTIVADO · ",
-      trackFromAssistantSuffix: " fotograma(s) clave (del asistente). Borrar seguimiento para revertir.",
+      trackFromAssistantSuffix:
+        " fotograma(s) clave (del asistente). Borrar seguimiento para revertir.",
       usageTokens: "tokens",
       usageInLabel: "entrada",
       usageOutLabel: "salida",
@@ -771,7 +786,8 @@ export const es: Messages = {
       cutsLabel: "cortes",
       swellsLabel: "crescendos",
       detectScenes: "Detectar escenas",
-      detectScenesTitle: "Detecta cortes de escena — alinea con ellos los tiempos de cambio de fotogramas clave.",
+      detectScenesTitle:
+        "Detecta cortes de escena — alinea con ellos los tiempos de cambio de fotogramas clave.",
       snapLabel: "Imán",
       snapTitle:
         "Ajustar In/Out al ritmo: cuando está activo, soltar un arrastre o pulsar I/O lleva el punto al ataque de audio detectado más cercano (±150 ms). Desactivado por defecto — tus puntos se quedan exactamente donde los pusiste.",

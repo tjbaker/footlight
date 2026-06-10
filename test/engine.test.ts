@@ -149,9 +149,7 @@ describe("buildFfmpegArgs golden cases", () => {
       { source_file: "in.mp4", in_point: "0", out_point: "10", crop_offset: "center" },
       [1920, 1080],
     );
-    expect(vfOf(args)).toBe(
-      "crop=608:1080:656:0,scale=1080:1920:flags=lanczos,setsar=1",
-    );
+    expect(vfOf(args)).toBe("crop=608:1080:656:0,scale=1080:1920:flags=lanczos,setsar=1");
     expect(audioOf(args)).toEqual(["-c:a", "copy"]);
   });
 
@@ -160,9 +158,7 @@ describe("buildFfmpegArgs golden cases", () => {
       { source_file: "in.mp4", in_point: "0", out_point: "10", crop_offset: "720" },
       [1920, 1080],
     );
-    expect(vfOf(args)).toBe(
-      "crop=608:1080:720:0,scale=1080:1920:flags=lanczos,setsar=1",
-    );
+    expect(vfOf(args)).toBe("crop=608:1080:720:0,scale=1080:1920:flags=lanczos,setsar=1");
   });
 
   it("3. letterboxed edit: content_crop + schedule", () => {
@@ -187,9 +183,7 @@ describe("buildFfmpegArgs golden cases", () => {
       [1920, 1080],
       { cropWindow: { x: 800, y: 120, w: 405, h: 720 } },
     );
-    expect(vfOf(args)).toBe(
-      "crop=404:720:800:120,scale=1080:1920:flags=lanczos,setsar=1",
-    );
+    expect(vfOf(args)).toBe("crop=404:720:800:120,scale=1080:1920:flags=lanczos,setsar=1");
   });
 
   it("cropWindow even-rounds and clamps x/y into the working region", () => {
@@ -199,9 +193,7 @@ describe("buildFfmpegArgs golden cases", () => {
       { cropWindow: { x: 9999, y: -50, w: 405, h: 720 } },
     );
     // w even-rounds 405->404; x clamps to 1920-404=1516; y clamps to 0.
-    expect(vfOf(args)).toBe(
-      "crop=404:720:1516:0,scale=1080:1920:flags=lanczos,setsar=1",
-    );
+    expect(vfOf(args)).toBe("crop=404:720:1516:0,scale=1080:1920:flags=lanczos,setsar=1");
   });
 
   it("cropWindow is relative to the content_crop working region", () => {
@@ -217,11 +209,9 @@ describe("buildFfmpegArgs golden cases", () => {
 
   it("cropWindow exceeding the working region throws", () => {
     expect(() =>
-      build(
-        { source_file: "in.mp4", in_point: "0", out_point: "10" },
-        [1920, 1080],
-        { cropWindow: { x: 0, y: 0, w: 405, h: 2000 } },
-      ),
+      build({ source_file: "in.mp4", in_point: "0", out_point: "10" }, [1920, 1080], {
+        cropWindow: { x: 0, y: 0, w: 405, h: 2000 },
+      }),
     ).toThrow(/exceeds working region/);
   });
 
@@ -246,7 +236,12 @@ describe("buildFfmpegArgs golden cases", () => {
 
   it("auto-generates out_name from stem + timestamps", () => {
     const { outPath } = build(
-      { source_file: "downloads/My Show.mkv", in_point: "1:08", out_point: "2:59", crop_offset: "center" },
+      {
+        source_file: "downloads/My Show.mkv",
+        in_point: "1:08",
+        out_point: "2:59",
+        crop_offset: "center",
+      },
       [1920, 1080],
     );
     expect(outPath).toBe("clips/My_Show_1_08-2_59.mp4");
@@ -254,7 +249,13 @@ describe("buildFfmpegArgs golden cases", () => {
 
   it("respects explicit out_name and appends .mp4", () => {
     const { outPath } = build(
-      { source_file: "in.mp4", in_point: "0", out_point: "10", crop_offset: "center", out_name: "my_clip" },
+      {
+        source_file: "in.mp4",
+        in_point: "0",
+        out_point: "10",
+        crop_offset: "center",
+        out_name: "my_clip",
+      },
       [1920, 1080],
     );
     expect(outPath).toBe("clips/my_clip.mp4");
@@ -275,7 +276,10 @@ describe("buildFfmpegArgs golden cases", () => {
 
   it("throws when out_point not after in_point", () => {
     expect(() =>
-      build({ source_file: "in.mp4", in_point: "10", out_point: "10", crop_offset: "center" }, [1920, 1080]),
+      build(
+        { source_file: "in.mp4", in_point: "10", out_point: "10", crop_offset: "center" },
+        [1920, 1080],
+      ),
     ).toThrow();
   });
 });
@@ -300,7 +304,12 @@ describe("parseFadeSeconds", () => {
 });
 
 describe("buildFfmpegArgs fades (issue #165)", () => {
-  const ROW: ClipRow = { source_file: "in.mp4", in_point: "0", out_point: "10", crop_offset: "center" };
+  const ROW: ClipRow = {
+    source_file: "in.mp4",
+    in_point: "0",
+    out_point: "10",
+    crop_offset: "center",
+  };
 
   /** Pull the value following `-af` out of an ffmpeg arg array (or null). */
   function afOf(args: string[]): string | null {
