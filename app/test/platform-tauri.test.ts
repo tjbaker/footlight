@@ -263,6 +263,45 @@ describe("dialogs (export / pickers)", () => {
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
+  it("exportCover saves via a PNG dialog then runs export_cover with the spec", async () => {
+    saveMock.mockResolvedValue("/chosen/x_cover.png");
+    invokeMock.mockResolvedValue(undefined);
+    const spec = {
+      source_file: "/v/show.mp4",
+      in_point: "10.000",
+      out_point: "20.000",
+      crop_offset: "center",
+    } as Parameters<typeof tauriPlatform.exportCover>[2];
+
+    const out = await tauriPlatform.exportCover("/v/show.mp4", 12.5, spec, "x_cover.png");
+
+    expect(out).toBe(true);
+    expect(saveMock).toHaveBeenCalledWith({
+      defaultPath: "x_cover.png",
+      filters: [{ name: "PNG", extensions: ["png"] }],
+    });
+    expect(invokeMock).toHaveBeenCalledWith("export_cover", {
+      source: "/v/show.mp4",
+      t: 12.5,
+      spec,
+      outPath: "/chosen/x_cover.png",
+    });
+  });
+
+  it("exportCover resolves false (and runs nothing) when the dialog is cancelled", async () => {
+    saveMock.mockResolvedValue(null);
+    const spec = { source_file: "/v.mp4", in_point: "0", out_point: "1" };
+    expect(
+      await tauriPlatform.exportCover(
+        "/v.mp4",
+        0,
+        spec as Parameters<typeof tauriPlatform.exportCover>[2],
+        "c.png",
+      ),
+    ).toBe(false);
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
   it("pickSourceFile opens a single-file video dialog and returns the path", async () => {
     openMock.mockResolvedValue("/movies/show.mp4");
     expect(await tauriPlatform.pickSourceFile()).toBe("/movies/show.mp4");

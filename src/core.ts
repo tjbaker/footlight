@@ -485,6 +485,75 @@ export function buildEasedCropWindowFilters(
   return filters;
 }
 
+/**
+ * Evaluate an animated punch-in's window at clip-relative time `t` as plain
+ * numbers — the single-instant form of `buildEasedCropWindowFilters`'s eased
+ * expressions (same smoothstep per channel, holding the first/last window
+ * outside the path's range), WITHOUT the even-round/clamp (callers wanting
+ * render-exact pixels apply those). Used by the GUI preview overlay to follow
+ * the push over time.
+ */
+export function easedCropWindowAt(
+  keyframes: CropWindowKeyframe[],
+  t: number,
+): { x: number; y: number; w: number; h: number } {
+  const at = (sel: (k: CropWindowKeyframe) => number): number =>
+    easedCropXAt(
+      keyframes.map((k) => ({ t: k.t, x: sel(k) })),
+      t,
+    );
+  return { x: at((k) => k.x), y: at((k) => k.y), w: at((k) => k.w), h: at((k) => k.h) };
+}
+
+/**
+ * Evaluate an eased crop path's x at clip-relative time `t` as a plain number —
+ * the same smoothstep math `buildEasedCropX` encodes into an ffmpeg expression
+ * (p clamped to [0,1], s = p*p*(3-2p)), evaluated in JS for a single instant.
+ * Holds the first/last keyframe's x outside the path's time range; coincident
+ * keyframes degenerate to a step (matching the expression's behavior). Used by
+ * the GUI preview overlay and the cover-frame export (`coverFrameArgs`).
+ */
+export function easedCropXAt(keyframes: CropPathKeyframe[], t: number): number {
+  if (keyframes.length === 0) return 0;
+  const kfs = [...keyframes].sort((a, b) => a.t - b.t);
+  if (kfs.length === 1) return kfs[0]!.x;
+  if (t <= kfs[0]!.t) return kfs[0]!.x;
+  const last = kfs[kfs.length - 1]!;
+  if (t >= last.t) return last.x;
+  for (let i = 0; i < kfs.length - 1; i++) {
+    const a = kfs[i]!;
+    const b = kfs[i + 1]!;
+    if (t >= a.t && t <= b.t) {
+      const dt = b.t - a.t;
+      if (dt <= 0) return b.x;
+      const p = Math.max(0, Math.min(1, (t - a.t) / dt));
+      const s = p * p * (3 - 2 * p);
+      return a.x + (b.x - a.x) * s;
+    }
+  }
+  return last.x;
+}
+
+/**
+ * The ACTIVE offset of a parsed `crop_offset` schedule at clip-relative time
+ * `t`: the last segment whose time is ≤ `t`. The first segment applies from the
+ * clip start regardless of its stated time (matching the nested `if(lt(t,…))`
+ * hard-switch expression `buildFfmpegArgs` emits — this is its single-instant
+ * evaluation, used by the cover-frame export). `segments` must be sorted by
+ * time, as `parseCropSchedule` returns them.
+ */
+export function scheduleOffsetAt(segments: Array<[number, string]>, t: number): string {
+  if (segments.length === 0) {
+    throw new Error("scheduleOffsetAt: at least one segment required");
+  }
+  let active = segments[0]![1];
+  for (const [time, offset] of segments) {
+    if (time <= t) active = offset;
+    else break;
+  }
+  return active;
+}
+
 /** Sanitize text for use in a filename. */
 export function safeName(text: string): string {
   const collapsed = text.replace(/[^A-Za-z0-9._-]+/g, "_");
@@ -649,22 +718,8 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
     const xExpr = buildEasedCropX(opts.cropPath);
     cropFilter = `crop=${base.cw}:${base.ch}:x='${xExpr}':y=${base.y}`;
   } else if (opts.cropWindow) {
-    // Explicit punch-in / zoom window: a fixed-size 9:16 crop positioned in the
-    // working region. Even-round (H.264) and clamp all four into [0, work].
-    const win = opts.cropWindow;
-    const cw = even(win.w);
-    const ch = even(win.h);
-    if (cw <= 0 || ch <= 0) {
-      throw new Error(`cropWindow must have positive w/h, got ${cw}x${ch}`);
-    }
-    if (cw > workW || ch > workH) {
-      throw new Error(
-        `cropWindow ${cw}x${ch} exceeds working region ${workW}x${workH}`,
-      );
-    }
-    const x = even(Math.max(0, Math.min(win.x, workW - cw)));
-    const y = even(Math.max(0, Math.min(win.y, workH - ch)));
-    cropFilter = `crop=${cw}:${ch}:${x}:${y}`;
+    const win = clampCropWindow(opts.cropWindow, workW, workH);
+    cropFilter = `crop=${win.cw}:${win.ch}:${win.x}:${win.y}`;
   } else {
     const schedule = parseCropSchedule(row.crop_offset);
     // Crop size and y are constant across the schedule; only x changes.
@@ -790,6 +845,135 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
   ];
 
   return { args, outPath, forcedAudioReencode };
+}
+
+/**
+ * Even-round and clamp an explicit punch-in `CropWindowSpec` into the working
+ * region (H.264 needs even dimensions; the still export keeps the same rule so
+ * the cover matches the rendered clip pixel-for-pixel). Throws on a non-positive
+ * or region-exceeding window. Shared by `buildFfmpegArgs` and `coverFrameArgs`.
+ */
+function clampCropWindow(win: CropWindowSpec, workW: number, workH: number): Crop {
+  const cw = even(win.w);
+  const ch = even(win.h);
+  if (cw <= 0 || ch <= 0) {
+    throw new Error(`cropWindow must have positive w/h, got ${cw}x${ch}`);
+  }
+  if (cw > workW || ch > workH) {
+    throw new Error(`cropWindow ${cw}x${ch} exceeds working region ${workW}x${workH}`);
+  }
+  const x = even(Math.max(0, Math.min(win.x, workW - cw)));
+  const y = even(Math.max(0, Math.min(win.y, workH - ch)));
+  return { cw, ch, x, y };
+}
+
+/** Options for building a cover-frame (single-PNG) ffmpeg command. */
+export interface CoverFrameOptions {
+  /** Pre-probed source dimensions [width, height] (passed in — stays pure). */
+  dims: [number, number];
+  /** Eased crop path; takes precedence over `crop_offset` (same as render). */
+  cropPath?: CropPathKeyframe[];
+  /** Explicit punch-in window; beats `crop_offset` when no `cropPath` is set. */
+  cropWindow?: CropWindowSpec;
+  /** Output target: a `.png` path, or `"-"` (the default) for PNG on stdout. */
+  out?: string;
+}
+
+/**
+ * Build the ffmpeg argument array that exports ONE frame at source time `t`
+ * through the row's ACTIVE framing as a 1080×1920 PNG — the clip's cover image
+ * (issue #166). The filter chain mirrors `buildFfmpegArgs` exactly minus the
+ * encode: `[optional content_crop] → 9:16 crop → scale=1080:1920:lanczos`, with
+ * `-frames:v 1` and the PNG encoder. Because a still has no timeline, the crop
+ * x is a single NUMBER evaluated at `t` instead of a `t`-expression:
+ *
+ *  - eased `cropPath` → `easedCropXAt` at the clip-relative time (rounded and
+ *    clamped into the working region), matching the smoothstep the render emits;
+ *  - punch-in `cropWindow` → the same even-rounded/clamped fixed window;
+ *  - `crop_offset` (fixed or schedule) → `scheduleOffsetAt` picks the segment
+ *    active at the clip-relative time, then `computeCrop` resolves its x.
+ *
+ * `t` is in SOURCE seconds (the GUI playhead); schedule/path times are
+ * clip-relative, so they are evaluated at `max(0, t - in_point)`. Precedence is
+ * the render's: `cropPath` > `cropWindow` > `crop_offset`.
+ *
+ * The native Rust backend (app/src-tauri/src/main.rs `cover_frame_args`) hand-
+ * mirrors this builder — keep the two in sync.
+ */
+export function coverFrameArgs(row: ClipRow, t: number, opts: CoverFrameOptions): string[] {
+  const source = row.source_file.trim();
+  const [iw, ih] = opts.dims;
+
+  // Optional content region (strip letterbox/pillarbox) cropped before the
+  // 9:16 crop, exactly as in buildFfmpegArgs.
+  const content = parseContentCrop(row.content_crop);
+  const workW = content ? content[0] : iw;
+  const workH = content ? content[1] : ih;
+
+  // Clip-relative time for the schedule / eased path (clamped at the clip start).
+  const seek = Number.isFinite(t) ? t : 0;
+  const rel = Math.max(0, seek - parseTimestamp(row.in_point));
+
+  let cropFilter: string;
+  if (opts.cropPath && opts.cropPath.length > 0) {
+    // SPEC §6.9 precedence: the eased path beats everything. Same "center" base
+    // sizing trick as buildFfmpegArgs (cw/ch/y are offset-independent).
+    const base = computeCrop(workW, workH, "center");
+    const maxX = Math.max(0, workW - base.cw);
+    const x = Math.round(Math.min(maxX, Math.max(0, easedCropXAt(opts.cropPath, rel))));
+    cropFilter = `crop=${base.cw}:${base.ch}:${x}:${base.y}`;
+  } else if (opts.cropWindow) {
+    const win = clampCropWindow(opts.cropWindow, workW, workH);
+    cropFilter = `crop=${win.cw}:${win.ch}:${win.x}:${win.y}`;
+  } else {
+    const schedule = parseCropSchedule(row.crop_offset);
+    const c = computeCrop(workW, workH, scheduleOffsetAt(schedule, rel));
+    cropFilter = `crop=${c.cw}:${c.ch}:${c.x}:${c.y}`;
+  }
+
+  const filters: string[] = [];
+  if (content) {
+    filters.push(`crop=${content[0]}:${content[1]}:${content[2]}:${content[3]}`);
+  }
+  filters.push(cropFilter);
+  filters.push(`scale=${TARGET_W}:${TARGET_H}:flags=lanczos`);
+
+  // INPUT-seek (accurate, same as frameExtractArgs); -y so a file target can be
+  // overwritten (harmless for the stdout form).
+  return [
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-y",
+    "-ss",
+    String(seek),
+    "-i",
+    source,
+    "-vf",
+    filters.join(","),
+    "-frames:v",
+    "1",
+    "-f",
+    "image2",
+    "-c:v",
+    "png",
+    opts.out ?? "-",
+  ];
+}
+
+/**
+ * Default filename for a clip's exported cover PNG, derived from the clip the
+ * same way `buildFfmpegArgs` derives its output name: the row's `out_name`
+ * (minus any `.mp4`) when set, else `<stem>_<in>-<out>`, suffixed `_cover.png`.
+ */
+export function coverOutName(row: ClipRow): string {
+  let base = (row.out_name || "").trim();
+  if (base.toLowerCase().endsWith(".mp4")) base = base.slice(0, -4);
+  if (!base) {
+    const stem = sourceStem(row.source_file.trim());
+    base = `${safeName(stem)}_${safeName(row.in_point)}-${safeName(row.out_point)}`;
+  }
+  return `${base}_cover.png`;
 }
 
 /** Vertical placement of the burned caption block in the 1080×1920 frame. */

@@ -46,6 +46,7 @@ import {
   frameExtractTailArgs,
   scenesArgs,
   loudnessCombinedArgs,
+  coverFrameArgs,
   LOUDNESS_BUCKETS,
 } from "../../dist/core.js";
 
@@ -737,5 +738,77 @@ describe("collectFontFiles scan bounds", () => {
     const acc: string[] = [];
     await collectFontFiles(join(root, "does-not-exist"), 0, acc);
     expect(acc).toEqual([]);
+  });
+});
+
+// --- /cover (issue #166) ----------------------------------------------------------
+
+describe("POST /cover", () => {
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const PROBE_JSON = JSON.stringify({
+    streams: [{ width: 1920, height: 1080 }],
+    format: { duration: "30" },
+  });
+  const spec = {
+    source_file: "/v/show.mp4",
+    in_point: "10.000",
+    out_point: "20.000",
+    crop_offset: "0=left; 4=right",
+  };
+
+  it("probes the source, runs the shared coverFrameArgs at t, and streams the PNG", async () => {
+    onSpawn((cmd) => (cmd === "ffprobe" ? { stdout: PROBE_JSON } : { stdout: PNG }));
+
+    const res = await fetch(`${base}/cover?source=${encodeURIComponent("/v/show.mp4")}&t=15`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(spec),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(Buffer.from(await res.arrayBuffer())).toEqual(PNG);
+
+    expect(spawnCall(0)).toEqual({ cmd: "ffprobe", args: ffprobeStreamArgs("/v/show.mp4") });
+    const expected = coverFrameArgs(
+      { source_file: "/v/show.mp4", in_point: "10.000", out_point: "20.000", crop_offset: "0=left; 4=right" },
+      15,
+      { dims: [1920, 1080] },
+    );
+    expect(spawnCall(1)).toEqual({ cmd: "ffmpeg", args: expected });
+  });
+
+  it("400s on a missing source or an unparseable spec body", async () => {
+    const noSource = await fetch(`${base}/cover?t=1`, { method: "POST", body: "{}" });
+    expect(noSource.status).toBe(400);
+    const badJson = await fetch(`${base}/cover?source=/v.mp4&t=1`, {
+      method: "POST",
+      body: "not json",
+    });
+    expect(badJson.status).toBe(400);
+    expect(await badJson.text()).toContain("not valid JSON");
+  });
+
+  it("400s with the engine's message on a bad framing spec", async () => {
+    onSpawn((cmd) => (cmd === "ffprobe" ? { stdout: PROBE_JSON } : { stdout: PNG }));
+    const res = await fetch(`${base}/cover?source=/v.mp4&t=0`, {
+      method: "POST",
+      body: JSON.stringify({ ...spec, cropWindow: { x: 0, y: 0, w: 405, h: 2000 } }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.text()).toContain("exceeds working region");
+  });
+
+  it("500s when ffmpeg fails or emits nothing", async () => {
+    onSpawn((cmd) =>
+      cmd === "ffprobe" ? { stdout: PROBE_JSON } : { code: 1, stderr: "encode error" },
+    );
+    const res = await fetch(`${base}/cover?source=/v.mp4&t=1`, {
+      method: "POST",
+      body: JSON.stringify(spec),
+    });
+    expect(res.status).toBe(500);
+    expect(await res.text()).toContain("cover export failed: encode error");
   });
 });

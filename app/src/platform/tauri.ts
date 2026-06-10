@@ -11,6 +11,7 @@
  * Tauri.
  */
 
+import type { ClipSpec } from "@manifest";
 import type {
   FootlightPlatform,
   FontInfo,
@@ -107,6 +108,26 @@ export const tauriPlatform: FootlightPlatform = {
     });
     if (typeof path !== "string") return false; // cancelled
     await invoke<void>("write_text_file", { path, content });
+    return true;
+  },
+
+  // Cover-frame export (issue #166): native Save dialog seeded with the clip's
+  // default cover name, then the Rust `export_cover` command probes the source
+  // and writes the 1080×1920 PNG (its arg builder hand-mirrors the engine's
+  // coverFrameArgs). Returns false when the user cancels the dialog.
+  async exportCover(
+    source: string,
+    t: number,
+    spec: ClipSpec,
+    suggestedName: string,
+  ): Promise<boolean> {
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const path = await save({
+      defaultPath: suggestedName,
+      filters: [{ name: "PNG", extensions: ["png"] }],
+    });
+    if (typeof path !== "string") return false; // cancelled
+    await invoke<void>("export_cover", { source, t, spec, outPath: path });
     return true;
   },
 

@@ -19,7 +19,14 @@
  *    and rendered through `platform.render`.
  */
 
-import { TARGET_AR, parseTimestamp, detectSwells, detectOnsets, LOUDNESS_BUCKETS } from "@core";
+import {
+  TARGET_AR,
+  parseTimestamp,
+  detectSwells,
+  detectOnsets,
+  coverOutName,
+  LOUDNESS_BUCKETS,
+} from "@core";
 import {
   cropBoxToOffset,
   cropBoxToWindow,
@@ -1865,7 +1872,66 @@ export function mountEditor(root: HTMLElement): void {
   exportBtn.innerHTML = `${ICON_DOWN}${escapeHtml(m.queue.exportJson)}`;
   exportBtn.style.alignSelf = "center";
   exportBtn.title = m.queue.exportJsonTitle;
-  filmstrip.append(queueLabel, clipList, addCard, fsSpacer, exportBtn);
+  // Export the playhead frame, through the ACTIVE framing, as the clip's
+  // 1080×1920 PNG cover image (#166) — same framing precedence as addClip.
+  const coverBtn = button("", "fl-btn sm ghost", () => {
+    void doExportCover();
+  });
+  coverBtn.innerHTML = `${ICON_DOWN}${escapeHtml(m.queue.exportCover)}`;
+  coverBtn.style.alignSelf = "center";
+  coverBtn.title = m.queue.exportCoverTitle;
+  filmstrip.append(queueLabel, clipList, addCard, fsSpacer, coverBtn, exportBtn);
+
+  /**
+   * Cover-frame export (#166): build a spec from the CURRENT editor framing
+   * (cropPath > cropWindow > offset/schedule, plus any content crop — the same
+   * precedence addClip emits) and hand it to the platform with the playhead t.
+   * The backend evaluates the crop at that instant and writes/downloads the PNG.
+   */
+  async function doExportCover(): Promise<void> {
+    if (!state.source || !state.dims) {
+      setOutput(m.errors.loadSourceFirst, "err");
+      return;
+    }
+    const spec: ClipSpec = {
+      source_file: state.source,
+      in_point: (state.inPoint ?? 0).toFixed(3),
+      out_point: (state.outPoint ?? state.duration).toFixed(3),
+    };
+    const win = cropWindowSpec();
+    if (hasActiveTrack(state)) {
+      spec.cropPath = state.cropPath!.map((k) => ({ t: k.t, x: k.x }));
+      spec.crop_offset = "center";
+    } else if (win) {
+      spec.cropWindow = win;
+      spec.crop_offset = currentOffset();
+    } else {
+      spec.crop_offset = state.keyframes.length
+        ? scheduleToString(state.keyframes)
+        : currentOffset();
+    }
+    if (state.contentMode && state.contentBox && state.contentBox.w > 0) {
+      spec.content_crop = contentCropFromBox(state.contentBox);
+    }
+    const name = nameInput.value.trim();
+    if (name) spec.out_name = name;
+    try {
+      const saved = await platform.exportCover(
+        state.source,
+        state.t,
+        spec,
+        coverOutName({
+          source_file: spec.source_file,
+          in_point: spec.in_point,
+          out_point: spec.out_point,
+          ...(spec.out_name ? { out_name: spec.out_name } : {}),
+        }),
+      );
+      if (saved) setOutput(m.activity.coverExported);
+    } catch (err) {
+      setOutput(errMsg(err), "err");
+    }
+  }
 
   appEl.append(topbar, main, timeline, filmstrip);
   root.append(appEl);

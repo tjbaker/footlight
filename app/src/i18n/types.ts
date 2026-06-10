@@ -422,6 +422,9 @@ export interface EditorMessages {
     addClip: string;
     exportJson: string;
     exportJsonTitle: string;
+    /** Cover-frame export (issue #166): button label + tooltip. */
+    exportCover: string;
+    exportCoverTitle: string;
     /** `Render {n}` — composed in code. */
     renderN: string;
     cardEditTitle: string;
@@ -448,6 +451,8 @@ export interface EditorMessages {
     sceneCutsSuffix: string;
     noScenes: string;
     stagedForRender: string;
+    /** Cover-frame export succeeded (the PNG was saved/downloaded). */
+    coverExported: string;
     copied: string;
     copyFailed: string;
     copyIdle: string;

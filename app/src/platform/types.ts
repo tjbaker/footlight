@@ -197,6 +197,16 @@ export interface FootlightPlatform {
    * writes the file. Resolves `true` if a file was written, `false` if cancelled.
    */
   exportTextFile(suggestedName: string, content: string): Promise<boolean>;
+  /**
+   * Export the frame at source time `t` through `spec`'s ACTIVE framing
+   * (`cropPath` > `cropWindow` > `crop_offset` schedule, plus any
+   * `content_crop`) as a 1080×1920 PNG — the clip's cover image (issue #166).
+   * The backend probes the source and runs the engine's `coverFrameArgs`
+   * command. Web: streams the PNG back and downloads it as `suggestedName`.
+   * Native: opens a Save dialog seeded with `suggestedName`, then writes the
+   * file. Resolves `true` if an image was saved, `false` if cancelled.
+   */
+  exportCover(source: string, t: number, spec: ClipSpec, suggestedName: string): Promise<boolean>;
   /** Open a URL in the user's default browser. */
   openExternal(url: string): Promise<void>;
   /**
