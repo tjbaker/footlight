@@ -184,9 +184,7 @@ describe("coverFrameArgs — eased cropPath at t", () => {
     expect(vfOf(build({}, 0, { cropPath }))).toContain("crop=608:1080:0:0");
     expect(vfOf(build({}, 99, { cropPath }))).toContain("crop=608:1080:1312:0");
     // A path x beyond maxX clamps (1920-608=1312).
-    expect(vfOf(build({}, 0, { cropPath: [{ t: 0, x: 9999 }] }))).toContain(
-      "crop=608:1080:1312:0",
-    );
+    expect(vfOf(build({}, 0, { cropPath: [{ t: 0, x: 9999 }] }))).toContain("crop=608:1080:1312:0");
     // Fractional eased x rounds to the nearest integer pixel.
     const frac = vfOf(build({}, 1, { cropPath }));
     const m = /crop=608:1080:(\d+):0/.exec(frac);
@@ -232,14 +230,10 @@ describe("coverFrameArgs — content_crop working region", () => {
   });
 
   it("a punch-in window is clamped against the content region, not the frame", () => {
-    const a = build(
-      { content_crop: "1280:720:320:180" },
-      0,
-      { cropWindow: { x: 100, y: 0, w: 270, h: 480 } },
-    );
-    expect(vfOf(a)).toBe(
-      "crop=1280:720:320:180,crop=270:480:100:0,scale=1080:1920:flags=lanczos",
-    );
+    const a = build({ content_crop: "1280:720:320:180" }, 0, {
+      cropWindow: { x: 100, y: 0, w: 270, h: 480 },
+    });
+    expect(vfOf(a)).toBe("crop=1280:720:320:180,crop=270:480:100:0,scale=1080:1920:flags=lanczos");
   });
 });
 
@@ -248,13 +242,12 @@ describe("coverOutName", () => {
     expect(coverOutName({ ...ROW, out_name: "chorus_closeup.mp4" })).toBe(
       "chorus_closeup_cover.png",
     );
-    expect(coverOutName({ ...ROW, out_name: "chorus_closeup" })).toBe(
-      "chorus_closeup_cover.png",
-    );
+    expect(coverOutName({ ...ROW, out_name: "chorus_closeup" })).toBe("chorus_closeup_cover.png");
   });
 
   it("falls back to the render's <stem>_<in>-<out> derivation", () => {
-    expect(coverOutName({ source_file: "/media/My Show.mp4", in_point: "0:14.5", out_point: "0:29" }))
-      .toBe("My_Show_0_14.5-0_29_cover.png");
+    expect(
+      coverOutName({ source_file: "/media/My Show.mp4", in_point: "0:14.5", out_point: "0:29" }),
+    ).toBe("My_Show_0_14.5-0_29_cover.png");
   });
 });

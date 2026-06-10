@@ -172,7 +172,12 @@ describe("bucketLufs", () => {
   });
 
   it("skips non-finite readings; an all-silence window is 0", () => {
-    const lufs = [Number.NEGATIVE_INFINITY, LUFS_CEIL, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY];
+    const lufs = [
+      Number.NEGATIVE_INFINITY,
+      LUFS_CEIL,
+      Number.NEGATIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ];
     // window 0 = [-inf, ceil] → only the ceiling counts → 1; window 1 = all -inf → 0.
     expect(bucketLufs(lufs, 2)).toEqual([1, 0]);
   });

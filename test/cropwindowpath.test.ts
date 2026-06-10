@@ -65,11 +65,7 @@ describe("buildEasedCropWindowFilters", () => {
 
   it("even-rounds w/h and clamps x/y like the static cropWindow", () => {
     // 405→404 wide; x 9999 clamps to 1920−404=1516 (already even).
-    const f = buildEasedCropWindowFilters(
-      [{ t: 0, x: 9999, y: -50, w: 405, h: 720 }],
-      1920,
-      1080,
-    );
+    const f = buildEasedCropWindowFilters([{ t: 0, x: 9999, y: -50, w: 405, h: 720 }], 1920, 1080);
     expect(f[0]).toBe("crop=404:720:1516:0");
   });
 
@@ -133,7 +129,10 @@ describe("buildFfmpegArgs with a cropWindowPath", () => {
         audioBitrate: "copy",
         outdir: "out",
         dims: [1920, 1080],
-        cropWindowPath: [{ t: 0, x: 0, y: 0, w: 1440, h: 1080 }, { ...END, x: 700 }],
+        cropWindowPath: [
+          { t: 0, x: 0, y: 0, w: 1440, h: 1080 },
+          { ...END, x: 700 },
+        ],
       },
     );
     const vf = vfOf(args);
@@ -188,10 +187,22 @@ describe("animated punch-in renders correctly (REAL ffmpeg)", () => {
   it("matches the static endpoints and moves in between", () => {
     // 10 fps × 2 s = 20 frames; the push completes at t=1.5 (frame 15).
     ff([
-      "-loglevel", "error", "-f", "lavfi", "-i",
+      "-loglevel",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
       "testsrc=size=1920x1080:duration=2:rate=10",
-      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "12", "-pix_fmt", "yuv420p",
-      "-y", src,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-crf",
+      "12",
+      "-pix_fmt",
+      "yuv420p",
+      "-y",
+      src,
     ]);
 
     const { args, outPath } = buildFfmpegArgs(
@@ -211,7 +222,17 @@ describe("animated punch-in renders correctly (REAL ffmpeg)", () => {
     // Output dims are the standard 1080×1920.
     const dims = execFileSync(
       "ffprobe",
-      ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0", outPath],
+      [
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height",
+        "-of",
+        "csv=p=0",
+        outPath,
+      ],
       { encoding: "utf8" },
     ).trim();
     expect(dims).toBe("1080,1920");
@@ -220,14 +241,40 @@ describe("animated punch-in renders correctly (REAL ffmpeg)", () => {
     const startOut = join(dir, "start.mp4");
     const endOut = join(dir, "end.mp4");
     ff([
-      "-loglevel", "error", "-i", src,
-      "-vf", `crop=${START.w}:${START.h}:${START.x}:${START.y},scale=1080:1920:flags=lanczos,setsar=1`,
-      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "12", "-pix_fmt", "yuv420p", "-y", startOut,
+      "-loglevel",
+      "error",
+      "-i",
+      src,
+      "-vf",
+      `crop=${START.w}:${START.h}:${START.x}:${START.y},scale=1080:1920:flags=lanczos,setsar=1`,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-crf",
+      "12",
+      "-pix_fmt",
+      "yuv420p",
+      "-y",
+      startOut,
     ]);
     ff([
-      "-loglevel", "error", "-i", src,
-      "-vf", `crop=${END.w}:${END.h}:${END.x}:${END.y},scale=1080:1920:flags=lanczos,setsar=1`,
-      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "12", "-pix_fmt", "yuv420p", "-y", endOut,
+      "-loglevel",
+      "error",
+      "-i",
+      src,
+      "-vf",
+      `crop=${END.w}:${END.h}:${END.x}:${END.y},scale=1080:1920:flags=lanczos,setsar=1`,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-crf",
+      "12",
+      "-pix_fmt",
+      "yuv420p",
+      "-y",
+      endOut,
     ]);
 
     const firstVsStart = psnrAt(outPath, startOut, 0);

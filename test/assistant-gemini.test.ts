@@ -35,9 +35,7 @@ function response(parts: unknown[]): unknown {
 
 describe("GeminiAssistant.parseModelTurn (pure, no network)", () => {
   it("text-only response -> prose, no tool calls", () => {
-    const turn = GeminiAssistant.parseModelTurn(
-      response([{ text: "Here's a framing idea." }]),
-    );
+    const turn = GeminiAssistant.parseModelTurn(response([{ text: "Here's a framing idea." }]));
     expect(turn.text).toBe("Here's a framing idea.");
     expect(turn.toolCalls).toEqual([]);
   });
@@ -58,9 +56,7 @@ describe("GeminiAssistant.parseModelTurn (pure, no network)", () => {
       ]),
     );
     expect(turn.text).toBe("Setting the clip.");
-    expect(turn.toolCalls).toEqual([
-      { name: "setInOut", args: { inSec: 2, outSec: 8 } },
-    ]);
+    expect(turn.toolCalls).toEqual([{ name: "setInOut", args: { inSec: 2, outSec: 8 } }]);
   });
 
   it("multiple functionCalls -> tool calls in order, prose preserved", () => {
@@ -79,9 +75,7 @@ describe("GeminiAssistant.parseModelTurn (pure, no network)", () => {
   });
 
   it("functionCall with missing args -> normalized to {}", () => {
-    const turn = GeminiAssistant.parseModelTurn(
-      response([{ functionCall: { name: "render" } }]),
-    );
+    const turn = GeminiAssistant.parseModelTurn(response([{ functionCall: { name: "render" } }]));
     expect(turn.toolCalls).toEqual([{ name: "render", args: {} }]);
   });
 
@@ -128,9 +122,10 @@ describe("GeminiAssistant.parseModelTurn (pure, no network)", () => {
       text: "",
       toolCalls: [],
     });
-    expect(
-      GeminiAssistant.parseModelTurn({ candidates: [{ content: {} }] }),
-    ).toEqual({ text: "", toolCalls: [] });
+    expect(GeminiAssistant.parseModelTurn({ candidates: [{ content: {} }] })).toEqual({
+      text: "",
+      toolCalls: [],
+    });
     expect(GeminiAssistant.parseModelTurn(null)).toEqual({ text: "", toolCalls: [] });
     expect(GeminiAssistant.parseModelTurn("nonsense")).toEqual({
       text: "",
@@ -140,13 +135,7 @@ describe("GeminiAssistant.parseModelTurn (pure, no network)", () => {
 
   it("ignores junk parts (non-object, empty text, non-object functionCall)", () => {
     const turn = GeminiAssistant.parseModelTurn(
-      response([
-        null,
-        42,
-        { text: "" },
-        { functionCall: "not-an-object" },
-        { text: "kept" },
-      ]),
+      response([null, 42, { text: "" }, { functionCall: "not-an-object" }, { text: "kept" }]),
     );
     expect(turn.text).toBe("kept");
     expect(turn.toolCalls).toEqual([]);

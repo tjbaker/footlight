@@ -110,10 +110,18 @@ describe("buildFfmpegArgs with cropPath", () => {
     const { args } = build(
       { source_file: "in.mp4", in_point: "0", out_point: "3", crop_offset: "center" },
       [1920, 1080],
-      { cropPath: [{ t: 0, x: 0 }, { t: 3, x: 1312 }] },
+      {
+        cropPath: [
+          { t: 0, x: 0 },
+          { t: 3, x: 1312 },
+        ],
+      },
     );
     const vf = vfOf(args);
-    const expr = buildEasedCropX([{ t: 0, x: 0 }, { t: 3, x: 1312 }]);
+    const expr = buildEasedCropX([
+      { t: 0, x: 0 },
+      { t: 3, x: 1312 },
+    ]);
     expect(vf).toBe(
       `crop=${region.cw}:${region.ch}:x='${expr}':y=${region.y},scale=1080:1920:flags=lanczos,setsar=1`,
     );
@@ -123,7 +131,12 @@ describe("buildFfmpegArgs with cropPath", () => {
     const { args } = build(
       { source_file: "in.mp4", in_point: "0", out_point: "3", crop_offset: "0=center; 1.5=440" },
       [1920, 1080],
-      { cropPath: [{ t: 0, x: 100 }, { t: 3, x: 900 }] },
+      {
+        cropPath: [
+          { t: 0, x: 100 },
+          { t: 3, x: 900 },
+        ],
+      },
     );
     const vf = vfOf(args);
     // No hard-switch schedule artifacts; uses the eased expression.
@@ -141,10 +154,18 @@ describe("buildFfmpegArgs with cropPath", () => {
         content_crop: "1800:1010:60:34",
       },
       [1, 1],
-      { cropPath: [{ t: 0, x: 0 }, { t: 3, x: 600 }] },
+      {
+        cropPath: [
+          { t: 0, x: 0 },
+          { t: 3, x: 600 },
+        ],
+      },
     );
     const region = computeCrop(1800, 1010, "center");
-    const expr = buildEasedCropX([{ t: 0, x: 0 }, { t: 3, x: 600 }]);
+    const expr = buildEasedCropX([
+      { t: 0, x: 0 },
+      { t: 3, x: 600 },
+    ]);
     expect(vfOf(args)).toBe(
       `crop=1800:1010:60:34,crop=${region.cw}:${region.ch}:x='${expr}':y=${region.y},scale=1080:1920:flags=lanczos,setsar=1`,
     );

@@ -171,6 +171,17 @@ pure builders in `src/core.ts` (it cannot import TS); every mirror carries a
   preserve this when touching crop math.
 - Engine/CLI changes **need tests** (`CONTRIBUTING.md`). Tests pass dimensions in to
   keep things file-free; mirror that pattern.
+- **DRY by delegation — always.** Never restate logic that already exists in a
+  pure module: reuse it, or extract a shared helper and delegate (the smoothstep
+  easing, crop-width rule, even-rounding, and window clamping each live in
+  exactly ONE place in `core.ts`; the editor's framing emission is the single
+  `framingToSpec`). The only sanctioned duplication is a **documented mirror
+  that cannot import its source** — the Rust shell and `manifest.ts`'s
+  inverse-of-the-engine math — and every mirror MUST be pinned by tests that
+  reuse the original's fixtures so drift fails CI. Shared test scaffolding
+  lives in `app/test/helpers/`, never copied into individual suites.
+- **Prettier owns formatting** (`npm run format` in each package; CI runs
+  `format:check`) — don't hand-wrangle whitespace or argue style in review.
 - ffmpeg `cropdetect` sees **black bars only** — colored/blurred pillarboxing is
   invisible to it. Framing is a human call; don't trust metadata over pixels.
 - **No telemetry** — the project does not phone home.

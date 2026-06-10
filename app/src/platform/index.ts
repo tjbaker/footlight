@@ -18,8 +18,7 @@ function isTauri(): boolean {
   // silently falls back to the dev-server backend (no native ffmpeg, no file
   // picker). Detect on the internals bridge, keeping `__TAURI__` as a fallback.
   return (
-    typeof window !== "undefined" &&
-    ("__TAURI_INTERNALS__" in window || "__TAURI__" in window)
+    typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window)
   );
 }
 

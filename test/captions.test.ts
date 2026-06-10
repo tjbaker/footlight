@@ -75,7 +75,8 @@ describe("buildCaptionAss (pure, libass — SPEC §6.5)", () => {
   });
 
   it("text_position maps to ASS alignment (top=8, center=5, bottom=2)", () => {
-    const at = (p?: string) => styleLine(buildCaptionAss({ ...ROW, hook: "H", text_position: p }, opts())!);
+    const at = (p?: string) =>
+      styleLine(buildCaptionAss({ ...ROW, hook: "H", text_position: p }, opts())!);
     expect(at("top")).toMatch(/,1,4,0,8,60,60,/);
     expect(at("center")).toMatch(/,1,4,0,5,60,60,/);
     expect(at("bottom")).toMatch(/,1,4,0,2,60,60,/);
@@ -90,18 +91,21 @@ describe("buildCaptionAss (pure, libass — SPEC §6.5)", () => {
   });
 
   it("font resolution: name -> Fontname, file -> stem, neither -> Sans", () => {
-    expect(styleLine(buildCaptionAss({ ...ROW, hook: "H" }, opts({ captionFontName: "Impact" }))!))
-      .toContain("Style: Caption,Impact,");
-    expect(styleLine(buildCaptionAss({ ...ROW, hook: "H" }, opts({ captionFontFile: "/f/My Font.ttf" }))!))
-      .toContain("Style: Caption,My Font,");
-    expect(styleLine(buildCaptionAss({ ...ROW, hook: "H" }, opts())!))
-      .toContain("Style: Caption,Sans,");
+    expect(
+      styleLine(buildCaptionAss({ ...ROW, hook: "H" }, opts({ captionFontName: "Impact" }))!),
+    ).toContain("Style: Caption,Impact,");
+    expect(
+      styleLine(
+        buildCaptionAss({ ...ROW, hook: "H" }, opts({ captionFontFile: "/f/My Font.ttf" }))!,
+      ),
+    ).toContain("Style: Caption,My Font,");
+    expect(styleLine(buildCaptionAss({ ...ROW, hook: "H" }, opts())!)).toContain(
+      "Style: Caption,Sans,",
+    );
   });
 
   it("neutralizes ASS override braces and strips backslashes from text", () => {
-    const d = dialogueLine(
-      buildCaptionAss({ ...ROW, hook: "a{\\b1}b" }, opts())!,
-    );
+    const d = dialogueLine(buildCaptionAss({ ...ROW, hook: "a{\\b1}b" }, opts())!);
     // the inline \fs tag we add is intact, but the user's braces/backslash are gone
     expect(d).toContain(`{\\fs${HOOK_SIZE}}a(b1)b`);
     expect(d).not.toContain("{\\b1}");
@@ -227,7 +231,13 @@ describe("buildFfmpegArgs caption integration", () => {
   it("adds fontsdir when a caption font file is set", () => {
     const { args } = buildFfmpegArgs(
       { ...ROW, hook: "Yo" },
-      { ...opts(), dims, outdir: "out", captionAssPath: "/tmp/c.ass", captionFontFile: "/f/My Font.ttf" },
+      {
+        ...opts(),
+        dims,
+        outdir: "out",
+        captionAssPath: "/tmp/c.ass",
+        captionFontFile: "/f/My Font.ttf",
+      },
     );
     const vf = args[args.indexOf("-vf") + 1]!;
     expect(vf).toContain("subtitles=filename='/tmp/c.ass':fontsdir='/f'");
@@ -236,7 +246,13 @@ describe("buildFfmpegArgs caption integration", () => {
   it("points fontsdir at the root for a root-level font file", () => {
     const { args } = buildFfmpegArgs(
       { ...ROW, hook: "Yo" },
-      { ...opts(), dims, outdir: "out", captionAssPath: "/tmp/c.ass", captionFontFile: "/My Font.ttf" },
+      {
+        ...opts(),
+        dims,
+        outdir: "out",
+        captionAssPath: "/tmp/c.ass",
+        captionFontFile: "/My Font.ttf",
+      },
     );
     const vf = args[args.indexOf("-vf") + 1]!;
     expect(vf).toContain("subtitles=filename='/tmp/c.ass':fontsdir='/'");

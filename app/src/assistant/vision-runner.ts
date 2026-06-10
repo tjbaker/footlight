@@ -71,16 +71,12 @@ export class RealVisionRunner implements VisionRunner {
     args: { t: number; subjectHint?: string },
     ctx: AssistantContext,
   ): Promise<Box> {
-    const samples = await this.platform.track(
-      this.trackRequest(ctx, [args.t], args.subjectHint),
-    );
+    const samples = await this.platform.track(this.trackRequest(ctx, [args.t], args.subjectHint));
     // The single requested sample may be omitted on a detection miss; take the
     // first located box (track returns at most one for one sample time).
     const hit = samples.find((s) => !!s && !!s.box);
     if (!hit) {
-      throw new Error(
-        `suggestCropForFrame: the vision model located no subject at t=${args.t}s`,
-      );
+      throw new Error(`suggestCropForFrame: the vision model located no subject at t=${args.t}s`);
     }
     return hit.box;
   }
@@ -92,10 +88,7 @@ export class RealVisionRunner implements VisionRunner {
    * located samples. The orchestrator builds the eased crop path from them via
    * `samplesToCropPath` — this stays a single continuous shot (SPEC §6.9).
    */
-  async trackSubject(
-    args: { subjectHint: string },
-    ctx: AssistantContext,
-  ): Promise<TrackSample[]> {
+  async trackSubject(args: { subjectHint: string }, ctx: AssistantContext): Promise<TrackSample[]> {
     const shotEnd = clipLength(ctx);
     const sampleTimes = planSampleTimes({
       shotStart: 0,
@@ -135,17 +128,11 @@ export class RealVisionRunner implements VisionRunner {
 
 /** The shot length to plan samples over: In→Out when known, else source duration. */
 function clipLength(ctx: AssistantContext): number {
-  if (
-    ctx.inSec !== undefined &&
-    ctx.outSec !== undefined &&
-    ctx.outSec > ctx.inSec
-  ) {
+  if (ctx.inSec !== undefined && ctx.outSec !== undefined && ctx.outSec > ctx.inSec) {
     return ctx.outSec - ctx.inSec;
   }
   if (ctx.duration !== undefined && ctx.duration > 0) return ctx.duration;
-  throw new Error(
-    "trackSubject: need In/Out or a source duration to bound the shot",
-  );
+  throw new Error("trackSubject: need In/Out or a source duration to bound the shot");
 }
 
 /**

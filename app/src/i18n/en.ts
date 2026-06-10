@@ -243,7 +243,7 @@ export const en: Messages = {
           },
           {
             kind: "p",
-            text: "The assistant only ever PROPOSES. Each suggestion previews on the canvas and timeline as a ghost, and nothing changes until you Accept it — or Step through proposals one at a time, or Discard them. Even \"render\" only stages the queue; the assistant never encodes for you.",
+            text: 'The assistant only ever PROPOSES. Each suggestion previews on the canvas and timeline as a ghost, and nothing changes until you Accept it — or Step through proposals one at a time, or Discard them. Even "render" only stages the queue; the assistant never encodes for you.',
           },
           {
             kind: "list",
@@ -418,12 +418,14 @@ export const en: Messages = {
       defaults: "Defaults",
       destination: "Destination",
       destinationBrowse: "Browse…",
-      destinationHint: "Default output folder for rendered clips. Pre-fills the editor's destination.",
+      destinationHint:
+        "Default output folder for rendered clips. Pre-fills the editor's destination.",
       trackingInterval: "Tracking interval",
       trackingIntervalHint: "Default AI sampling cadence — wider means fewer frames, so cheaper.",
       session: "Session",
       autosave: "Autosave & restore session",
-      autosaveHint: "Remember your source, queue, and destination, and restore them on next launch.",
+      autosaveHint:
+        "Remember your source, queue, and destination, and restore them on next launch.",
       clearSession: "Clear saved session",
       sessionCleared: "Saved session cleared.",
     },
@@ -463,7 +465,8 @@ export const en: Messages = {
 
     ai: {
       title: "AI & models",
-      subtitle: "Optional, bring-your-own-key. One multimodal model does both tracking and the assistant.",
+      subtitle:
+        "Optional, bring-your-own-key. One multimodal model does both tracking and the assistant.",
       provider: "Provider",
       providerGemini: "Google Gemini",
       providerClaude: "Anthropic Claude",
@@ -638,7 +641,8 @@ export const en: Messages = {
     captions: {
       header: "Captions",
       hookPlaceholder: "hook (big line, optional)",
-      hookTitle: "The big caption line burned over the clip (when burn-in is on). Enter adds a line break.",
+      hookTitle:
+        "The big caption line burned over the clip (when burn-in is on). Enter adds a line break.",
       titlePlaceholder: "title (secondary line, optional)",
       titleTitle: "The secondary caption line, shown under the hook. Enter adds a line break.",
       posVTitle: "Vertical placement of the caption.",

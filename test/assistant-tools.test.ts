@@ -73,7 +73,9 @@ describe("interpretTool (deterministic tools)", () => {
   });
 
   it("setInOut rejects out <= in", () => {
-    expect(() => interpretTool("setInOut", { inSec: 10, outSec: 10 }, { region })).toThrow(/greater than/);
+    expect(() => interpretTool("setInOut", { inSec: 10, outSec: 10 }, { region })).toThrow(
+      /greater than/,
+    );
   });
 
   it("addCropKeyframe clamps x into frame", () => {
@@ -89,18 +91,25 @@ describe("interpretTool (deterministic tools)", () => {
   });
 
   it("trim / detectScenes / render map to their commit kinds", () => {
-    expect(interpretTool("trim", { outSec: 30 }, { region }).commit).toEqual({ kind: "trim", outSec: 30 });
+    expect(interpretTool("trim", { outSec: 30 }, { region }).commit).toEqual({
+      kind: "trim",
+      outSec: 30,
+    });
     expect(interpretTool("detectScenes", {}, { region }).commit).toEqual({ kind: "detectScenes" });
     expect(interpretTool("render", {}, { region }).commit).toEqual({ kind: "render" });
   });
 
   it("rejects vision tools (they need a model result)", () => {
-    expect(() => interpretTool("trackSubject", { subjectHint: "x" }, { region })).toThrow(/vision tool/);
+    expect(() => interpretTool("trackSubject", { subjectHint: "x" }, { region })).toThrow(
+      /vision tool/,
+    );
     expect(() => interpretTool("suggestCropForFrame", { t: 1 }, { region })).toThrow(/vision tool/);
   });
 
   it("rejects malformed args", () => {
-    expect(() => interpretTool("setInOut", { inSec: "a", outSec: 2 } as never, { region })).toThrow(/finite number/);
+    expect(() => interpretTool("setInOut", { inSec: "a", outSec: 2 } as never, { region })).toThrow(
+      /finite number/,
+    );
   });
 });
 
@@ -108,7 +117,11 @@ describe("vision-result builders", () => {
   it("buildSuggestCropAction inverts the box via cropBoxToOffset", () => {
     const box: Box = { x: 700, y: 240, w: 608, h: 600 };
     const a = buildSuggestCropAction(3.2, box, region);
-    expect(a.commit).toEqual({ kind: "suggestCropForFrame", t: 3.2, cropOffset: cropBoxToOffset(box, region) });
+    expect(a.commit).toEqual({
+      kind: "suggestCropForFrame",
+      t: 3.2,
+      cropOffset: cropBoxToOffset(box, region),
+    });
     expect(a.ghost?.crop).toEqual(box);
   });
 

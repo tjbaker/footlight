@@ -13,12 +13,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import {
-  ONSET_FRAME_SEC,
-  ONSET_MIN_GAP_SEC,
-  onsetEnvelope,
-  detectOnsets,
-} from "../src/core.js";
+import { ONSET_FRAME_SEC, ONSET_MIN_GAP_SEC, onsetEnvelope, detectOnsets } from "../src/core.js";
 
 /** Frames per second of the onset envelope (50 at the default 0.02s frame). */
 const FPS = Math.round(1 / ONSET_FRAME_SEC);

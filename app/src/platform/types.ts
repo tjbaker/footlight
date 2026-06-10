@@ -13,8 +13,8 @@ import type { ClipSpec } from "@manifest";
 
 /** One past render, persisted locally so it can be re-opened and tweaked. */
 export interface HistoryEntry {
-  id: string;     // unique
-  ts: number;     // epoch ms when rendered
+  id: string; // unique
+  ts: number; // epoch ms when rendered
   spec: ClipSpec; // the rendered clip's spec
   outdir: string; // the output dir used
 }
@@ -58,10 +58,10 @@ export interface RenderOptions {
 
 /** A saved working session (project) — restored on next launch. */
 export interface SessionData {
-  source: string;     // last-loaded source path ("" if none)
-  outdir: string;     // output dir
-  clips: ClipSpec[];  // the queue
-  savedAt: number;    // epoch ms
+  source: string; // last-loaded source path ("" if none)
+  outdir: string; // output dir
+  clips: ClipSpec[]; // the queue
+  savedAt: number; // epoch ms
 }
 
 /** Result of probing a source video. */

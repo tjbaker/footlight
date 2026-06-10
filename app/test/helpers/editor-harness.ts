@@ -55,12 +55,11 @@ export function installDomShims(): void {
   HTMLCanvasElement.prototype.getContext = (() =>
     null) as unknown as typeof HTMLCanvasElement.prototype.getContext;
   if (typeof URL.createObjectURL !== "function") {
-    (URL as unknown as { createObjectURL: (b: unknown) => string }).createObjectURL =
-      () => "blob:stub";
+    (URL as unknown as { createObjectURL: (b: unknown) => string }).createObjectURL = () =>
+      "blob:stub";
   }
   if (typeof URL.revokeObjectURL !== "function") {
-    (URL as unknown as { revokeObjectURL: (u: string) => void }).revokeObjectURL =
-      () => undefined;
+    (URL as unknown as { revokeObjectURL: (u: string) => void }).revokeObjectURL = () => undefined;
   }
   // Pointer capture: jsdom lacks it; the crop/timeline drag handlers call it.
   Element.prototype.setPointerCapture = () => undefined;

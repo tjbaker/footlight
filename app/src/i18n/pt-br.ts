@@ -12,7 +12,8 @@ export const ptBR: Messages = {
     reportBug: "Relatar um bug",
     viewOnGithub: "Ver no GitHub",
     title: "Footlight — Guia do usuário",
-    subtitle: "Corte vídeo 16:9 em clipes verticais 9:16, com controle total sobre o enquadramento.",
+    subtitle:
+      "Corte vídeo 16:9 em clipes verticais 9:16, com controle total sobre o enquadramento.",
     tocLabel: "Conteúdo",
     close: "Fechar",
     sections: [
@@ -418,9 +419,11 @@ export const ptBR: Messages = {
       defaults: "Padrões",
       destination: "Destino",
       destinationBrowse: "Procurar…",
-      destinationHint: "Pasta de saída padrão para clipes renderizados. Pré-preenche o destino do editor.",
+      destinationHint:
+        "Pasta de saída padrão para clipes renderizados. Pré-preenche o destino do editor.",
       trackingInterval: "Intervalo de rastreamento",
-      trackingIntervalHint: "Cadência de amostragem padrão da IA — mais amplo significa menos quadros, então mais barato.",
+      trackingIntervalHint:
+        "Cadência de amostragem padrão da IA — mais amplo significa menos quadros, então mais barato.",
       session: "Sessão",
       autosave: "Salvar e restaurar a sessão automaticamente",
       autosaveHint: "Lembrar sua origem, fila e destino, e restaurá-los na próxima inicialização.",
@@ -430,7 +433,8 @@ export const ptBR: Messages = {
 
     rendering: {
       title: "Renderização",
-      subtitle: "Padrões para cada renderização — cada um corresponde a uma flag do footlight render.",
+      subtitle:
+        "Padrões para cada renderização — cada um corresponde a uma flag do footlight render.",
       quality: "Qualidade (CRF)",
       qualityNearLossless: "quase sem perdas",
       qualityHigh: "alta (padrão)",
@@ -444,12 +448,12 @@ export const ptBR: Messages = {
       audio: "Áudio",
       audioCopy: "Copiar (sem perdas)",
       audioReencode: "Recodificar em AAC",
-      audioCopyHint:
-        "A faixa de origem passa intacta — a origem é o seu teto de qualidade.",
+      audioCopyHint: "A faixa de origem passa intacta — a origem é o seu teto de qualidade.",
       audioReencodeHint: "Apenas para um corte de áudio exato no quadro em uma batida forte.",
       bitrate: "Taxa de bits",
       dryRun: "Mostrar o comando do ffmpeg antes de renderizar",
-      dryRunHint: "Imprimir a invocação exata do ffmpeg para que você possa inspecioná-la ou copiá-la.",
+      dryRunHint:
+        "Imprimir a invocação exata do ffmpeg para que você possa inspecioná-la ou copiá-la.",
       captions: "Legendas",
       burnCaptions: "Gravar legendas no vídeo",
       burnCaptionsHint:
@@ -463,7 +467,8 @@ export const ptBR: Messages = {
 
     ai: {
       title: "IA e modelos",
-      subtitle: "Opcional, use sua própria chave. Um único modelo multimodal faz tanto o rastreamento quanto o assistente.",
+      subtitle:
+        "Opcional, use sua própria chave. Um único modelo multimodal faz tanto o rastreamento quanto o assistente.",
       provider: "Provedor",
       providerGemini: "Google Gemini",
       providerClaude: "Anthropic Claude",
@@ -509,7 +514,8 @@ export const ptBR: Messages = {
 
     shortcuts: {
       title: "Atalhos",
-      subtitle: "Os atalhos voltados ao teclado. Pressione ? a qualquer momento para a sobreposição.",
+      subtitle:
+        "Os atalhos voltados ao teclado. Pressione ? a qualquer momento para a sobreposição.",
     },
 
     about: {
@@ -543,7 +549,8 @@ export const ptBR: Messages = {
     },
     stage: {
       sourceTag: "ORIGEM",
-      overlayTitle: "Arraste para reenquadrar · arraste um canto para aproximar / dar zoom · duplo-clique para redefinir",
+      overlayTitle:
+        "Arraste para reenquadrar · arraste um canto para aproximar / dar zoom · duplo-clique para redefinir",
       previewHeadTitle: "Arraste para mover · desative a pré-visualização na barra superior",
       guides: "guias",
       guidesTitle:
@@ -563,7 +570,8 @@ export const ptBR: Messages = {
       frameAlt: "quadro atual",
     },
     transport: {
-      playTitle: "Reproduza com áudio para encontrar sua Entrada/Saída de ouvido — Definir entrada/saída funciona durante a reprodução",
+      playTitle:
+        "Reproduza com áudio para encontrar sua Entrada/Saída de ouvido — Definir entrada/saída funciona durante a reprodução",
       inOut: "entrada→saída",
     },
     tabs: {
@@ -587,7 +595,8 @@ export const ptBR: Messages = {
       cropdetectNone:
         "cropdetect: nenhuma barra preta detectada (pillarbox colorido/desfocado é invisível para ele — avalie o quadro a olho).",
       enterPath: "Insira um caminho absoluto para um arquivo de origem e clique em Carregar.",
-      dropHint: "Arrastar e soltar carrega arquivos no app desktop — cole o caminho absoluto acima.",
+      dropHint:
+        "Arrastar e soltar carrega arquivos no app desktop — cole o caminho absoluto acima.",
     },
     clip: {
       header: "Clipe",
@@ -639,9 +648,11 @@ export const ptBR: Messages = {
     captions: {
       header: "Legendas",
       hookPlaceholder: "gancho (linha grande, opcional)",
-      hookTitle: "A linha grande de legenda gravada sobre o clipe (quando a gravação está ativa). Enter adiciona uma quebra de linha.",
+      hookTitle:
+        "A linha grande de legenda gravada sobre o clipe (quando a gravação está ativa). Enter adiciona uma quebra de linha.",
       titlePlaceholder: "título (linha secundária, opcional)",
-      titleTitle: "A linha secundária de legenda, exibida sob o gancho. Enter adiciona uma quebra de linha.",
+      titleTitle:
+        "A linha secundária de legenda, exibida sob o gancho. Enter adiciona uma quebra de linha.",
       posVTitle: "Posicionamento vertical da legenda.",
       posHTitle: "Posicionamento horizontal da legenda.",
       posTop: "Topo",
@@ -676,7 +687,8 @@ export const ptBR: Messages = {
       schedulePrefix: "cronograma: ",
       scheduleNone: "cronograma: (nenhum)",
       scheduleNoKeyframes: "cronograma: (sem keyframes — usa o deslocamento atual da caixa)",
-      needIn: "Defina o ponto de Entrada antes de adicionar keyframes (os tempos de keyframe são relativos ao clipe).",
+      needIn:
+        "Defina o ponto de Entrada antes de adicionar keyframes (os tempos de keyframe são relativos ao clipe).",
     },
     add: {
       header: "Adicionar à fila",
@@ -691,7 +703,8 @@ export const ptBR: Messages = {
       intervalPlaceholder: "0.75",
       intervalLabel: "intervalo (s)",
       autoTrack: "Rastrear automaticamente",
-      autoTrackTitle: "Rastrear o sujeito ao longo do plano de Entrada/Saída e montar um caminho de recorte amortecido.",
+      autoTrackTitle:
+        "Rastrear o sujeito ao longo do plano de Entrada/Saída e montar um caminho de recorte amortecido.",
       clearTrack: "Limpar rastreamento",
       clearTrackTitle: "Descartar o caminho rastreado; reverter para o enquadramento manual.",
       statusNone: "rastreamento: (nenhum — crop_offset manual em uso)",
@@ -736,7 +749,8 @@ export const ptBR: Messages = {
         "cada proposta é pré-visualizada antes de mudar qualquer coisa.",
       youLabel: "você",
       assistantLabel: "assistente",
-      needSource: "Carregue uma origem primeiro, então eu posso ler seus quadros e propor enquadramento.",
+      needSource:
+        "Carregue uma origem primeiro, então eu posso ler seus quadros e propor enquadramento.",
       needKey:
         "Eu preciso de uma chave de API do Gemini para ler os quadros. Adicione uma em Configurações → IA e modelos (ela fica armazenada no chaveiro do seu sistema operacional, nunca em arquivos do projeto), depois me pergunte de novo.",
       turnFailedPrefix: "Desculpe — esse turno falhou: ",
@@ -749,7 +763,8 @@ export const ptBR: Messages = {
       step: "Passo a passo",
       discard: "Descartar",
       appliedStagedPrefix: "Aplicado ",
-      appliedStagedSuffix: " — renderização preparada. Use o botão Renderizar quando estiver pronto.",
+      appliedStagedSuffix:
+        " — renderização preparada. Use o botão Renderizar quando estiver pronto.",
       appliedPrefix: "Aplicada ",
       appliedSuffixSingular: " proposta.",
       appliedSuffixPlural: " propostas.",

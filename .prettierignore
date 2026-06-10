@@ -1,0 +1,10 @@
+dist/
+coverage/
+node_modules/
+app/dist/
+app/coverage/
+app/node_modules/
+app/src-tauri/target/
+app/src-tauri/gen/
+package-lock.json
+app/package-lock.json
