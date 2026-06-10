@@ -17,6 +17,8 @@ import {
   saveOutdir,
   loadPreviewPref,
   savePreviewPref,
+  loadSnapPref,
+  saveSnapPref,
   loadRecents,
   pushRecent,
   saveTheme,
@@ -187,6 +189,30 @@ describe("preview pref round-trip (footlight.preview)", () => {
     withBrokenStorage(() => {
       expect(loadPreviewPref()).toBe(true);
       expect(() => savePreviewPref(false)).not.toThrow();
+    });
+  });
+});
+
+describe("onset-snap pref round-trip (footlight.snap)", () => {
+  it("defaults OFF (snapping is opt-in); only an explicit \"on\" enables it", () => {
+    expect(loadSnapPref()).toBe(false);
+    store.set("footlight.snap", "on");
+    expect(loadSnapPref()).toBe(true);
+    store.set("footlight.snap", "anything-else");
+    expect(loadSnapPref()).toBe(false);
+  });
+
+  it("round-trips through save", () => {
+    saveSnapPref(true);
+    expect(loadSnapPref()).toBe(true);
+    saveSnapPref(false);
+    expect(loadSnapPref()).toBe(false);
+  });
+
+  it("defaults OFF when storage is unavailable", () => {
+    withBrokenStorage(() => {
+      expect(loadSnapPref()).toBe(false);
+      expect(() => saveSnapPref(true)).not.toThrow();
     });
   });
 });

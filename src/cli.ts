@@ -29,6 +29,7 @@ import {
   parseScenes,
   frameExtractArgs,
   SCENE_THRESHOLD,
+  FADE_AUDIO_BITRATE,
   type ClipRow,
   type CropPathKeyframe,
   type CropWindowSpec,
@@ -332,6 +333,15 @@ async function cmdRender(argv: string[]): Promise<number> {
         continue;
       }
 
+      // Surface the fade/copy rule per clip: an afade cannot ride `-c:a copy`,
+      // so this clip's audio is re-encoded — never silently (issue #165).
+      if (built.forcedAudioReencode) {
+        console.log(
+          `${label} note: fades need an audio re-encode — this clip's audio is AAC ` +
+            `${FADE_AUDIO_BITRATE}, not the lossless copy`,
+        );
+      }
+
       if (dryRun) {
         console.log(`${label} ffmpeg ${built.args.join(" ")}`);
         continue;
@@ -399,6 +409,10 @@ function parseJsonManifest(text: string): RenderItem[] {
     if (spec.hook !== undefined) row.hook = spec.hook;
     if (spec.title !== undefined) row.title = spec.title;
     if (spec.text_position !== undefined) row.text_position = spec.text_position;
+    // Fades are plain numbers (seconds) in JSON; the engine row carries strings
+    // (CSV parity) and `parseFadeSeconds` validates them with a clear error.
+    if (spec.fade_in !== undefined) row.fade_in = String(spec.fade_in);
+    if (spec.fade_out !== undefined) row.fade_out = String(spec.fade_out);
 
     let caption: CaptionStyle | undefined;
     if (spec.caption !== undefined) {

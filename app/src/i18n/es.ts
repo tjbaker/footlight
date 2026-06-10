@@ -82,6 +82,10 @@ export const es: Messages = {
             text: "El In y el Out marcan el inicio y el final del clip. Defínelos de tres maneras: arrastrando sobre la línea de tiempo de volumen (lo más rápido), haciendo clic en Marcar In / Marcar Out en el fotograma actual, o pulsando I / O. La lectura muestra in / out / duración; los tiempos de fotogramas clave y de seguimiento automático se miden desde el In.",
           },
           {
+            kind: "p",
+            text: "Fundido de entrada / Fundido de salida (segundos, junto a la lectura de In/Out) funden el video del clip desde/hacia negro y su audio desde/hacia silencio — los subtítulos incrustados se funden con la imagen. Un fundido obliga a recodificar el audio de ese clip como AAC 256k, porque una copia de audio sin pérdidas no puede fundirse. El interruptor Unión del bucle muestra el primer y el último fotograma del clip lado a lado, para que recortes hasta un bucle visualmente limpio (el último fotograma corta directo al primero cuando el clip se repite).",
+          },
+          {
             kind: "tip",
             text: "Haz clic en un marcador de In o Out en la línea de tiempo para seleccionarlo, luego ajústalo fotograma a fotograma con ← / → (mantén Shift para ±0,1s).",
           },
@@ -102,11 +106,12 @@ export const es: Messages = {
               "Pasa el cursor por la pista para previsualizar el fotograma en ese momento.",
               "Las etiquetas de “crescendo” sugeridas marcan los aumentos de silencio→fuerte — haz clic en una para saltar justo antes de la subida.",
               "Los cortes de escena aparecen como marcas; los botones ⏮ / ⏭ saltan entre ellos. La detección se ejecuta automáticamente al cargar; Detectar escenas la vuelve a ejecutar.",
+              "Los ataques de audio detectados — golpes de batería, inicios de nota — aparecen como marcas sutiles en el borde inferior de la pista. Activa Imán y, al soltar un arrastre de In/Out (o al pulsar I / O), el punto se imanta al ataque más cercano dentro de ±150 ms, para que los cortes caigan en el ritmo.",
             ],
           },
           {
             kind: "tip",
-            text: "Las sugerencias de crescendo solo desplazan el cabezal de reproducción — nunca fijan el In por ti. El corte siempre lo haces tú.",
+            text: "Las sugerencias de crescendo solo desplazan el cabezal de reproducción — nunca fijan el In por ti. El corte siempre lo haces tú. El imán de ataques funciona igual: desactivado por defecto, se aplica solo al soltar (nunca a mitad del arrastre), y las teclas ← / → siempre mueven el punto exactamente adonde tú digas.",
           },
         ],
       },
@@ -589,6 +594,19 @@ export const es: Messages = {
       outKey: "out",
       durKey: "dur",
       offsetKey: "desplazamiento",
+      fadeInLabel: "Fundido de entrada",
+      fadeInTitle:
+        "Funde el clip desde negro (y el audio desde silencio) durante estos segundos.",
+      fadeOutLabel: "Fundido de salida",
+      fadeOutTitle:
+        "Funde el clip hacia negro (y el audio hacia silencio) durante estos segundos.",
+      fadeAudioHint:
+        "Los fundidos recodifican el audio de este clip (AAC 256k) — una copia sin pérdidas no puede fundirse.",
+      loopSeam: "Unión del bucle",
+      loopSeamTitle:
+        "Muestra el primer y el último fotograma del clip lado a lado para comprobar cómo hace bucle (último → primero).",
+      loopSeamInLabel: "Fotograma In",
+      loopSeamOutLabel: "Fotograma Out",
     },
     framing: {
       header: "Encuadre",
@@ -740,6 +758,9 @@ export const es: Messages = {
       swellsLabel: "crescendos",
       detectScenes: "Detectar escenas",
       detectScenesTitle: "Detecta cortes de escena — alinea con ellos los tiempos de cambio de fotogramas clave.",
+      snapLabel: "Imán",
+      snapTitle:
+        "Ajustar In/Out al ritmo: cuando está activo, soltar un arrastre o pulsar I/O lleva el punto al ataque de audio detectado más cercano (±150 ms). Desactivado por defecto — tus puntos se quedan exactamente donde los pusiste.",
       seekSwellPrefix: "Ir a justo antes de este crescendo (",
       seekSwellSuffix: ")",
     },
@@ -804,6 +825,7 @@ export const es: Messages = {
       outAfterIn: "El Out debe ir después del In.",
       addAtLeastOne: "Añade al menos un clip a la cola.",
       previewPlayerFailed: "el reproductor de vista previa no pudo cargar este origen",
+      fadesTooLong: "Los fundidos duran más que el clip — acórtalos o amplía el In/Out.",
     },
     common: {
       close: "Cerrar",

@@ -19,7 +19,7 @@
  *    and rendered through `platform.render`.
  */
 
-import { TARGET_AR, parseTimestamp, detectSwells, LOUDNESS_BUCKETS } from "@core";
+import { TARGET_AR, parseTimestamp, detectSwells, detectOnsets, LOUDNESS_BUCKETS } from "@core";
 import {
   cropBoxToOffset,
   cropBoxToWindow,
@@ -95,6 +95,13 @@ import {
 } from "./editor-offset.js";
 import { assembleAssistantContext, sampleChatStills } from "./editor-chat-context.js";
 import { applyCommitToState } from "./editor-commit.js";
+import {
+  parseFadeField,
+  fadesToSpec,
+  fadesFromSpec,
+  fadesFit,
+  loopSeamTimes,
+} from "./editor-fades.js";
 import { createInitialEditorState, hasActiveTrack } from "./editor-store.js";
 import {
   assistantSelection,
@@ -103,10 +110,13 @@ import {
   saveOutdir,
   loadPreviewPref,
   savePreviewPref,
+  loadSnapPref,
+  saveSnapPref,
   loadRecents,
   pushRecent,
   saveTheme,
 } from "./editor-prefs.js";
+import { snapToOnset } from "./editor-snap.js";
 import {
   clipDur,
   fmtUsd,
@@ -453,14 +463,18 @@ export function mountEditor(root: HTMLElement): void {
   clipSect.append(sectionHeader(m.clip.header));
   const ioRow = el("div", "fl-rowg");
   ioRow.style.marginBottom = "12px";
+  // Marking In/Out (button or I/O key) goes through `snapT`: with the timeline's
+  // onset-snap toggle ON the point magnetizes to the nearest detected onset
+  // (±150 ms); OFF (the default) it is the identity — the point stays exactly
+  // where the user put it.
   const setInBtn = button("", "fl-btn", () => {
-    state.inPoint = state.t;
+    state.inPoint = snapT(state.t);
     refreshIO();
   });
   setInBtn.innerHTML = `<span class="idot in"></span>${escapeHtml(m.clip.setIn)}`;
   setInBtn.title = m.clip.setInTitle;
   const setOutBtn = button("", "fl-btn", () => {
-    state.outPoint = state.t;
+    state.outPoint = snapT(state.t);
     refreshIO();
   });
   setOutBtn.innerHTML = `<span class="idot out"></span>${escapeHtml(m.clip.setOut)}`;
@@ -494,6 +508,78 @@ export function mountEditor(root: HTMLElement): void {
     readCell(kSpan(m.clip.offsetKey), offsetVal),
   );
   clipSect.append(ioRow, ioGrid);
+
+  // Per-clip fades (#165): two small numeric fields. A fade forces that clip's
+  // audio to re-encode (an afade can't ride `-c:a copy`), so the hint shows
+  // whenever any fade is set.
+  const fadeRow = el("div", "fl-rowg");
+  fadeRow.style.marginTop = "8px";
+  const mkFadeInput = (label: string, title: string, set: (v: number) => void): HTMLInputElement => {
+    const lab = el("span", "fl-rowlab");
+    lab.textContent = label;
+    const inp = input("number", "0");
+    inp.title = title;
+    inp.min = "0";
+    inp.step = "0.1";
+    inp.classList.add("mono");
+    inp.style.maxWidth = "70px";
+    inp.addEventListener("input", () => {
+      set(parseFadeField(inp.value));
+      refreshFadeHint();
+    });
+    fadeRow.append(lab, inp);
+    return inp;
+  };
+  const fadeInInput = mkFadeInput(m.clip.fadeInLabel, m.clip.fadeInTitle, (v) => (state.fadeIn = v));
+  const fadeOutInput = mkFadeInput(m.clip.fadeOutLabel, m.clip.fadeOutTitle, (v) => (state.fadeOut = v));
+  const fadeHint = el("div", "hint");
+  fadeHint.textContent = m.clip.fadeAudioHint;
+  fadeHint.style.display = "none";
+  function refreshFadeHint(): void {
+    fadeHint.style.display = state.fadeIn > 0 || state.fadeOut > 0 ? "" : "none";
+  }
+
+  // Loop-seam check (#165): the clip's LAST frame next to its In frame — the
+  // exact join the viewer sees when the clip loops (last → first).
+  const seamPanel = el("div", "fl-loopseam");
+  seamPanel.style.cssText = "display:none; gap:6px; margin-top:8px;";
+  const mkSeamCell = (label: string): { wrap: HTMLElement; img: HTMLImageElement } => {
+    const wrap = el("div");
+    wrap.style.cssText = "flex:1; min-width:0;";
+    const img = document.createElement("img");
+    img.alt = label;
+    img.style.cssText = "width:100%; display:block; border-radius:4px;";
+    const cap = el("div", "hint");
+    cap.textContent = label;
+    wrap.append(img, cap);
+    return { wrap, img };
+  };
+  const seamOut = mkSeamCell(m.clip.loopSeamOutLabel);
+  const seamIn = mkSeamCell(m.clip.loopSeamInLabel);
+  seamPanel.append(seamOut.wrap, seamIn.wrap); // out first — the loop reads out → in
+  let seamOpen = false;
+  const seamBtn = button(m.clip.loopSeam, "fl-btn sm ghost", () => {
+    seamOpen = !seamOpen;
+    seamBtn.classList.toggle("primary", seamOpen);
+    seamPanel.style.display = seamOpen ? "flex" : "none";
+    void refreshLoopSeam();
+  });
+  seamBtn.title = m.clip.loopSeamTitle;
+  async function refreshLoopSeam(): Promise<void> {
+    if (!seamOpen || !state.source || state.inPoint == null || state.outPoint == null) return;
+    const { inT, outT } = loopSeamTimes(state.inPoint, state.outPoint, state.fps);
+    try {
+      const [outUrl, inUrl] = await Promise.all([
+        extractCached(state.source, outT),
+        extractCached(state.source, inT),
+      ]);
+      seamOut.img.src = outUrl;
+      seamIn.img.src = inUrl;
+    } catch {
+      /* best-effort: a failed frame leaves the previous image in place */
+    }
+  }
+  clipSect.append(fadeRow, fadeHint, seamBtn, seamPanel);
 
   const framingSect = el("div", "fl-sect");
   framingSect.append(sectionHeader(m.framing.header));
@@ -1150,6 +1236,7 @@ export function mountEditor(root: HTMLElement): void {
     return d;
   };
   const tlCutsLayer = layer();
+  const tlOnsetsLayer = layer();
   const tlMarksLayer = layer();
   const tlRegion = el("div", "fl-tl-region");
   tlRegion.style.display = "none";
@@ -1168,6 +1255,7 @@ export function mountEditor(root: HTMLElement): void {
   tlTrack.append(
     tlRuler,
     tlWave,
+    tlOnsetsLayer,
     tlCutsLayer,
     tlMarksLayer,
     tlRegion,
@@ -1183,9 +1271,23 @@ export function mountEditor(root: HTMLElement): void {
   cutsChip.innerHTML = `<span class="lab">${escapeHtml(m.timeline.cutsLabel)}</span><span class="val">0</span>`;
   const swellsChip = el("span", "fl-rdchip swell");
   swellsChip.innerHTML = `<span class="lab">${escapeHtml(m.timeline.swellsLabel)}</span><span class="val">0</span>`;
+  // Onset snap (issue #164): opt-in, persisted. When ON, releasing an In/Out
+  // drag or keying I/O magnetizes the point to the nearest detected onset
+  // (±ONSET_SNAP_WINDOW_SEC). Never applied during the drag itself.
+  let snapOn = loadSnapPref();
+  const snapBtn = button(m.timeline.snapLabel, "fl-btn sm fl-snap", () => {
+    snapOn = !snapOn;
+    saveSnapPref(snapOn);
+    snapBtn.classList.toggle("on", snapOn);
+  });
+  snapBtn.title = m.timeline.snapTitle;
+  snapBtn.classList.toggle("on", snapOn);
   const scenesBtn = button(m.timeline.detectScenes, "fl-btn sm", doScenes);
   scenesBtn.title = m.timeline.detectScenesTitle;
-  tlInfo.append(cutsChip, swellsChip, scenesBtn);
+  tlInfo.append(cutsChip, swellsChip, snapBtn, scenesBtn);
+
+  /** `t` snapped to the nearest onset when the toggle is on (else unchanged). */
+  const snapT = (t: number): number => (snapOn ? snapToOnset(t, state.onsets) : t);
 
   timeline.append(tlCluster, tlCol, tlInfo);
 
@@ -1260,6 +1362,18 @@ export function mountEditor(root: HTMLElement): void {
     });
     const v = swellsChip.querySelector(".val");
     if (v) v.textContent = String(state.swells.length);
+  }
+
+  /** Subtle onset ticks along the bottom of the track (below the scene-cut
+   *  markers' full-height lines) — the beat grid the snap toggle targets. */
+  function renderOnsets(): void {
+    tlOnsetsLayer.innerHTML = "";
+    if (!(state.duration > 0)) return;
+    state.onsets.forEach((t) => {
+      const tick = el("div", "fl-tl-onset");
+      tick.style.left = pct(t);
+      tlOnsetsLayer.append(tick);
+    });
   }
 
   function renderCuts(): void {
@@ -1353,25 +1467,29 @@ export function mountEditor(root: HTMLElement): void {
   }
 
   /**
-   * Fetch the source's two loudness envelopes and update the timeline: the
-   * perceptual `display` envelope draws the bars; the raw-energy `detect`
-   * envelope feeds the swell heuristic (it surfaces musical dips that
-   * perceptually-gated LUFS smooths away on compressed material).
+   * Fetch the source's audio envelopes and update the timeline: the perceptual
+   * `display` envelope draws the bars; the raw-energy `detect` envelope feeds
+   * the swell heuristic (it surfaces musical dips that perceptually-gated LUFS
+   * smooths away on compressed material); the fine `onsetEnvelope` feeds the
+   * onset detector behind the In/Out snap toggle and the timeline's beat ticks.
    */
   async function loadLoudness(source: string): Promise<void> {
     renderWave(true);
     try {
-      const { display, detect } = await platform.loudness(source);
+      const { display, detect, onsetEnvelope } = await platform.loudness(source);
       if (state.source !== source) return; // a newer load superseded this one
       state.loudness = display;
       state.swells = detectSwells(detect, state.duration);
+      state.onsets = detectOnsets(onsetEnvelope ?? []);
     } catch {
       if (state.source !== source) return;
       state.loudness = null;
       state.swells = [];
+      state.onsets = [];
     }
     renderWave(false);
     renderSwells();
+    renderOnsets();
   }
 
   /** Source time at a client-X over the timeline track. */
@@ -1487,6 +1605,17 @@ export function mountEditor(root: HTMLElement): void {
       // A plain click: seek there and drop any marker selection.
       setSelectedMarker(null);
       seek(regionAnchor);
+    } else if (snapOn) {
+      // Onset snap happens at RELEASE only (never mid-drag), so the magnet
+      // assists the gesture without fighting the hand. With the toggle off,
+      // the release leaves the user's point exactly where they put it.
+      if ((tlDrag === "in" || tlDrag === "region") && state.inPoint != null) {
+        state.inPoint = round3(clamp(snapT(state.inPoint), 0, state.outPoint ?? state.duration));
+      }
+      if ((tlDrag === "out" || tlDrag === "region") && state.outPoint != null) {
+        state.outPoint = round3(clamp(snapT(state.outPoint), state.inPoint ?? 0, state.duration));
+      }
+      refreshIO();
     }
     tlDrag = null;
   };
@@ -1636,7 +1765,7 @@ export function mountEditor(root: HTMLElement): void {
             setSelectedMarker("in");
           }
         } else {
-          state.inPoint = state.t;
+          state.inPoint = snapT(state.t); // identity unless onset snap is ON
           refreshIO();
           setSelectedMarker("in");
         }
@@ -1649,7 +1778,7 @@ export function mountEditor(root: HTMLElement): void {
             setSelectedMarker("out");
           }
         } else {
-          state.outPoint = state.t;
+          state.outPoint = snapT(state.t); // identity unless onset snap is ON
           refreshIO();
           setSelectedMarker("out");
         }
@@ -1981,9 +2110,11 @@ export function mountEditor(root: HTMLElement): void {
       state.sceneCuts = [];
       state.loudness = null;
       state.swells = [];
+      state.onsets = [];
       renderRuler();
       renderCuts();
       renderSwells();
+      renderOnsets();
       renderKf();
       renderRegion();
       movePlayhead();
@@ -2710,6 +2841,7 @@ export function mountEditor(root: HTMLElement): void {
     if (valEl) valEl.textContent = dur;
     renderRegion();
     renderKf(); // keyframe positions are clip-relative to In
+    void refreshLoopSeam(); // the seam frames track In/Out while the panel is open
   }
 
   /**
@@ -3320,6 +3452,10 @@ export function mountEditor(root: HTMLElement): void {
     if (state.inPoint == null || state.outPoint == null)
       return flashErr(m.errors.setInOut);
     if (state.outPoint <= state.inPoint) return flashErr(m.errors.outAfterIn);
+    // Mirror the engine's early fade validation so the queue never holds a clip
+    // the render would reject.
+    if (!fadesFit({ fadeIn: state.fadeIn, fadeOut: state.fadeOut }, state.outPoint - state.inPoint))
+      return flashErr(m.errors.fadesTooLong);
 
     const spec: ClipSpec = {
       source_file: state.source,
@@ -3356,6 +3492,8 @@ export function mountEditor(root: HTMLElement): void {
     const title = state.title.trim();
     if (hook) spec.hook = hook;
     if (title) spec.title = title;
+    // Per-clip fades (#165) — sparse: a clip without fades carries neither field.
+    Object.assign(spec, fadesToSpec({ fadeIn: state.fadeIn, fadeOut: state.fadeOut }));
     // Omit the default (bottom-center, stored as "bottom") to keep manifests clean.
     if ((hook || title) && state.textPosition !== "bottom") spec.text_position = state.textPosition;
     // Per-clip caption style (omitting engine defaults). Only meaningful with text.
@@ -3660,6 +3798,12 @@ export function mountEditor(root: HTMLElement): void {
     titleCapInput.value = state.title;
     autosize(hookInput);
     autosize(titleCapInput);
+    const fades = fadesFromSpec(spec);
+    state.fadeIn = fades.fadeIn;
+    state.fadeOut = fades.fadeOut;
+    fadeInInput.value = fades.fadeIn > 0 ? String(fades.fadeIn) : "";
+    fadeOutInput.value = fades.fadeOut > 0 ? String(fades.fadeOut) : "";
+    refreshFadeHint();
     syncSelectsFromPos();
     state.caption = captionStyleFromSpec(spec.caption);
     syncCaptionControls();

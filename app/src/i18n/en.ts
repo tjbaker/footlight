@@ -82,6 +82,10 @@ export const en: Messages = {
             text: "In and Out mark the clip's start and end. Set them three ways: drag across the loudness timeline (quickest), click Set In / Set Out at the current frame, or press I / O. The readout shows in / out / duration; keyframe and auto-track times are measured from In.",
           },
           {
+            kind: "p",
+            text: "Fade in / Fade out (seconds, next to the In/Out readout) fade the clip's video from/to black and its audio from/to silence — burned captions fade with the picture. A fade forces that clip's audio to re-encode as AAC 256k, since a lossless audio copy cannot fade. The Loop seam toggle shows the clip's first and last frames side by side, so you can trim to a visually clean loop (the last frame cuts straight back to the first when the clip loops).",
+          },
+          {
             kind: "tip",
             text: "Click an In or Out marker on the timeline to select it, then nudge it a frame at a time with ← / → (hold Shift for ±0.1s).",
           },
@@ -102,11 +106,12 @@ export const en: Messages = {
               "Hover the track to preview the frame at that time.",
               "Suggested “swell” chips mark quiet→loud build-ups — click one to jump to just before the rise.",
               "Scene cuts show as ticks; the ⏮ / ⏭ buttons jump between them. Detection runs automatically on load; Detect scenes re-runs it.",
+              "Detected audio onsets — drum hits, note attacks — show as subtle ticks along the bottom of the track. Turn on Snap and a released In/Out drag (or pressing I / O) magnetizes the point to the nearest onset within ±150 ms, so cuts land on the beat.",
             ],
           },
           {
             kind: "tip",
-            text: "Swell suggestions only seek the playhead — they never set In for you. You always make the cut.",
+            text: "Swell suggestions only seek the playhead — they never set In for you. You always make the cut. Onset snap is the same: off by default, applied only at release (never mid-drag), and the ← / → nudge keys always move a point exactly where you say.",
           },
         ],
       },
@@ -589,6 +594,18 @@ export const en: Messages = {
       outKey: "out",
       durKey: "dur",
       offsetKey: "offset",
+      fadeInLabel: "Fade in",
+      fadeInTitle:
+        "Fade the clip in from black (and the audio up from silence) over this many seconds.",
+      fadeOutLabel: "Fade out",
+      fadeOutTitle:
+        "Fade the clip out to black (and the audio down to silence) over this many seconds.",
+      fadeAudioHint: "Fades re-encode this clip's audio (AAC 256k) — a lossless copy can't fade.",
+      loopSeam: "Loop seam",
+      loopSeamTitle:
+        "Show the clip's first and last frames side by side to check how it loops (last → first).",
+      loopSeamInLabel: "In frame",
+      loopSeamOutLabel: "Out frame",
     },
     framing: {
       header: "Framing",
@@ -740,6 +757,9 @@ export const en: Messages = {
       swellsLabel: "swells",
       detectScenes: "Detect scenes",
       detectScenesTitle: "Detect scene cuts — align keyframe switch times to these.",
+      snapLabel: "Snap",
+      snapTitle:
+        "Snap In/Out to the beat: when on, releasing a drag or pressing I/O pulls the point to the nearest detected audio onset (±150 ms). Off by default — your points stay exactly where you put them.",
       seekSwellPrefix: "Seek to just before this swell (",
       seekSwellSuffix: ")",
     },
@@ -804,6 +824,7 @@ export const en: Messages = {
       outAfterIn: "Out must be after In.",
       addAtLeastOne: "Add at least one clip to the queue.",
       previewPlayerFailed: "the preview player could not load this source",
+      fadesTooLong: "Fades are longer than the clip — shorten them or widen In/Out.",
     },
     common: {
       close: "Close",

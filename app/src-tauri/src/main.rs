@@ -247,12 +247,16 @@ async fn scenes(source: String) -> Result<Vec<f64>, String> {
 struct LoudnessResult {
     display: Vec<f64>,
     detect: Vec<f64>,
+    #[serde(rename = "onsetEnvelope")]
+    onset_envelope: Vec<f64>,
 }
 
-// Keep these in sync with core.ts LOUDNESS_BUCKETS / LUFS_FLOOR / LUFS_CEIL.
+// Keep these in sync with core.ts LOUDNESS_BUCKETS / LUFS_FLOOR / LUFS_CEIL /
+// ONSET_FRAME_SEC.
 const LOUDNESS_BUCKETS: usize = 160;
 const LUFS_FLOOR: f64 = -40.0;
 const LUFS_CEIL: f64 = -5.0;
+const ONSET_FRAME_SEC: f64 = 0.02;
 
 /// ffmpeg args for the one-pass loudness run: the ebur128 analysis filter logs
 /// per-frame momentary LUFS to stderr while mono 8 kHz f32le PCM lands on
@@ -366,13 +370,42 @@ fn bucket_loudness(samples: &[f32], buckets: usize) -> Vec<f64> {
     detect
 }
 
-/// Compute the timeline's two loudness envelopes (0..1) in ONE ffmpeg pass.
+/// Fine per-frame RMS envelope at `ONSET_FRAME_SEC` resolution, max-normalized
+/// to 0..1 (all-silence stays zeros) with a trailing partial frame dropped and
+/// values rounded to 4 decimals (compact JSON; identical pinned fixtures across
+/// the TS/Rust mirrors). Feeds the frontend's `detectOnsets` — the 160-bucket
+/// envelopes are far too coarse for beats. HAND MIRROR of core.ts
+/// `onsetEnvelope` — keep in sync.
+fn onset_envelope(samples: &[f32], sample_rate: f64) -> Vec<f64> {
+    let frame_len = ((sample_rate * ONSET_FRAME_SEC).round() as usize).max(1);
+    let frames = samples.len() / frame_len;
+    let mut out = vec![0.0f64; frames];
+    for (f, slot) in out.iter_mut().enumerate() {
+        let mut sum_sq = 0.0f64;
+        for s in &samples[f * frame_len..(f + 1) * frame_len] {
+            let v = *s as f64;
+            sum_sq += v * v;
+        }
+        *slot = (sum_sq / frame_len as f64).sqrt();
+    }
+    let max = out.iter().cloned().fold(0.0f64, f64::max);
+    if max > 0.0 {
+        for v in out.iter_mut() {
+            *v = ((*v / max) * 1e4).round() / 1e4;
+        }
+    }
+    out
+}
+
+/// Compute the timeline's audio envelopes (0..1) in ONE ffmpeg pass.
 /// Mirrors core.ts `loudnessCombinedArgs` + `parseEbur128Momentary`/`bucketLufs`
-/// (display) + `bucketLoudness` (detect); Rust can't import the TS. The ebur128
-/// analysis filter passes audio through, so the same run logs per-frame momentary
-/// LUFS to stderr (→ `display`, the perceptual bars) AND emits mono 8 kHz f32le
-/// PCM on stdout (→ `detect`, the raw-energy RMS the swell detector needs). Keep
-/// LOUDNESS_BUCKETS (160) and the LUFS floor/ceiling in sync with core.ts.
+/// (display) + `bucketLoudness` (detect) + `onsetEnvelope` (onset_envelope);
+/// Rust can't import the TS. The ebur128 analysis filter passes audio through,
+/// so the same run logs per-frame momentary LUFS to stderr (→ `display`, the
+/// perceptual bars) AND emits mono 8 kHz f32le PCM on stdout (→ `detect`, the
+/// raw-energy RMS the swell detector needs, and → `onset_envelope`, the fine
+/// envelope the beat-snap onset detector needs). Keep LOUDNESS_BUCKETS (160),
+/// the LUFS floor/ceiling, and ONSET_FRAME_SEC in sync with core.ts.
 #[tauri::command]
 async fn loudness(source: String) -> Result<LoudnessResult, String> {
     let out = Command::new("ffmpeg")
@@ -390,12 +423,13 @@ async fn loudness(source: String) -> Result<LoudnessResult, String> {
 
     let display = bucket_lufs(&momentary, LOUDNESS_BUCKETS);
 
-    // --- detect: RMS of the mono f32le PCM on stdout (mirrors bucketLoudness:
-    // per-window RMS, then normalize the whole array to 0..1 by its max).
+    // --- detect + onset envelope: from the mono 8 kHz f32le PCM on stdout
+    // (mirrors bucketLoudness / onsetEnvelope).
     let samples = pcm_f32le_samples(&out.stdout);
     let detect = bucket_loudness(&samples, LOUDNESS_BUCKETS);
+    let onset_env = onset_envelope(&samples, 8000.0);
 
-    Ok(LoudnessResult { display, detect })
+    Ok(LoudnessResult { display, detect, onset_envelope: onset_env })
 }
 
 /// Locate a subject across sample times (AI subject tracking, SPEC §6.9). Writes
@@ -1361,6 +1395,40 @@ mod tests {
     fn bucket_loudness_zeros_for_empty_or_silence() {
         assert_eq!(bucket_loudness(&[], 10), vec![0.0; 10]);
         assert_eq!(bucket_loudness(&[0.0f32; 500], 10), vec![0.0; 10]);
+    }
+
+    // --- onset envelope (In/Out beat snap, issue #164) ----------------------
+
+    /// Mirrors test/onsets.test.ts "pinned: per-frame RMS, normalized and
+    /// rounded to 4 decimals (rate 200)" — sample rate 200 → 4 samples/frame,
+    /// so [1,1,0,0] → RMS √0.5 and [1,1,1,1] → RMS 1; normalized + rounded →
+    /// [0.7071, 1].
+    #[test]
+    fn onset_envelope_pinned_fixture() {
+        let samples = [1.0f32, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0];
+        assert_eq!(onset_envelope(&samples, 200.0), vec![0.7071, 1.0]);
+    }
+
+    /// Mirrors test/onsets.test.ts "pinned: silence stays zeros; a partial
+    /// trailing frame is dropped (rate 200)".
+    #[test]
+    fn onset_envelope_silence_and_partial() {
+        assert_eq!(onset_envelope(&[0.0f32; 6], 200.0), vec![0.0]);
+    }
+
+    /// Mirrors test/onsets.test.ts "emits one RMS frame per ONSET_FRAME_SEC,
+    /// dropping a trailing partial frame" — 8 kHz × 0.02 s = 160 samples/frame;
+    /// 1.01 s → 50 full frames (+ a dropped partial).
+    #[test]
+    fn onset_envelope_frame_count_at_8khz() {
+        let samples = vec![0.5f32; (8000.0f64 * 1.01).round() as usize];
+        assert_eq!(onset_envelope(&samples, 8000.0).len(), 50);
+    }
+
+    /// Mirrors test/onsets.test.ts "returns [] for empty input" (envelope half).
+    #[test]
+    fn onset_envelope_empty_input() {
+        assert!(onset_envelope(&[], 8000.0).is_empty());
     }
 
     // --- render -----------------------------------------------------------

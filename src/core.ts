@@ -39,6 +39,10 @@ export interface ClipRow {
   title?: string;
   /** Vertical placement of the caption block: `top` | `center` | `bottom`. */
   text_position?: string;
+  /** Fade-in length in seconds (video from black + audio from silence). */
+  fade_in?: string;
+  /** Fade-out length in seconds (video to black + audio to silence). */
+  fade_out?: string;
   [key: string]: string | undefined;
 }
 
@@ -93,6 +97,33 @@ export const DEFAULT_RENDER_OPTIONS: RenderOptions = {
   preset: "medium",
   audioBitrate: "copy",
 };
+
+/**
+ * The AAC bitrate forced when a clip has a fade but the render is set to the
+ * default lossless `-c:a copy` (SPEC: issue #165's decide-once rule). An
+ * `afade` must decode and re-encode the audio — a stream copy cannot fade —
+ * so rather than silently dropping the audio fade (mismatched A/V fades feel
+ * broken) or failing the clip, the engine re-encodes that clip's audio at this
+ * bitrate and the callers surface it (CLI log note, GUI hint, README).
+ */
+export const FADE_AUDIO_BITRATE = "256k";
+
+/**
+ * Parse a per-clip fade length (seconds) from its manifest field. Empty/absent
+ * means no fade (0). Anything non-numeric, non-finite, or negative is an error —
+ * better to fail the row early than emit a garbage `fade` filter.
+ */
+export function parseFadeSeconds(value: string | undefined | null, field: string): number {
+  const v = (value ?? "").trim();
+  if (!v) return 0;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new Error(
+      `${field} must be a non-negative number of seconds, got ${JSON.stringify(value)}`,
+    );
+  }
+  return n;
+}
 
 /** Parse `HH:MM:SS`, `MM:SS`, or plain seconds into float seconds. */
 export function parseTimestamp(value: string): number {
@@ -484,6 +515,13 @@ function num(n: number): string {
 export interface BuiltCommand {
   args: string[];
   outPath: string;
+  /**
+   * True when the row has a `fade_in`/`fade_out` but the render asked for the
+   * default lossless `-c:a copy`: an `afade` cannot ride a stream copy, so the
+   * clip's audio was re-encoded to AAC at `FADE_AUDIO_BITRATE` instead. Callers
+   * surface this (CLI log note / GUI hint) so the change is never silent.
+   */
+  forcedAudioReencode: boolean;
 }
 
 /** Options for building an ffmpeg command. */
@@ -556,8 +594,10 @@ function joinPath(dir: string, name: string): string {
  *
  * The filter chain: optional content-crop first, then the 9:16 crop (with an
  * `if()` x-expression for multi-segment schedules), scale to 1080x1920,
- * setsar=1, H.264 encode, and lossless audio copy by default. Dimensions are
- * passed in (already probed) so this stays pure.
+ * setsar=1, optional burned captions, optional per-clip fades (last, so the
+ * captions fade with the video), and lossless audio copy by default — except
+ * when a fade forces an AAC re-encode (see `FADE_AUDIO_BITRATE`). Dimensions
+ * are passed in (already probed) so this stays pure.
  */
 export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand {
   const source = row.source_file.trim();
@@ -568,6 +608,20 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
   if (duration <= 0) {
     throw new Error(`out_point (${end}s) must be after in_point (${start}s)`);
   }
+
+  // Per-clip fades (issue #165). The clip duration is known at build time, so
+  // both fades resolve to fixed start times here. Validate early: a fade pair
+  // longer than the clip would push the fade-out's start before 0 / overlap the
+  // fade-in and render garbage, so it is a manifest error, not a clamp.
+  const fadeIn = parseFadeSeconds(row.fade_in, "fade_in");
+  const fadeOut = parseFadeSeconds(row.fade_out, "fade_out");
+  if (fadeIn + fadeOut > duration) {
+    throw new Error(
+      `fades are longer than the clip: fade_in (${num(fadeIn)}s) + fade_out (${num(fadeOut)}s) ` +
+        `exceed the clip duration (${num(duration)}s) — shorten the fades or widen In/Out`,
+    );
+  }
+  const hasFade = fadeIn > 0 || fadeOut > 0;
 
   const [iw, ih] = opts.dims;
 
@@ -661,15 +715,38 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
     }
     filters.push(sub);
   }
+  // Per-clip fades go LAST — after the burned captions — so the captions fade
+  // in/out with the video instead of floating at full opacity over a black
+  // frame (the polished look). Times are clip-relative: `-ss` before `-i`
+  // resets timestamps to 0, so the fade-in starts at 0 and the fade-out at
+  // duration − length.
+  if (fadeIn > 0) filters.push(`fade=t=in:st=0:d=${f3(fadeIn)}`);
+  if (fadeOut > 0) filters.push(`fade=t=out:st=${f3(duration - fadeOut)}:d=${f3(fadeOut)}`);
   const vf = filters.join(",");
 
   // Audio: default to a lossless stream copy (same codec, bitrate and sample
   // rate as the source) so we never re-compress or resample. Pass a bitrate
   // (e.g. 256k) only if a re-encode is actually needed.
+  //
+  // THE FADE/COPY RULE (issue #165, decided once): a fade needs a matching
+  // `afade`, and `afade` cannot ride a stream copy — the audio must be decoded
+  // and re-encoded. When a clip has a fade and the render asked for "copy",
+  // force an AAC re-encode at FADE_AUDIO_BITRATE for THAT clip and report it
+  // via `forcedAudioReencode` (the CLI logs a note; the GUI hints at it).
+  // Fading only the video was rejected: a hard audio cut under a video fade
+  // reads as broken, and silently ignoring the fade is worse.
+  const forcedAudioReencode = hasFade && opts.audioBitrate === "copy";
+  const audioBitrate = forcedAudioReencode ? FADE_AUDIO_BITRATE : opts.audioBitrate;
   const audioArgs =
-    opts.audioBitrate === "copy"
+    audioBitrate === "copy"
       ? ["-c:a", "copy"]
-      : ["-c:a", "aac", "-b:a", opts.audioBitrate];
+      : ["-c:a", "aac", "-b:a", audioBitrate];
+
+  // Matching audio fades (same lengths/times as the video's).
+  const afades: string[] = [];
+  if (fadeIn > 0) afades.push(`afade=t=in:st=0:d=${f3(fadeIn)}`);
+  if (fadeOut > 0) afades.push(`afade=t=out:st=${f3(duration - fadeOut)}:d=${f3(fadeOut)}`);
+  const audioFilterArgs = afades.length > 0 ? ["-af", afades.join(",")] : [];
 
   const args = [
     "-hide_banner",
@@ -693,13 +770,14 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
     String(opts.crf),
     "-pix_fmt",
     "yuv420p",
+    ...audioFilterArgs,
     ...audioArgs,
     "-movflags",
     "+faststart",
     outPath,
   ];
 
-  return { args, outPath };
+  return { args, outPath, forcedAudioReencode };
 }
 
 /** Vertical placement of the burned caption block in the 1080×1920 frame. */
@@ -1390,4 +1468,129 @@ export function detectSwells(
   }
 
   return merged.map((t) => ({ t, label: "quiet → loud" }));
+}
+
+// ---------------------------------------------------------------------------
+// Onset detection (the In/Out beat-snap feature, issue #164).
+//
+// Music footage has no transcript — audio IS the signal — and a cut that lands
+// off the musical phrase reads amateur instantly. The 160-bucket display
+// envelope above is far too coarse for beats (~1 bucket ≈ 2s on a 5-min source),
+// so onsets get their own FINE envelope: fixed `ONSET_FRAME_SEC` RMS frames over
+// the same 8 kHz mono PCM the loudness pass already decodes (no extra ffmpeg
+// run). The backends compute `onsetEnvelope` next to the two display envelopes
+// and ship it across the platform boundary; the frontend derives the onset list
+// with `detectOnsets` — the same split as `detect` → `detectSwells`.
+//
+// Pure (samples/envelope in, numbers out), browser-safe and file-free in tests.
+// The native Rust backend (app/src-tauri/src/main.rs) hand-mirrors
+// `onsetEnvelope` (same frame size + rounding) — keep them in sync.
+// ---------------------------------------------------------------------------
+
+/** Onset-envelope frame length in seconds (50 Hz — fine enough that a snapped
+ *  cut lands within ±half a video frame of the audible hit). */
+export const ONSET_FRAME_SEC = 0.02;
+
+/**
+ * Per-frame RMS envelope at `ONSET_FRAME_SEC` resolution, max-normalized to
+ * 0..1 (all-silence stays zeros, like `bucketLoudness`). A trailing partial
+ * frame is dropped. Values are rounded to 4 decimals — far below anything the
+ * detector can distinguish — so the envelope serializes compactly across the
+ * platform boundary and the Rust mirror can pin identical fixtures.
+ */
+export function onsetEnvelope(samples: Float32Array, sampleRate = 8000): number[] {
+  const frameLen = Math.max(1, Math.round(sampleRate * ONSET_FRAME_SEC));
+  const frames = Math.floor(samples.length / frameLen);
+  const out = new Array<number>(frames);
+  for (let f = 0; f < frames; f++) {
+    let sumSq = 0;
+    for (let i = f * frameLen; i < (f + 1) * frameLen; i++) {
+      const s = samples[i]!;
+      sumSq += s * s;
+    }
+    out[f] = Math.sqrt(sumSq / frameLen);
+  }
+  let max = 0;
+  for (const v of out) if (v > max) max = v;
+  if (max > 0) {
+    for (let f = 0; f < frames; f++) out[f] = Math.round((out[f]! / max) * 1e4) / 1e4;
+  }
+  return out;
+}
+
+// Tunable thresholds for the onset detector — named so they are easy to adjust.
+// An onset is a frame-to-frame energy RISE that stands out from its local
+// neighborhood (adaptive threshold), so detection works on quiet and loud
+// material alike without an absolute level gate.
+/** Moving-average half-pass window (frames) used to smooth before detection. */
+export const ONSET_SMOOTH_WINDOW = 1;
+/** Width (seconds) of the centered window the adaptive threshold averages over. */
+export const ONSET_THRESHOLD_WINDOW_SEC = 1;
+/** A rise must exceed the local mean rise by this factor… */
+export const ONSET_THRESHOLD_FACTOR = 1.5;
+/** …plus this absolute floor (normalized 0..1), so noise-floor jitter and slow
+ *  crescendos can't masquerade as onsets. */
+export const ONSET_THRESHOLD_DELTA = 0.05;
+/** Merge onsets closer together than this many seconds (keep the earlier one). */
+export const ONSET_MIN_GAP_SEC = 0.1;
+
+/**
+ * Detect energy onsets — drum hits, note attacks, phrase starts — in an
+ * `onsetEnvelope`. Classic spectral-flux-style recipe on the energy envelope:
+ *   (a) smooth with a small moving average;
+ *   (b) half-wave-rectified difference d[i] = max(0, env[i] − env[i−1]) — only
+ *       energy RISES count, decays never do;
+ *   (c) adaptive threshold: d[i] qualifies when it exceeds the local mean rise
+ *       (±`ONSET_THRESHOLD_WINDOW_SEC`/2) × `ONSET_THRESHOLD_FACTOR` +
+ *       `ONSET_THRESHOLD_DELTA`, and is a local maximum of d;
+ *   (d) merge hits closer than `ONSET_MIN_GAP_SEC`.
+ *
+ * Returns onset times in seconds, ascending. Times are the START of the rising
+ * frame (smoothing biases ≤1 frame early — erring on the cut-before-the-beat
+ * side, which is the right side to err on). Pure: envelope in, seconds out.
+ */
+export function detectOnsets(envelope: number[], frameSec = ONSET_FRAME_SEC): number[] {
+  const n = envelope.length;
+  if (n < 3 || !(frameSec > 0)) return [];
+
+  // (a) Smooth with a small centered moving average (mirrors detectSwells).
+  const w = Math.max(0, Math.floor(ONSET_SMOOTH_WINDOW));
+  const smooth = new Array<number>(n);
+  for (let i = 0; i < n; i++) {
+    let sum = 0;
+    let count = 0;
+    for (let j = Math.max(0, i - w); j <= Math.min(n - 1, i + w); j++) {
+      sum += envelope[j]!;
+      count++;
+    }
+    smooth[i] = sum / count;
+  }
+
+  // (b) Half-wave-rectified first difference (d[0] = 0: a source that starts
+  // loud is not an "onset" — there is nothing before it to cut against).
+  const d = new Array<number>(n).fill(0);
+  for (let i = 1; i < n; i++) d[i] = Math.max(0, smooth[i]! - smooth[i - 1]!);
+
+  // Prefix sums so each frame's local-mean threshold is O(1).
+  const prefix = new Array<number>(n + 1).fill(0);
+  for (let i = 0; i < n; i++) prefix[i + 1] = prefix[i]! + d[i]!;
+  const halfWin = Math.max(1, Math.round(ONSET_THRESHOLD_WINDOW_SEC / 2 / frameSec));
+
+  // (c) Adaptive threshold + local-maximum peak picking.
+  const onsets: number[] = [];
+  for (let i = 1; i < n; i++) {
+    const di = d[i]!;
+    if (di <= 0) continue;
+    const lo = Math.max(0, i - halfWin);
+    const hi = Math.min(n - 1, i + halfWin);
+    const localMean = (prefix[hi + 1]! - prefix[lo]!) / (hi - lo + 1);
+    if (di < ONSET_THRESHOLD_FACTOR * localMean + ONSET_THRESHOLD_DELTA) continue;
+    // Local max of the rise (ties break toward the earlier frame).
+    if (di <= d[i - 1]! || (i + 1 < n && di < d[i + 1]!)) continue;
+    // (d) Enforce the minimum gap (keep the earlier onset).
+    const t = Number((i * frameSec).toFixed(3));
+    if (onsets.length > 0 && t - onsets[onsets.length - 1]! < ONSET_MIN_GAP_SEC) continue;
+    onsets.push(t);
+  }
+  return onsets;
 }

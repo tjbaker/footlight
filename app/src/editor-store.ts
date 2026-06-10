@@ -48,6 +48,8 @@ export interface EditorState {
   loudness: number[] | null;
   /** Suggested quiet→loud "swell" moments (seconds), derived from loudness. */
   swells: { t: number; label: string }[];
+  /** Detected audio onsets (seconds, ascending) — beat-snap targets for In/Out. */
+  onsets: number[];
   /** Caption big line (`hook`) — shot-list data carried in the manifest. */
   hook: string;
   /** Caption secondary line (`title`). */
@@ -66,6 +68,10 @@ export interface EditorState {
    * narrows them to a sparse `CaptionStyle` (omitting defaults) on the saved clip.
    */
   caption: CaptionStyleState;
+  /** Per-clip fade-in length in seconds (0 = no fade); issue #165. */
+  fadeIn: number;
+  /** Per-clip fade-out length in seconds (0 = no fade). */
+  fadeOut: number;
 }
 
 /** A fresh editor state for an empty workspace (no source loaded). */
@@ -89,10 +95,13 @@ export function createInitialEditorState(): EditorState {
     sceneCuts: [],
     loudness: null,
     swells: [],
+    onsets: [],
     hook: "",
     title: "",
     textPosition: "bottom",
     caption: defaultCaptionStyle(),
+    fadeIn: 0,
+    fadeOut: 0,
   };
 }
 

@@ -6,11 +6,13 @@ import {
   parseTimestamp,
   parseContentCrop,
   parseCropSchedule,
+  parseFadeSeconds,
   even,
   roundEven,
   computeCrop,
   safeName,
   buildFfmpegArgs,
+  FADE_AUDIO_BITRATE,
   type ClipRow,
   type BuildOptions,
 } from "../src/engine.js";
@@ -275,5 +277,106 @@ describe("buildFfmpegArgs golden cases", () => {
     expect(() =>
       build({ source_file: "in.mp4", in_point: "10", out_point: "10", crop_offset: "center" }, [1920, 1080]),
     ).toThrow();
+  });
+});
+
+describe("parseFadeSeconds", () => {
+  it("empty/absent means no fade", () => {
+    expect(parseFadeSeconds(undefined, "fade_in")).toBe(0);
+    expect(parseFadeSeconds(null, "fade_in")).toBe(0);
+    expect(parseFadeSeconds("", "fade_in")).toBe(0);
+    expect(parseFadeSeconds("  ", "fade_in")).toBe(0);
+  });
+  it("parses plain non-negative seconds", () => {
+    expect(parseFadeSeconds("0", "fade_in")).toBe(0);
+    expect(parseFadeSeconds("0.5", "fade_in")).toBe(0.5);
+    expect(parseFadeSeconds(" 2 ", "fade_out")).toBe(2);
+  });
+  it("rejects negative, non-numeric, and non-finite values with the field name", () => {
+    expect(() => parseFadeSeconds("-1", "fade_in")).toThrow(/fade_in.*non-negative/);
+    expect(() => parseFadeSeconds("abc", "fade_out")).toThrow(/fade_out.*non-negative/);
+    expect(() => parseFadeSeconds("Infinity", "fade_in")).toThrow(/non-negative/);
+  });
+});
+
+describe("buildFfmpegArgs fades (issue #165)", () => {
+  const ROW: ClipRow = { source_file: "in.mp4", in_point: "0", out_point: "10", crop_offset: "center" };
+
+  /** Pull the value following `-af` out of an ffmpeg arg array (or null). */
+  function afOf(args: string[]): string | null {
+    const i = args.indexOf("-af");
+    return i === -1 ? null : args[i + 1]!;
+  }
+
+  it("appends fade in+out video filters LAST and matching afades", () => {
+    const { args } = build({ ...ROW, fade_in: "0.5", fade_out: "1" }, [1920, 1080]);
+    expect(vfOf(args)).toBe(
+      "crop=608:1080:656:0,scale=1080:1920:flags=lanczos,setsar=1," +
+        "fade=t=in:st=0:d=0.500,fade=t=out:st=9.000:d=1.000",
+    );
+    expect(afOf(args)).toBe("afade=t=in:st=0:d=0.500,afade=t=out:st=9.000:d=1.000");
+  });
+
+  it("fade-in only / fade-out only emit just their filter", () => {
+    const inOnly = build({ ...ROW, fade_in: "0.25" }, [1920, 1080]);
+    expect(vfOf(inOnly.args)).toContain("fade=t=in:st=0:d=0.250");
+    expect(vfOf(inOnly.args)).not.toContain("fade=t=out");
+    expect(afOf(inOnly.args)).toBe("afade=t=in:st=0:d=0.250");
+
+    const outOnly = build({ ...ROW, fade_out: "2" }, [1920, 1080]);
+    expect(vfOf(outOnly.args)).toContain("fade=t=out:st=8.000:d=2.000");
+    expect(vfOf(outOnly.args)).not.toContain("fade=t=in");
+    expect(afOf(outOnly.args)).toBe("afade=t=out:st=8.000:d=2.000");
+  });
+
+  it("THE AUDIO RULE: a fade + audioBitrate 'copy' forces an AAC re-encode and flags it", () => {
+    const built = build({ ...ROW, fade_in: "0.5" }, [1920, 1080]); // DEFAULTS has "copy"
+    expect(audioOf(built.args)).toEqual(["-c:a", "aac", "-b:a", FADE_AUDIO_BITRATE]);
+    expect(built.forcedAudioReencode).toBe(true);
+  });
+
+  it("an explicit audio bitrate is respected (no forcing) when fading", () => {
+    const built = build({ ...ROW, fade_out: "1" }, [1920, 1080], { audioBitrate: "192k" });
+    expect(audioOf(built.args)).toEqual(["-c:a", "aac", "-b:a", "192k"]);
+    expect(built.forcedAudioReencode).toBe(false);
+  });
+
+  it("no fades: audio stays a lossless copy with no -af, and no forced flag", () => {
+    const built = build(ROW, [1920, 1080]);
+    expect(audioOf(built.args)).toEqual(["-c:a", "copy"]);
+    expect(afOf(built.args)).toBeNull();
+    expect(built.forcedAudioReencode).toBe(false);
+    expect(vfOf(built.args)).not.toContain("fade");
+  });
+
+  it("zero-length fades are no-ops (no filters, no forced re-encode)", () => {
+    const built = build({ ...ROW, fade_in: "0", fade_out: "0" }, [1920, 1080]);
+    expect(vfOf(built.args)).not.toContain("fade");
+    expect(afOf(built.args)).toBeNull();
+    expect(audioOf(built.args)).toEqual(["-c:a", "copy"]);
+    expect(built.forcedAudioReencode).toBe(false);
+  });
+
+  it("fades render AFTER burned captions so the captions fade with the video", () => {
+    const { args } = build({ ...ROW, fade_out: "1" }, [1920, 1080], {
+      captionAssPath: "/tmp/cap.ass",
+    });
+    const vf = vfOf(args);
+    const subIdx = vf.indexOf("subtitles=");
+    const fadeIdx = vf.indexOf("fade=t=out");
+    expect(subIdx).toBeGreaterThan(-1);
+    expect(fadeIdx).toBeGreaterThan(subIdx);
+  });
+
+  it("errors early when the fades are longer than the clip", () => {
+    expect(() => build({ ...ROW, fade_in: "6", fade_out: "5" }, [1920, 1080])).toThrow(
+      /longer than the clip/,
+    );
+    expect(() => build({ ...ROW, fade_in: "11" }, [1920, 1080])).toThrow(/longer than the clip/);
+  });
+
+  it("errors early on malformed fade values", () => {
+    expect(() => build({ ...ROW, fade_in: "-0.5" }, [1920, 1080])).toThrow(/fade_in/);
+    expect(() => build({ ...ROW, fade_out: "fast" }, [1920, 1080])).toThrow(/fade_out/);
   });
 });

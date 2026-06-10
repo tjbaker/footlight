@@ -134,8 +134,12 @@ describe("scenes", () => {
 });
 
 describe("loudness", () => {
-  it("GETs /loudness and parses the two envelopes", async () => {
-    const result: LoudnessResult = { display: [0, 0.5, 1], detect: [0.1, 0.2] };
+  it("GETs /loudness and parses the three envelopes", async () => {
+    const result: LoudnessResult = {
+      display: [0, 0.5, 1],
+      detect: [0.1, 0.2],
+      onsetEnvelope: [0.1, 1, 0.1],
+    };
     mockFetch(() => ok({ json: async () => result }));
     const out = await webPlatform.loudness("/song.mp4");
     expect(out).toEqual(result);

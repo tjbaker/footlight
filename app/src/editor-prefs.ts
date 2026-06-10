@@ -107,6 +107,26 @@ export function savePreviewPref(on: boolean): void {
   }
 }
 
+// Onset-snap toggle (snap In/Out to detected audio onsets; persisted, default
+// OFF — snapping is assistive and strictly opt-in, issue #164).
+const SNAP_KEY = "footlight.snap";
+
+export function loadSnapPref(): boolean {
+  try {
+    return localStorage.getItem(SNAP_KEY) === "on";
+  } catch {
+    return false;
+  }
+}
+
+export function saveSnapPref(on: boolean): void {
+  try {
+    localStorage.setItem(SNAP_KEY, on ? "on" : "off");
+  } catch {
+    /* non-fatal */
+  }
+}
+
 // Recent source paths (most-recent-first), shown as a datalist on the path field.
 const RECENTS_KEY = "footlight.recents";
 const RECENTS_CAP = 10;

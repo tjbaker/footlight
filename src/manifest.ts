@@ -56,6 +56,10 @@ export interface ClipRow {
   title?: string;
   /** Caption block placement: `top` | `center` | `bottom`. */
   text_position?: string;
+  /** Fade-in length in seconds (CSV cell; empty/absent = no fade). */
+  fade_in?: string;
+  /** Fade-out length in seconds (CSV cell; empty/absent = no fade). */
+  fade_out?: string;
 }
 
 /** Tolerance (px) within which a box x snaps to a named left/center/right offset. */
@@ -185,6 +189,8 @@ const MANIFEST_COLUMNS: Array<keyof ClipRow> = [
   "source_file",
   "in_point",
   "out_point",
+  "fade_in",
+  "fade_out",
   "crop_offset",
   "content_crop",
   "out_name",
@@ -257,6 +263,16 @@ export interface ClipSpec {
   title?: string;
   /** Caption block placement: `top|center|bottom` optionally `-left|-center|-right`. */
   text_position?: string;
+  /**
+   * Fade-in length in SECONDS (≥ 0; omitted = no fade). Video fades from black
+   * and the audio fades from silence over the same length; a fade forces an AAC
+   * audio re-encode when the render is set to `-c:a copy` (see the engine's
+   * `FADE_AUDIO_BITRATE`). A plain number in JSON; the CSV column carries it as
+   * a numeric string.
+   */
+  fade_in?: number;
+  /** Fade-out length in seconds — the tail counterpart of `fade_in`. */
+  fade_out?: number;
   /** Per-clip caption styling (font + colour + emphasis + effects), applied when burned. */
   caption?: CaptionStyle;
   /** Optional eased crop path; takes precedence over `crop_offset` at render. */
