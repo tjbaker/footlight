@@ -95,7 +95,8 @@ describe("probe / scenes / loudness / track", () => {
   });
 
   it("loudness invokes the loudness command", async () => {
-    const result = { display: [0, 1], detect: [0.5] };
+    // The native backend returns all three envelopes (display/detect/onset).
+    const result = { display: [0, 1], detect: [0.5], onsetEnvelope: [0.1, 1, 0.1] };
     invokeMock.mockResolvedValue(result);
     expect(await tauriPlatform.loudness("/v.mp4")).toEqual(result);
     expect(invokeMock).toHaveBeenCalledWith("loudness", { source: "/v.mp4" });

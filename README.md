@@ -125,6 +125,11 @@ The CLI is also available directly after `make build` — see **CLI usage** belo
   click to seek, hover to preview frames. It draws volume over time with suggested
   quiet→loud **swells**, plus scene-cut ticks and ⏮ / ⏭ cut-jumps (scenes are
   auto-detected on load).
+- **Beat snap (optional):** detected audio onsets — drum hits, note attacks —
+  show as subtle ticks along the bottom of the timeline. Turn on **Snap** and a
+  released In/Out drag (or pressing **I / O**) magnetizes the point to the
+  nearest onset within ±150 ms, so cuts land on the musical phrase. Off by
+  default and applied only at release — your points never move behind your back.
 - **Frame** with the orange 9:16 box — drag to reposition, drag a **corner to
   punch in / zoom**, double-click to reset. A live **9:16 output preview** (with
   optional social safe-area guides) shows the actual vertical result as you frame.

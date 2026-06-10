@@ -48,6 +48,8 @@ export interface EditorState {
   loudness: number[] | null;
   /** Suggested quiet→loud "swell" moments (seconds), derived from loudness. */
   swells: { t: number; label: string }[];
+  /** Detected audio onsets (seconds, ascending) — beat-snap targets for In/Out. */
+  onsets: number[];
   /** Caption big line (`hook`) — shot-list data carried in the manifest. */
   hook: string;
   /** Caption secondary line (`title`). */
@@ -93,6 +95,7 @@ export function createInitialEditorState(): EditorState {
     sceneCuts: [],
     loudness: null,
     swells: [],
+    onsets: [],
     hook: "",
     title: "",
     textPosition: "bottom",

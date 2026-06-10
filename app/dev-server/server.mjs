@@ -50,6 +50,7 @@ import {
   parseEbur128Momentary,
   bucketLufs,
   bucketLoudness,
+  onsetEnvelope,
   LOUDNESS_BUCKETS,
 } from "../../dist/core.js";
 
@@ -161,11 +162,12 @@ async function handleScenes(source, res) {
 }
 
 /**
- * GET /loudness — the timeline's two envelopes from ONE ffmpeg pass: `display`
+ * GET /loudness — the timeline's audio envelopes from ONE ffmpeg pass: `display`
  * (perceptual ebur128 momentary LUFS, parsed from stderr → `bucketLufs`) for the
- * bars, and `detect` (raw-energy RMS from the mono f32le PCM on stdout →
- * `bucketLoudness`) for the swell detector. The ebur128 filter passes audio
- * through, so both come out of the same decode.
+ * bars, `detect` (raw-energy RMS from the mono f32le PCM on stdout →
+ * `bucketLoudness`) for the swell detector, and `onsetEnvelope` (fine fixed-rate
+ * RMS over the same PCM) for the In/Out beat-snap onset detector. The ebur128
+ * filter passes audio through, so all three come out of the same decode.
  */
 async function handleLoudness(source, res) {
   const result = await run("ffmpeg", loudnessCombinedArgs(source), { collectStdoutBinary: true });
@@ -180,6 +182,7 @@ async function handleLoudness(source, res) {
   sendJson(res, 200, {
     display: bucketLufs(momentary, LOUDNESS_BUCKETS),
     detect: bucketLoudness(samples, LOUDNESS_BUCKETS),
+    onsetEnvelope: onsetEnvelope(samples),
   });
 }
 

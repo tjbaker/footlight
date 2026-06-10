@@ -74,14 +74,18 @@ export interface ProbeResult {
 }
 
 /**
- * Two normalized (0..1) loudness envelopes for the timeline, from one ffmpeg pass:
+ * Normalized (0..1) audio envelopes for the timeline, from one ffmpeg pass:
  * `display` is perceptual (ebur128 momentary LUFS) for the waveform bars; `detect`
  * is raw-energy RMS, fed to the swell detector because it exposes the musical dips
- * that perceptually-gated LUFS smooths away on compressed live material.
+ * that perceptually-gated LUFS smooths away on compressed live material;
+ * `onsetEnvelope` is a FINE fixed-rate RMS envelope (`ONSET_FRAME_SEC` frames over
+ * the same 8 kHz mono PCM — the 160-bucket envelopes are far too coarse for
+ * beats), fed to `detectOnsets` for the In/Out beat-snap ticks.
  */
 export interface LoudnessResult {
   display: number[];
   detect: number[];
+  onsetEnvelope: number[];
 }
 
 /** A located subject at a clip-relative time; `box` is in working-region pixels. */
@@ -138,9 +142,10 @@ export interface FootlightPlatform {
   /** Detect scene-cut timestamps (seconds). */
   scenes(source: string): Promise<number[]>;
   /**
-   * Compute the timeline's two loudness envelopes (perceptual `display` + RMS
-   * `detect`) in one pass. A cheap pass next to `probe`; cache per source. Swell
-   * suggestions are derived from `detect` on the frontend via `detectSwells`.
+   * Compute the timeline's audio envelopes (perceptual `display` + RMS `detect`
+   * + fine `onsetEnvelope`) in one pass. A cheap pass next to `probe`; cache per
+   * source. Swell suggestions and beat-snap onsets are derived on the frontend
+   * via `detectSwells(detect)` / `detectOnsets(onsetEnvelope)`.
    */
   loudness(source: string): Promise<LoudnessResult>;
   /**

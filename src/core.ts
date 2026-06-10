@@ -1330,3 +1330,128 @@ export function detectSwells(
 
   return merged.map((t) => ({ t, label: "quiet → loud" }));
 }
+
+// ---------------------------------------------------------------------------
+// Onset detection (the In/Out beat-snap feature, issue #164).
+//
+// Music footage has no transcript — audio IS the signal — and a cut that lands
+// off the musical phrase reads amateur instantly. The 160-bucket display
+// envelope above is far too coarse for beats (~1 bucket ≈ 2s on a 5-min source),
+// so onsets get their own FINE envelope: fixed `ONSET_FRAME_SEC` RMS frames over
+// the same 8 kHz mono PCM the loudness pass already decodes (no extra ffmpeg
+// run). The backends compute `onsetEnvelope` next to the two display envelopes
+// and ship it across the platform boundary; the frontend derives the onset list
+// with `detectOnsets` — the same split as `detect` → `detectSwells`.
+//
+// Pure (samples/envelope in, numbers out), browser-safe and file-free in tests.
+// The native Rust backend (app/src-tauri/src/main.rs) hand-mirrors
+// `onsetEnvelope` (same frame size + rounding) — keep them in sync.
+// ---------------------------------------------------------------------------
+
+/** Onset-envelope frame length in seconds (50 Hz — fine enough that a snapped
+ *  cut lands within ±half a video frame of the audible hit). */
+export const ONSET_FRAME_SEC = 0.02;
+
+/**
+ * Per-frame RMS envelope at `ONSET_FRAME_SEC` resolution, max-normalized to
+ * 0..1 (all-silence stays zeros, like `bucketLoudness`). A trailing partial
+ * frame is dropped. Values are rounded to 4 decimals — far below anything the
+ * detector can distinguish — so the envelope serializes compactly across the
+ * platform boundary and the Rust mirror can pin identical fixtures.
+ */
+export function onsetEnvelope(samples: Float32Array, sampleRate = 8000): number[] {
+  const frameLen = Math.max(1, Math.round(sampleRate * ONSET_FRAME_SEC));
+  const frames = Math.floor(samples.length / frameLen);
+  const out = new Array<number>(frames);
+  for (let f = 0; f < frames; f++) {
+    let sumSq = 0;
+    for (let i = f * frameLen; i < (f + 1) * frameLen; i++) {
+      const s = samples[i]!;
+      sumSq += s * s;
+    }
+    out[f] = Math.sqrt(sumSq / frameLen);
+  }
+  let max = 0;
+  for (const v of out) if (v > max) max = v;
+  if (max > 0) {
+    for (let f = 0; f < frames; f++) out[f] = Math.round((out[f]! / max) * 1e4) / 1e4;
+  }
+  return out;
+}
+
+// Tunable thresholds for the onset detector — named so they are easy to adjust.
+// An onset is a frame-to-frame energy RISE that stands out from its local
+// neighborhood (adaptive threshold), so detection works on quiet and loud
+// material alike without an absolute level gate.
+/** Moving-average half-pass window (frames) used to smooth before detection. */
+export const ONSET_SMOOTH_WINDOW = 1;
+/** Width (seconds) of the centered window the adaptive threshold averages over. */
+export const ONSET_THRESHOLD_WINDOW_SEC = 1;
+/** A rise must exceed the local mean rise by this factor… */
+export const ONSET_THRESHOLD_FACTOR = 1.5;
+/** …plus this absolute floor (normalized 0..1), so noise-floor jitter and slow
+ *  crescendos can't masquerade as onsets. */
+export const ONSET_THRESHOLD_DELTA = 0.05;
+/** Merge onsets closer together than this many seconds (keep the earlier one). */
+export const ONSET_MIN_GAP_SEC = 0.1;
+
+/**
+ * Detect energy onsets — drum hits, note attacks, phrase starts — in an
+ * `onsetEnvelope`. Classic spectral-flux-style recipe on the energy envelope:
+ *   (a) smooth with a small moving average;
+ *   (b) half-wave-rectified difference d[i] = max(0, env[i] − env[i−1]) — only
+ *       energy RISES count, decays never do;
+ *   (c) adaptive threshold: d[i] qualifies when it exceeds the local mean rise
+ *       (±`ONSET_THRESHOLD_WINDOW_SEC`/2) × `ONSET_THRESHOLD_FACTOR` +
+ *       `ONSET_THRESHOLD_DELTA`, and is a local maximum of d;
+ *   (d) merge hits closer than `ONSET_MIN_GAP_SEC`.
+ *
+ * Returns onset times in seconds, ascending. Times are the START of the rising
+ * frame (smoothing biases ≤1 frame early — erring on the cut-before-the-beat
+ * side, which is the right side to err on). Pure: envelope in, seconds out.
+ */
+export function detectOnsets(envelope: number[], frameSec = ONSET_FRAME_SEC): number[] {
+  const n = envelope.length;
+  if (n < 3 || !(frameSec > 0)) return [];
+
+  // (a) Smooth with a small centered moving average (mirrors detectSwells).
+  const w = Math.max(0, Math.floor(ONSET_SMOOTH_WINDOW));
+  const smooth = new Array<number>(n);
+  for (let i = 0; i < n; i++) {
+    let sum = 0;
+    let count = 0;
+    for (let j = Math.max(0, i - w); j <= Math.min(n - 1, i + w); j++) {
+      sum += envelope[j]!;
+      count++;
+    }
+    smooth[i] = sum / count;
+  }
+
+  // (b) Half-wave-rectified first difference (d[0] = 0: a source that starts
+  // loud is not an "onset" — there is nothing before it to cut against).
+  const d = new Array<number>(n).fill(0);
+  for (let i = 1; i < n; i++) d[i] = Math.max(0, smooth[i]! - smooth[i - 1]!);
+
+  // Prefix sums so each frame's local-mean threshold is O(1).
+  const prefix = new Array<number>(n + 1).fill(0);
+  for (let i = 0; i < n; i++) prefix[i + 1] = prefix[i]! + d[i]!;
+  const halfWin = Math.max(1, Math.round(ONSET_THRESHOLD_WINDOW_SEC / 2 / frameSec));
+
+  // (c) Adaptive threshold + local-maximum peak picking.
+  const onsets: number[] = [];
+  for (let i = 1; i < n; i++) {
+    const di = d[i]!;
+    if (di <= 0) continue;
+    const lo = Math.max(0, i - halfWin);
+    const hi = Math.min(n - 1, i + halfWin);
+    const localMean = (prefix[hi + 1]! - prefix[lo]!) / (hi - lo + 1);
+    if (di < ONSET_THRESHOLD_FACTOR * localMean + ONSET_THRESHOLD_DELTA) continue;
+    // Local max of the rise (ties break toward the earlier frame).
+    if (di <= d[i - 1]! || (i + 1 < n && di < d[i + 1]!)) continue;
+    // (d) Enforce the minimum gap (keep the earlier onset).
+    const t = Number((i * frameSec).toFixed(3));
+    if (onsets.length > 0 && t - onsets[onsets.length - 1]! < ONSET_MIN_GAP_SEC) continue;
+    onsets.push(t);
+  }
+  return onsets;
+}
