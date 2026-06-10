@@ -329,3 +329,50 @@ describe("track --mock subcommand", () => {
     expect(stderr).toContain("cannot read");
   });
 });
+
+describe("render flag validation (issue: fail fast, not per-clip at ffmpeg time)", () => {
+  function manifest(): string {
+    const dir = tmp();
+    // The accept cases reach the per-clip probe even under --dry-run, so the
+    // source must really exist (mirrors the dry-run suite above).
+    const src = join(dir, "src.mp4");
+    execFileSync("ffmpeg", [
+      "-hide_banner", "-loglevel", "error", "-y",
+      "-f", "lavfi", "-i", "testsrc=size=1920x1080:rate=30:duration=1",
+      "-frames:v", "5", src,
+    ]);
+    const p = join(dir, "m.csv");
+    writeFileSync(
+      p,
+      `source_file,in_point,out_point,crop_offset\n${src},0,0.1,center\n`,
+      "utf8",
+    );
+    return p;
+  }
+
+  it("rejects a --crf outside 0-51 (and non-integers) with a clear error", () => {
+    for (const bad of ["52", "-1", "abc", "19.5"]) {
+      const { code, stderr } = runCli(["render", manifest(), "--dry-run", "--crf", bad]);
+      expect(code, `--crf ${bad}`).toBe(1);
+      expect(stderr).toContain("--crf must be an integer 0-51");
+    }
+  });
+
+  it("rejects an unknown --preset, listing the valid x264 set", () => {
+    const { code, stderr } = runCli([
+      "render", manifest(), "--dry-run", "--preset", "warpspeed",
+    ]);
+    expect(code).toBe(1);
+    expect(stderr).toContain("--preset must be one of");
+    expect(stderr).toContain("ultrafast");
+    expect(stderr).toContain("placebo");
+  });
+
+  it("accepts the boundary CRFs and every x264 preset name", () => {
+    for (const ok of [["--crf", "0"], ["--crf", "51"], ["--preset", "veryslow"]]) {
+      const { code, stderr } = runCli(["render", manifest(), "--dry-run", ...ok]);
+      expect(code, ok.join(" ")).toBe(0);
+      expect(stderr).toBe("");
+    }
+  });
+});
