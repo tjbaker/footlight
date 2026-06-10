@@ -19,6 +19,7 @@ import {
   roundEven,
   type CropWindowSpec,
   type CropPathKeyframe,
+  type CropWindowKeyframe,
 } from "./core.js";
 
 /** A working-region size in pixels. */
@@ -283,6 +284,13 @@ export interface ClipSpec {
    * `crop_offset` at render — see `CropWindowSpec` in core.
    */
   cropWindow?: CropWindowSpec;
+  /**
+   * Optional ANIMATED punch-in (slow push, issue #163): smoothstep-eased crop
+   * WINDOW keyframes (position and size, clip-relative seconds) within a single
+   * shot. Highest render precedence: `cropWindowPath` > `cropPath` >
+   * `cropWindow` > `crop_offset`. JSON-only, like `cropPath`.
+   */
+  cropWindowPath?: CropWindowKeyframe[];
 }
 
 /**
@@ -316,6 +324,8 @@ export interface RehydratedClip {
   keyframes: CropKeyframe[];
   /** Eased crop path from `spec.cropPath`, else null. */
   cropPath: CropPathKeyframe[] | null;
+  /** Animated punch-in keyframes from `spec.cropWindowPath`, else null. */
+  cropWindowPath: CropWindowKeyframe[] | null;
   /** Output name (`spec.out_name ?? ""`). */
   name: string;
 }
@@ -354,8 +364,16 @@ export function specToEditorState(spec: ClipSpec, dims: Dims): RehydratedClip {
   let cropBox: Box | null;
   let keyframes: CropKeyframe[] = [];
   let cropPath: CropPathKeyframe[] | null = null;
+  let cropWindowPath: CropWindowKeyframe[] | null = null;
 
-  if (spec.cropPath?.length) {
+  if (spec.cropWindowPath?.length) {
+    // Animated punch-in (highest render precedence): the editor shows the
+    // FIRST keyframe's window as the drawn box; the push itself is carried on
+    // `cropWindowPath` and previewed over time.
+    cropWindowPath = spec.cropWindowPath.map((k) => ({ t: k.t, x: k.x, y: k.y, w: k.w, h: k.h }));
+    const first = [...cropWindowPath].sort((a, b) => a.t - b.t)[0]!;
+    cropBox = { x: first.x + originX, y: first.y + originY, w: first.w, h: first.h };
+  } else if (spec.cropPath?.length) {
     // Eased crop path wins: editor shows a full-height centered 9:16 box.
     cropPath = spec.cropPath.map((p) => ({ t: p.t, x: p.x }));
     const c = computeCrop(region.width, region.height, "center");
@@ -387,6 +405,7 @@ export function specToEditorState(spec: ClipSpec, dims: Dims): RehydratedClip {
     contentMode,
     keyframes,
     cropPath,
+    cropWindowPath,
     name: spec.out_name ?? "",
   };
 }

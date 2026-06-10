@@ -154,8 +154,12 @@ export const ptBR: Messages = {
             ],
           },
           {
+            kind: "p",
+            text: "Avanço (aproximação animada): enquadre a caixa onde o clipe deve ABRIR e clique em Definir início, depois enquadre onde deve TERMINAR e clique em Definir fim — a renderização transiciona suavemente entre as duas ao longo do clipe (o avanço lento em direção ao sujeito). Uma caixa fantasma tracejada pré-visualiza a janela enquanto você navega; ✕ limpa o avanço. Um avanço tem prioridade sobre qualquer outro enquadramento daquele clipe.",
+          },
+          {
             kind: "tip",
-            text: "O zoom amplia a origem, então aproximações muito grandes amaciam a imagem. Mantenha-se moderado, a menos que a origem seja de alta resolução.",
+            text: "O zoom amplia a origem, então aproximações muito grandes amaciam a imagem. Mantenha-se moderado, a menos que a origem seja de alta resolução — e o mesmo vale para onde um avanço termina.",
           },
         ],
       },
@@ -621,7 +625,16 @@ export const ptBR: Messages = {
       modeTrack: "rastreamento",
       modePunchIn: "aproximação",
       modeSchedule: "cronograma",
+      modePush: "avanço",
       defaultOffset: "centro",
+      pushLabel: "Avanço",
+      pushSetStart: "Definir início",
+      pushSetStartTitle:
+        "Captura a caixa atual como a janela INICIAL do avanço — o enquadramento com que o clipe abre.",
+      pushSetEnd: "Definir fim",
+      pushSetEndTitle:
+        "Captura a caixa atual como a janela FINAL do avanço — a renderização transiciona suavemente do início ao fim ao longo do clipe (o avanço lento).",
+      pushClearTitle: "Limpa o avanço — volta a um enquadramento estático.",
     },
     captions: {
       header: "Legendas",

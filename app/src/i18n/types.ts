@@ -272,7 +272,16 @@ export interface EditorMessages {
     modeTrack: string;
     modePunchIn: string;
     modeSchedule: string;
+    /** Animated punch-in ("push", issue #163) mode label. */
+    modePush: string;
     defaultOffset: string;
+    /** Push controls: row label, capture buttons + tooltips, clear tooltip. */
+    pushLabel: string;
+    pushSetStart: string;
+    pushSetStartTitle: string;
+    pushSetEnd: string;
+    pushSetEndTitle: string;
+    pushClearTitle: string;
   };
   /** Captions section. */
   captions: {

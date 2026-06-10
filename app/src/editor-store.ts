@@ -9,7 +9,7 @@
  */
 
 import type { Box, Dims, ClipSpec, CropKeyframe } from "@manifest";
-import type { CropPathKeyframe } from "@core";
+import type { CropPathKeyframe, CropWindowSpec } from "@core";
 import { defaultCaptionStyle, clamp, round3, type CaptionStyleState } from "./editor-util.js";
 
 /** Default source FPS until a probe reports the real one. */
@@ -72,6 +72,12 @@ export interface EditorState {
   fadeIn: number;
   /** Per-clip fade-out length in seconds (0 = no fade). */
   fadeOut: number;
+  /**
+   * Animated punch-in endpoints ("push", issue #163): the drawn box captured
+   * as start/end working-region windows. Armed (and emitted as the clip's
+   * `cropWindowPath`, the highest framing precedence) only when BOTH are set.
+   */
+  push: { start: CropWindowSpec | null; end: CropWindowSpec | null };
 }
 
 /** A fresh editor state for an empty workspace (no source loaded). */
@@ -102,6 +108,7 @@ export function createInitialEditorState(): EditorState {
     caption: defaultCaptionStyle(),
     fadeIn: 0,
     fadeOut: 0,
+    push: { start: null, end: null },
   };
 }
 
