@@ -149,7 +149,9 @@ The CLI is also available directly after `make build` — see **CLI usage** belo
   duplicate), choose a **Destination**, and **Render**. Past renders are saved to
   **History** for one-click re-framing; your working session is autosaved and
   restored on next launch. **Export** the queue as a JSON manifest (it re-imports
-  via `footlight render`); **Clear** resets the workspace to start fresh.
+  via `footlight render`); **Export cover** saves the current frame — through the
+  active framing, exactly as the render would crop it — as a 1080×1920 PNG ready
+  to upload as the post's cover image; **Clear** resets the workspace to start fresh.
 - **Keyboard-driven** (NLE-style) — Space to play, **J / K / L** to shuttle
   (reverse / pause / forward, tap again to speed up), ← / → to step a frame,
   **I / O** to mark In / Out (**Shift+I / O** or **Q / W** to jump to them),
