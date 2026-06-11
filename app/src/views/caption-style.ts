@@ -484,7 +484,16 @@ export function buildCaptionStyle(
   });
   angleRow.append(angleLab, angleInput, angleVal);
 
-  styleWrap.append(fontRow, fontField, fillRow, outlineRow, emphasisRow, fxRow, boxColorRow, angleRow);
+  styleWrap.append(
+    fontRow,
+    fontField,
+    fillRow,
+    outlineRow,
+    emphasisRow,
+    fxRow,
+    boxColorRow,
+    angleRow,
+  );
 
   /** Refresh every caption-style control from `state.caption` (used on clip restore). */
   function syncCaptionControls(): void {

@@ -271,15 +271,11 @@ export function buildInspector(store: EditorStore, deps: InspectorViewDeps): Ins
     fadeRow.append(lab, inp);
     return inp;
   };
-  const fadeInInput = mkFadeInput(
-    m.clip.fadeInLabel,
-    m.clip.fadeInTitle,
-    (v) => store.set({ fadeIn: v }),
+  const fadeInInput = mkFadeInput(m.clip.fadeInLabel, m.clip.fadeInTitle, (v) =>
+    store.set({ fadeIn: v }),
   );
-  const fadeOutInput = mkFadeInput(
-    m.clip.fadeOutLabel,
-    m.clip.fadeOutTitle,
-    (v) => store.set({ fadeOut: v }),
+  const fadeOutInput = mkFadeInput(m.clip.fadeOutLabel, m.clip.fadeOutTitle, (v) =>
+    store.set({ fadeOut: v }),
   );
   const fadeHint = el("div", "hint");
   fadeHint.textContent = m.clip.fadeAudioHint;
@@ -602,7 +598,9 @@ export function buildInspector(store: EditorStore, deps: InspectorViewDeps): Ins
       return;
     }
     const rel = Math.max(0, state.t - state.inPoint);
-    store.set({ keyframes: [...state.keyframes, { t: round3(rel), offset: deps.currentOffset() }] });
+    store.set({
+      keyframes: [...state.keyframes, { t: round3(rel), offset: deps.currentOffset() }],
+    });
   }
 
   function refreshKeyframes(): void {
