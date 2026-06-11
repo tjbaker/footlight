@@ -34,13 +34,13 @@ import { planSampleTimes, samplesToCropPath } from "@track";
 import type { GhostPreview, CommitOp } from "@assistant-types";
 import { platform, platformName } from "./platform/index.js";
 import { messages } from "./i18n/index.js";
+import { createTransport } from "./transport.js";
 
 /** The editor's localized strings (the `editor` namespace of the catalog). */
 const m = messages.editor;
 
 import type { HistoryEntry, SessionData } from "./platform/types.js";
 import { openSettings, initTheme } from "./settings.js";
-import { openShortcuts } from "./shortcuts.js";
 import {
   loadAutoTrackSettings,
   saveAutoTrackSettings,
@@ -53,7 +53,6 @@ import {
   captionStyleFromSpec,
   parseTextPosition,
   joinTextPosition,
-  clamp,
   round3,
   errMsg,
   escapeHtml,
@@ -85,8 +84,6 @@ import {
   ICON_PLUS,
   ICON_SPARK,
   ICON_SUN,
-  PAUSE_GLYPH,
-  PLAY_GLYPH,
 } from "./icons.js";
 import { openHistoryModal } from "./views/history.js";
 import { buildQueueStrip } from "./views/queue.js";
@@ -227,10 +224,8 @@ export function mountEditor(root: HTMLElement): void {
   // ----- viewer column (views/viewer.ts) -----
   // The view owns the stage — frame/video/overlay/preview + the first-launch
   // onboarding — the overlay/preview painting, and the crop/content drag
-  // interaction. The editor keeps the transport (#187 Slice C) and drives the
-  // frame/video display through the view's seams; `currentRegion`/
-  // `contentOrigin` are the editor's framing wrappers (`framingToSpec` and the
-  // readouts share them).
+  // interaction. `currentRegion`/`contentOrigin` are the editor's framing
+  // wrappers (`framingToSpec` and the readouts share them).
   const viewerView = buildViewer(store, {
     currentRegion: () => currentRegion(),
     contentOrigin: () => contentOrigin(),
@@ -242,47 +237,14 @@ export function mountEditor(root: HTMLElement): void {
     },
   });
   reflectPreviewBtn(viewerView.isPreviewOn());
-  // The transport still owns playback (Slice C): the video element and the
-  // overlay repaint it triggers on its tick stay reachable as plain locals.
-  const video = viewerView.video;
+  // Commits and spec-restore repaint the overlay directly (their writes bypass
+  // the store) — keep the view's repaint reachable as a plain local.
   const drawOverlay = viewerView.drawOverlay;
 
-  // Transport: a single centered jog cluster (the ONLY play button in the app),
-  // in→out chip far-left, timecode far-right. No scrub bar — the loudness timeline
-  // below is the single scrubber.
-  const transport = el("div", "fl-transport");
-  const playBtn = button("", "fl-play", () => void togglePlay());
-  playBtn.innerHTML = PLAY_GLYPH;
-  playBtn.title = m.transport.playTitle;
-  playBtn.disabled = true;
-  const mkStep = (label: string, delta: () => number) =>
-    button(label, "fl-step", () => seek(state.t + delta()));
-  const stepsLeft = el("div", "fl-steps");
-  stepsLeft.append(
-    mkStep("⟨ −1s", () => -1),
-    mkStep("−0.1", () => -0.1),
-    mkStep("−1f", () => -1 / state.fps),
-  );
-  const stepsRight = el("div", "fl-steps");
-  stepsRight.append(
-    mkStep("+1f", () => 1 / state.fps),
-    mkStep("+0.1", () => 0.1),
-    mkStep("+1s ⟩", () => 1),
-  );
-  const jog = el("div", "fl-jog");
-  jog.append(stepsLeft, playBtn, stepsRight);
-
-  const ioChip = el("div", "fl-rdchip");
-  ioChip.innerHTML = `<span class="lab">${escapeHtml(m.transport.inOut)}</span><span class="val">${escapeHtml(m.common.dash)}</span>`;
-  const tpLeft = el("div", "fl-tp-side");
-  tpLeft.append(ioChip);
-  const tLabel = el("div", "fl-time tnum");
-  tLabel.textContent = "0.000s";
-  const tpRight = el("div", "fl-tp-side end");
-  tpRight.append(tLabel);
-  transport.append(tpLeft, jog, tpRight);
+  // The viewer column: the stage on top; the transport bar (transport.ts,
+  // built after the timeline view below) appends under it.
   const viewer = el("div", "fl-viewer");
-  viewer.append(viewerView.element, transport);
+  viewer.append(viewerView.element);
 
   // ----- inspector column -----
   const inspector = el("div", "fl-inspector");
@@ -1224,6 +1186,26 @@ export function mountEditor(root: HTMLElement): void {
   });
   const snapT = (t: number): number => timeline.snapT(t);
 
+  // ===== transport (transport.ts) =====
+  // Playback/seek (`setT` is the seek/extract-frame core), the jog bar, and
+  // the global keyboard handler. Built after the viewer/timeline views it
+  // drives; the timeline's `seek` dep above resolves back to this instance
+  // through its closure (the setT ⇄ views cycle, as one explicit seam).
+  const transport = createTransport(store, {
+    viewer: viewerView,
+    timeline,
+    assistant: {
+      toggle: () => assistant.toggle(),
+      isOpen: () => assistant.isOpen(),
+      close: () => assistant.close(),
+    },
+    onAddClip: () => addClip(),
+    onPlayError: (msg) => setOutput(msg, "err"),
+  });
+  viewer.append(transport.element);
+  const setT = transport.setT;
+  const seek = transport.seek;
+
   /** Replace the pending assistant ghost set and repaint the stage + timeline
    *  previews (each view keeps its own copy; nothing here mutates editor
    *  state — that's the commit's job). */
@@ -1289,141 +1271,6 @@ export function mountEditor(root: HTMLElement): void {
       /* leave the glow placeholder on failure */
     }
   }
-
-  // ---- keyboard-first operation ----
-  const CROP_NUDGE_PX = 4;
-
-  window.addEventListener("keydown", (e) => {
-    // Never hijack typing in a field; let browser/OS combos through.
-    const tgt = e.target as HTMLElement | null;
-    if (tgt && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" || tgt.isContentEditable))
-      return;
-    if (e.metaKey || e.ctrlKey) return;
-    if (e.key === "?") {
-      openShortcuts();
-      return;
-    }
-    // Spark hotkey: toggle the assistant rail (works even before a source loads
-    // so the "load a source first" guidance is reachable). Esc closes it.
-    if (e.key === "a" || e.key === "A") {
-      e.preventDefault();
-      assistant.toggle();
-      return;
-    }
-    if (assistant.isOpen() && e.key === "Escape") {
-      assistant.close();
-      return;
-    }
-    if (!state.dims) return;
-    const frame = 1 / state.fps;
-    switch (e.key) {
-      case " ":
-        e.preventDefault();
-        void togglePlay();
-        break;
-      case "ArrowLeft":
-      case "ArrowRight": {
-        e.preventDefault();
-        const dir = e.key === "ArrowRight" ? 1 : -1;
-        if (e.altKey) {
-          viewerView.nudgeCrop(dir * CROP_NUDGE_PX, 0);
-        } else {
-          const step = e.shiftKey ? 0.1 : frame;
-          if (!timeline.nudgeMarker(dir * step)) seek(state.t + dir * step);
-        }
-        break;
-      }
-      case "ArrowUp":
-      case "ArrowDown":
-        e.preventDefault();
-        if (e.altKey) {
-          viewerView.nudgeCrop(0, (e.key === "ArrowDown" ? 1 : -1) * CROP_NUDGE_PX);
-        } else {
-          // NLE convention: ↑/↓ jump to the previous/next scene cut (alias of [ / ]).
-          timeline.jumpCut(e.key === "ArrowUp" ? -1 : 1);
-        }
-        break;
-      case "i":
-      case "I":
-        // Shift+I jumps the playhead to the In point (verify it); I sets it.
-        if (e.shiftKey) {
-          if (state.inPoint != null) {
-            seek(state.inPoint);
-            timeline.setSelectedMarker("in");
-          }
-        } else {
-          store.set({ inPoint: snapT(state.t) }); // identity unless onset snap is ON
-          timeline.setSelectedMarker("in");
-        }
-        break;
-      case "o":
-      case "O":
-        if (e.shiftKey) {
-          if (state.outPoint != null) {
-            seek(state.outPoint);
-            timeline.setSelectedMarker("out");
-          }
-        } else {
-          store.set({ outPoint: snapT(state.t) }); // identity unless onset snap is ON
-          timeline.setSelectedMarker("out");
-        }
-        break;
-      // J/K/L shuttle (NLE convention): J reverse, K pause, L forward; tap again
-      // to speed up. Enters video mode on first press.
-      case "j":
-      case "J":
-        e.preventDefault();
-        void shuttle(-1);
-        break;
-      case "k":
-      case "K":
-        e.preventDefault();
-        setShuttle(0);
-        break;
-      case "l":
-      case "L":
-        e.preventDefault();
-        void shuttle(1);
-        break;
-      // Avid-style go-to aliases (mirror Shift+I / Shift+O).
-      case "q":
-      case "Q":
-        if (state.inPoint != null) {
-          seek(state.inPoint);
-          timeline.setSelectedMarker("in");
-        }
-        break;
-      case "w":
-      case "W":
-        if (state.outPoint != null) {
-          seek(state.outPoint);
-          timeline.setSelectedMarker("out");
-        }
-        break;
-      // Jump to the source start / end (NLE Home/End convention).
-      case "Home":
-        e.preventDefault();
-        seek(0);
-        break;
-      case "End":
-        e.preventDefault();
-        seek(state.duration);
-        break;
-      case "s":
-      case "S":
-        addClip();
-        break;
-      case "[":
-        timeline.jumpCut(-1);
-        break;
-      case "]":
-        timeline.jumpCut(1);
-        break;
-      case "Escape":
-        timeline.setSelectedMarker(null);
-        break;
-    }
-  });
 
   // ===== filmstrip queue (views/queue.ts) =====
   // The view owns the card rendering (reacting to `clips`); the editor supplies
@@ -1591,15 +1438,14 @@ export function mountEditor(root: HTMLElement): void {
       crumbPath.textContent = source.split(/[\\/]/).pop() || source;
       crumbDot.classList.add("live");
       viewerView.setLoaded();
-      playBtn.disabled = false;
+      transport.setPlayEnabled(true);
       pushRecent(source);
       refreshRecents();
       saveSessionSoon();
       void loadLoudness(source);
       void autoDetectScenes(source);
       // New source → start in frame mode; drop any previous player source.
-      exitVideoMode();
-      video.removeAttribute("src");
+      transport.resetForNewSource();
       // Default 9:16 crop box: full height, centered.
       viewerView.initCropBox();
       await setT(state.t, true);
@@ -1607,175 +1453,6 @@ export function mountEditor(root: HTMLElement): void {
       dimsLine.innerHTML = `<span class="err-text">${escapeHtml(errMsg(err))}</span>`;
     }
   }
-
-  let frameToken = 0;
-  let debounceTimer: number | undefined;
-
-  /** Set current time, fetch the frame (debounced unless immediate). */
-  async function setT(t: number, immediate = false): Promise<void> {
-    if (!state.dims) return;
-    t = clamp(t, 0, state.duration);
-    store.set({ t }); // the timeline's playhead follows via its subscription
-    tLabel.textContent = `${t.toFixed(3)}s`;
-    viewerView.setStageTime(t);
-    if (debounceTimer) window.clearTimeout(debounceTimer);
-    const fetchFrame = async () => {
-      const token = ++frameToken;
-      try {
-        const url = await platform.extractFrame(state.source, state.t);
-        if (token !== frameToken) {
-          URL.revokeObjectURL(url);
-          return; // a newer request superseded this one
-        }
-        viewerView.showFrame(url);
-      } catch (err) {
-        viewerView.showFrameError(errMsg(err));
-      }
-    };
-    if (immediate) await fetchFrame();
-    else debounceTimer = window.setTimeout(() => void fetchFrame(), 140);
-  }
-
-  // ---- video preview (play with audio to pick In/Out by ear) ----
-
-  // J/K/L shuttle state: 0 stopped, >0 forward ×, <0 reverse ×. Forward uses the
-  // native playbackRate; reverse steps currentTime back on a timer (HTML <video>
-  // has no reverse playback).
-  const SHUTTLE_MAG = [1, 2, 4] as const;
-  let shuttleRate = 0;
-  let reverseTimer: number | null = null;
-
-  /** Seek in the active mode (video playback vs frame extraction). */
-  function seek(t: number): void {
-    const clamped = clamp(t, 0, state.duration);
-    if (viewerView.isVideoMode()) video.currentTime = clamped;
-    else void setT(clamped);
-  }
-
-  async function enterVideoMode(): Promise<void> {
-    const url = await platform.videoSrc(state.source);
-    if (video.src !== url) {
-      video.src = url;
-      await new Promise<void>((resolve, reject) => {
-        const cleanup = () => {
-          video.removeEventListener("loadedmetadata", onMeta);
-          video.removeEventListener("error", onErr);
-        };
-        const onMeta = () => {
-          cleanup();
-          resolve();
-        };
-        const onErr = () => {
-          cleanup();
-          reject(new Error(m.errors.previewPlayerFailed));
-        };
-        video.addEventListener("loadedmetadata", onMeta);
-        video.addEventListener("error", onErr);
-      });
-    }
-    video.currentTime = state.t;
-    viewerView.setVideoMode(true);
-  }
-
-  /** Leave video mode: pause and hide the player (the frame img takes over again). */
-  function exitVideoMode(): void {
-    shuttleRate = 0;
-    stopReverseLoop();
-    if (!video.paused) video.pause();
-    viewerView.setVideoMode(false);
-    syncPlayGlyphs(false);
-  }
-
-  /** Reflect play/pause state on the (single) transport play button. */
-  function syncPlayGlyphs(playing: boolean): void {
-    playBtn.innerHTML = playing ? PAUSE_GLYPH : PLAY_GLYPH;
-  }
-
-  /** Play glyph reflects "moving" — forward OR reverse shuttle — not the raw paused flag. */
-  function reflectShuttleGlyph(): void {
-    syncPlayGlyphs(shuttleRate !== 0);
-  }
-
-  function stopReverseLoop(): void {
-    if (reverseTimer !== null) {
-      window.clearInterval(reverseTimer);
-      reverseTimer = null;
-    }
-  }
-
-  /** Apply a shuttle rate: forward via playbackRate, reverse via a step loop, 0 = pause. */
-  function setShuttle(rate: number): void {
-    shuttleRate = rate;
-    if (rate > 0) {
-      stopReverseLoop();
-      video.playbackRate = rate;
-      if (video.paused) void video.play().catch(() => undefined);
-    } else if (rate < 0) {
-      if (!video.paused) video.pause(); // no native reverse — step currentTime back
-      video.playbackRate = 1;
-      if (reverseTimer === null) {
-        reverseTimer = window.setInterval(() => {
-          const next = video.currentTime + shuttleRate / 30; // shuttleRate < 0
-          if (next <= 0) {
-            video.currentTime = 0;
-            setShuttle(0);
-            return;
-          }
-          video.currentTime = next;
-        }, 1000 / 30);
-      }
-    } else {
-      stopReverseLoop();
-      video.playbackRate = 1;
-      if (!video.paused) video.pause();
-    }
-    reflectShuttleGlyph();
-  }
-
-  /**
-   * Shuttle in `dir` (+1 forward / −1 reverse). Same direction steps up to the
-   * next speed (1→2→4); a new or opposite direction (re)starts at 1×. Enters
-   * video mode first, like `togglePlay`.
-   */
-  async function shuttle(dir: 1 | -1): Promise<void> {
-    if (!state.source || !state.dims) return;
-    try {
-      if (!viewerView.isVideoMode()) await enterVideoMode();
-    } catch (err) {
-      setOutput(errMsg(err), "err");
-      return;
-    }
-    let mag = 1;
-    if (Math.sign(shuttleRate) === dir) {
-      const i = SHUTTLE_MAG.indexOf(Math.abs(shuttleRate) as 1 | 2 | 4);
-      mag = SHUTTLE_MAG[Math.min(i + 1, SHUTTLE_MAG.length - 1)]!;
-    }
-    setShuttle(dir * mag);
-  }
-
-  async function togglePlay(): Promise<void> {
-    if (!state.source || !state.dims) return;
-    try {
-      if (!viewerView.isVideoMode()) await enterVideoMode();
-    } catch (err) {
-      setOutput(errMsg(err), "err");
-      return;
-    }
-    // Moving (forward, reverse, or natively playing) → stop; else play forward.
-    if (shuttleRate !== 0 || !video.paused) setShuttle(0);
-    else setShuttle(1);
-  }
-
-  video.addEventListener("play", () => reflectShuttleGlyph());
-  video.addEventListener("pause", () => reflectShuttleGlyph());
-  video.addEventListener("ended", () => setShuttle(0));
-  video.addEventListener("timeupdate", () => {
-    if (!viewerView.isVideoMode()) return;
-    store.set({ t: video.currentTime }); // the timeline's playhead follows
-    tLabel.textContent = `${state.t.toFixed(3)}s`;
-    viewerView.setStageTime(state.t);
-    drawOverlay();
-  });
 
   /**
    * The explicit punch-in/zoom window for the current crop box, in WORKING-REGION
@@ -1903,8 +1580,7 @@ export function mountEditor(root: HTMLElement): void {
             : state.keyframes.length
               ? m.framing.modeSchedule
               : currentOffset();
-    const valEl = ioChip.querySelector(".val");
-    if (valEl) valEl.textContent = dur;
+    transport.setWindowDur(dur);
     // Explicit (not view-subscription) repaints: assistant commits write
     // In/Out/keyframes directly, without a store notification.
     timeline.renderRegion();
