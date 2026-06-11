@@ -21,7 +21,6 @@
 
 import { detectSwells, detectOnsets, coverOutName, easedCropWindowAt } from "@core";
 import {
-  cropBoxToOffset,
   cropBoxToWindow,
   contentCropFromBox,
   scheduleToString,
@@ -30,7 +29,6 @@ import {
   type Dims,
   type ClipSpec,
 } from "@manifest";
-import { planSampleTimes, samplesToCropPath } from "@track";
 import type { GhostPreview, CommitOp } from "@assistant-types";
 import { platform, platformName } from "./platform/index.js";
 import { messages } from "./i18n/index.js";
@@ -41,47 +39,28 @@ const m = messages.editor;
 
 import type { HistoryEntry, SessionData } from "./platform/types.js";
 import { openSettings, initTheme } from "./settings.js";
-import {
-  loadAutoTrackSettings,
-  saveAutoTrackSettings,
-  migrateLegacyApiKey,
-  GEMINI_API_KEY_SECRET,
-  type AutoTrackSettings,
-} from "./autotrack.js";
+import { migrateLegacyApiKey, GEMINI_API_KEY_SECRET } from "./autotrack.js";
 import {
   captionStyleToSpec,
   captionStyleFromSpec,
   parseTextPosition,
   joinTextPosition,
-  round3,
   errMsg,
-  escapeHtml,
-  type TextPosV,
-  type TextPosH,
 } from "./editor-util.js";
 import { cropWindowSpec as cropWindowSpecPure } from "./editor-crop.js";
 import { currentRegion as currentRegionPure, offsetForBox } from "./editor-offset.js";
 import { applyCommitToState } from "./editor-commit.js";
-import {
-  parseFadeField,
-  fadesToSpec,
-  fadesFromSpec,
-  fadesFit,
-  loopSeamTimes,
-} from "./editor-fades.js";
-import { boxToRegionWindow, pushKeyframes, describePush } from "./editor-push.js";
+import { fadesToSpec, fadesFromSpec, fadesFit } from "./editor-fades.js";
+import { pushKeyframes } from "./editor-push.js";
 import { createEditorStore, hasActiveTrack, clipLength, type EditorState } from "./editor-store.js";
-import { el, input, textarea, autosize, button, sectionHeader } from "./ui.js";
+import { el, button } from "./ui.js";
 import {
   ICON_ACTIVITY,
   ICON_BRAND,
-  ICON_DOWN,
-  ICON_FOLDER,
   ICON_GEAR,
   ICON_HISTORY,
   ICON_MOON,
   ICON_PHONE,
-  ICON_PLUS,
   ICON_SPARK,
   ICON_SUN,
 } from "./icons.js";
@@ -91,14 +70,8 @@ import { buildActivityPanel } from "./views/activity.js";
 import { buildAssistantView, type AssistantView } from "./views/assistant.js";
 import { buildTimeline } from "./views/timeline.js";
 import { buildViewer } from "./views/viewer.js";
-import {
-  renderOptions,
-  loadOutdir,
-  saveOutdir,
-  loadRecents,
-  pushRecent,
-  saveTheme,
-} from "./editor-prefs.js";
+import { buildInspector } from "./views/inspector.js";
+import { renderOptions, saveOutdir, pushRecent, saveTheme } from "./editor-prefs.js";
 
 export function mountEditor(root: HTMLElement): void {
   // The EditorStore (#125 Phase 3): `state` stays directly readable everywhere;
@@ -137,7 +110,6 @@ export function mountEditor(root: HTMLElement): void {
   // eslint-disable-next-line prefer-const -- assigned once, but referenced above its build site.
   let assistant: AssistantView;
 
-  const autoTrack: AutoTrackSettings = loadAutoTrackSettings();
   // The BYOK Gemini key lives in the OS keychain (via `secretStore`), not in the
   // auto-track blob. Read LAZILY on first AI use (see `ensureApiKey`) — never at
   // launch — so the native app doesn't prompt for keychain access unless you
@@ -231,10 +203,7 @@ export function mountEditor(root: HTMLElement): void {
     contentOrigin: () => contentOrigin(),
     supportsFilePicker: platform.supportsFilePicker,
     onBrowse: () => void browse(),
-    onFocusPath: () => {
-      srcInput.focus();
-      srcInput.scrollIntoView({ block: "nearest" });
-    },
+    onFocusPath: () => inspectorView.revealSource(),
   });
   reflectPreviewBtn(viewerView.isPreviewOn());
   // Commits and spec-restore repaint the overlay directly (their writes bypass
@@ -246,912 +215,37 @@ export function mountEditor(root: HTMLElement): void {
   const viewer = el("div", "fl-viewer");
   viewer.append(viewerView.element);
 
-  // ----- inspector column -----
-  const inspector = el("div", "fl-inspector");
-  const seg = el("div", "fl-seg");
-  seg.style.margin = "16px 16px 4px";
-  const frameTab = button(m.tabs.frame, undefined, () => selectTab("frame"));
-  const trackTab = button("", undefined, () => selectTab("track"));
-  trackTab.textContent = m.tabs.track;
-  seg.append(frameTab, trackTab);
-
-  // -- Frame tab --
-  const framePane = el("div");
-
-  const srcSect = el("div", "fl-sect");
-  srcSect.append(sectionHeader(m.source.header));
-  const srcStack = el("div", "fl-stack");
-  const srcInput = input("text", m.source.sourcePlaceholder);
-  srcInput.classList.add("mono");
-  srcInput.title = m.source.sourceTitle;
-  // Recent sources as a native autocomplete on the path field.
-  const recentsList = document.createElement("datalist");
-  recentsList.id = "fl-recents";
-  srcInput.setAttribute("list", "fl-recents");
-  function refreshRecents(): void {
-    recentsList.innerHTML = "";
-    for (const p of loadRecents()) {
-      const opt = document.createElement("option");
-      opt.value = p;
-      recentsList.append(opt);
-    }
-  }
-  const loadBtn = button(m.source.load, "fl-btn sm", () => void load());
-  const srcField = el("div", "fl-field path");
-  srcField.innerHTML = `<span class="ic">${ICON_FOLDER}</span>`;
-  srcField.append(srcInput, recentsList);
-  const srcRow = el("div", "fl-rowg");
-  srcRow.append(srcField);
-  if (platform.supportsFilePicker) {
-    const browseBtn = button(m.source.browse, "fl-btn sm", () => void browse());
-    browseBtn.style.flex = "none";
-    srcRow.append(browseBtn);
-  } else {
-    loadBtn.style.flex = "none";
-    srcRow.append(loadBtn);
-  }
-  const dimsLine = el("div", "hint");
-  dimsLine.textContent = m.source.notLoaded;
-  const cropdetectLine = el("div", "hint");
-  const outdirInput = input("text", m.source.destPlaceholder);
-  outdirInput.classList.add("mono");
-  outdirInput.value = loadOutdir();
-  outdirInput.title = m.source.destTitle;
-  outdirInput.addEventListener("change", () => {
-    saveOutdir(outdirInput.value);
-    saveSessionSoon();
-  });
-  // Seed the platform default on a fresh install (no persisted/typed choice yet):
-  // the native app fills a folder in ~/Movies; web shows `clips`. Never clobbers a
-  // value the user already has, and the placeholder reflects it either way so an
-  // empty field still shows where clips will land (issue #58).
-  void platform
-    .defaultOutdir()
-    .then((d) => {
-      if (d) outdirInput.placeholder = d;
-      if (!outdirInput.value.trim() && d) outdirInput.value = d;
-    })
-    .catch(() => {
-      /* default lookup failed — the field keeps the `clips` fallback. */
-    });
-  const destField = el("div", "fl-field path");
-  destField.innerHTML = `<span class="ic">${ICON_DOWN}</span>`;
-  destField.append(outdirInput);
-  const destRow = el("div", "fl-rowg");
-  destRow.append(destField);
-  if (platform.supportsFilePicker) {
-    const browseDest = button(m.source.browse, "fl-btn sm", () => void browseOutdir());
-    browseDest.style.flex = "none";
-    destRow.append(browseDest);
-  }
-  srcStack.append(srcRow, dimsLine, cropdetectLine, destRow);
-  srcSect.append(srcStack);
-
-  const clipSect = el("div", "fl-sect");
-  clipSect.append(sectionHeader(m.clip.header));
-  const ioRow = el("div", "fl-rowg");
-  ioRow.style.marginBottom = "12px";
-  // Marking In/Out (button or I/O key) goes through `snapT`: with the timeline's
-  // onset-snap toggle ON the point magnetizes to the nearest detected onset
-  // (±150 ms); OFF (the default) it is the identity — the point stays exactly
-  // where the user put it.
-  const setInBtn = button("", "fl-btn", () => {
-    store.set({ inPoint: snapT(state.t) });
-  });
-  setInBtn.innerHTML = `<span class="idot in"></span>${escapeHtml(m.clip.setIn)}`;
-  setInBtn.title = m.clip.setInTitle;
-  const setOutBtn = button("", "fl-btn", () => {
-    store.set({ outPoint: snapT(state.t) });
-  });
-  setOutBtn.innerHTML = `<span class="idot out"></span>${escapeHtml(m.clip.setOut)}`;
-  setOutBtn.title = m.clip.setOutTitle;
-  ioRow.append(setInBtn, setOutBtn);
-  // 2×2 readout grid so the second column aligns:  in | out  /  dur | offset
-  const kSpan = (t: string): HTMLElement => {
-    const s = el("span", "k");
-    s.textContent = t;
-    return s;
-  };
-  const dotSpan = (c: string): HTMLElement => el("span", `idot ${c}`);
-  const readCell = (...kids: HTMLElement[]): HTMLElement => {
-    const d = el("div");
-    d.append(...kids);
-    return d;
-  };
-  const inVal = el("span", "v");
-  inVal.textContent = "—";
-  const outVal = el("span", "v");
-  outVal.textContent = "—";
-  const durVal = el("span", "v accent");
-  durVal.textContent = "—";
-  const offsetVal = el("span", "v");
-  offsetVal.textContent = "—";
-  const ioGrid = el("div", "fl-readgrid");
-  ioGrid.append(
-    readCell(dotSpan("in"), kSpan(m.clip.inKey), inVal),
-    readCell(dotSpan("out"), kSpan(m.clip.outKey), outVal),
-    readCell(dotSpan("dur"), kSpan(m.clip.durKey), durVal),
-    readCell(kSpan(m.clip.offsetKey), offsetVal),
-  );
-  clipSect.append(ioRow, ioGrid);
-
-  // Per-clip fades (#165): two small numeric fields. A fade forces that clip's
-  // audio to re-encode (an afade can't ride `-c:a copy`), so the hint shows
-  // whenever any fade is set.
-  const fadeRow = el("div", "fl-rowg");
-  fadeRow.style.marginTop = "8px";
-  const mkFadeInput = (
-    label: string,
-    title: string,
-    set: (v: number) => void,
-  ): HTMLInputElement => {
-    const lab = el("span", "fl-rowlab");
-    lab.textContent = label;
-    const inp = input("number", "0");
-    inp.title = title;
-    inp.min = "0";
-    inp.step = "0.1";
-    inp.classList.add("mono");
-    inp.style.maxWidth = "70px";
-    inp.addEventListener("input", () => {
-      set(parseFadeField(inp.value)); // the fade hint renders via subscription
-    });
-    fadeRow.append(lab, inp);
-    return inp;
-  };
-  const fadeInInput = mkFadeInput(
-    m.clip.fadeInLabel,
-    m.clip.fadeInTitle,
-    (v) => store.set({ fadeIn: v }),
-  );
-  const fadeOutInput = mkFadeInput(
-    m.clip.fadeOutLabel,
-    m.clip.fadeOutTitle,
-    (v) => store.set({ fadeOut: v }),
-  );
-  const fadeHint = el("div", "hint");
-  fadeHint.textContent = m.clip.fadeAudioHint;
-  fadeHint.style.display = "none";
-  function refreshFadeHint(): void {
-    fadeHint.style.display = state.fadeIn > 0 || state.fadeOut > 0 ? "" : "none";
-  }
-
-  // Loop-seam check (#165): the clip's LAST frame next to its In frame — the
-  // exact join the viewer sees when the clip loops (last → first).
-  const seamPanel = el("div", "fl-loopseam");
-  seamPanel.style.cssText = "display:none; gap:6px; margin-top:8px;";
-  const mkSeamCell = (label: string): { wrap: HTMLElement; img: HTMLImageElement } => {
-    const wrap = el("div");
-    wrap.style.cssText = "flex:1; min-width:0;";
-    const img = document.createElement("img");
-    img.alt = label;
-    img.style.cssText = "width:100%; display:block; border-radius:4px;";
-    const cap = el("div", "hint");
-    cap.textContent = label;
-    wrap.append(img, cap);
-    return { wrap, img };
-  };
-  const seamOut = mkSeamCell(m.clip.loopSeamOutLabel);
-  const seamIn = mkSeamCell(m.clip.loopSeamInLabel);
-  seamPanel.append(seamOut.wrap, seamIn.wrap); // out first — the loop reads out → in
-  let seamOpen = false;
-  const seamBtn = button(m.clip.loopSeam, "fl-btn sm ghost", () => {
-    seamOpen = !seamOpen;
-    seamBtn.classList.toggle("primary", seamOpen);
-    seamPanel.style.display = seamOpen ? "flex" : "none";
-    void refreshLoopSeam();
-  });
-  seamBtn.title = m.clip.loopSeamTitle;
-  async function refreshLoopSeam(): Promise<void> {
-    if (!seamOpen || !state.source || state.inPoint == null || state.outPoint == null) return;
-    const { inT, outT } = loopSeamTimes(state.inPoint, state.outPoint, state.fps);
-    try {
-      const [outUrl, inUrl] = await Promise.all([
-        extractCached(state.source, outT),
-        extractCached(state.source, inT),
-      ]);
-      seamOut.img.src = outUrl;
-      seamIn.img.src = inUrl;
-    } catch {
-      /* best-effort: a failed frame leaves the previous image in place */
-    }
-  }
-  clipSect.append(fadeRow, fadeHint, seamBtn, seamPanel);
-
-  const framingSect = el("div", "fl-sect");
-  framingSect.append(sectionHeader(m.framing.header));
-  const cropReadout = el("div", "fl-readout");
-  cropReadout.textContent = m.framing.loadASource;
-  framingSect.append(cropReadout);
-
-  // Animated punch-in ("push", #163): capture the drawn box twice — as the
-  // start and end windows — and the render eases between them over the clip.
-  const pushRow = el("div", "fl-rowg");
-  pushRow.style.marginTop = "8px";
-  const pushLab = el("span", "fl-rowlab");
-  pushLab.textContent = m.framing.pushLabel;
-  const pushReadout = el("span", "hint");
-  const capturePushWindow = () =>
-    state.cropBox && state.dims
-      ? boxToRegionWindow(state.cropBox, contentOrigin(), currentRegion())
-      : null;
-  function refreshPushReadout(): void {
-    pushReadout.textContent = describePush(state.push);
-    pushClearBtn.style.display = state.push.start || state.push.end ? "" : "none";
-  }
-  const pushStartBtn = button(m.framing.pushSetStart, "fl-btn sm ghost", () => {
-    const w = capturePushWindow();
-    if (!w) return;
-    store.set({ push: { ...state.push, start: w } });
-  });
-  pushStartBtn.title = m.framing.pushSetStartTitle;
-  const pushEndBtn = button(m.framing.pushSetEnd, "fl-btn sm ghost", () => {
-    const w = capturePushWindow();
-    if (!w) return;
-    store.set({ push: { ...state.push, end: w } });
-  });
-  pushEndBtn.title = m.framing.pushSetEndTitle;
-  const pushClearBtn = button("✕", "fl-btn sm ghost", () => {
-    store.set({ push: { start: null, end: null } });
-  });
-  pushClearBtn.title = m.framing.pushClearTitle;
-  pushRow.append(pushLab, pushStartBtn, pushEndBtn, pushClearBtn, pushReadout);
-  framingSect.append(pushRow);
-  refreshPushReadout();
-  // content-crop omitted from the UI (engine still supports it via the manifest);
-  // contentReadout stays so the inert content-crop code paths keep compiling.
-  const contentReadout = el("div", "hint");
-  contentReadout.textContent = m.framing.contentOff;
-
-  // Captions (SPEC §6.5): shot-list text carried in the manifest (hook/title/
-  // text_position). It is stored regardless of whether burn-in is enabled in
-  // Settings → Rendering; the engine's drawtext is the authoritative render.
-  const capSect = el("div", "fl-sect");
-  capSect.append(sectionHeader(m.captions.header));
-  const hookField = el("div", "fl-field");
-  hookField.style.marginBottom = "8px";
-  const hookInput = textarea(m.captions.hookPlaceholder);
-  hookInput.title = m.captions.hookTitle;
-  hookInput.addEventListener("input", () => {
-    store.set({ hook: hookInput.value }); // the preview renders via subscription
-    autosize(hookInput);
-  });
-  hookField.append(hookInput);
-  const titleCapField = el("div", "fl-field");
-  titleCapField.style.marginBottom = "8px";
-  const titleCapInput = textarea(m.captions.titlePlaceholder);
-  titleCapInput.title = m.captions.titleTitle;
-  titleCapInput.addEventListener("input", () => {
-    store.set({ title: titleCapInput.value });
-    autosize(titleCapInput);
-  });
-  titleCapField.append(titleCapInput);
-  // Caption placement on a 9-zone grid: two small selects (vertical × horizontal)
-  // combined into one stored `text_position` (`"<v>"` when horizontal is center for
-  // back-compat, else `"<v>-<h>"`). The engine maps this to ASS alignment 1–9.
-  const posField = el("div", "fl-rowg");
-  const posVSelect = document.createElement("select");
-  posVSelect.title = m.captions.posVTitle;
-  for (const [value, label] of [
-    ["top", m.captions.posTop],
-    ["center", m.captions.posCenter],
-    ["bottom", m.captions.posBottom],
-  ] as const) {
-    const opt = document.createElement("option");
-    opt.value = value;
-    opt.textContent = label;
-    posVSelect.append(opt);
-  }
-  const posHSelect = document.createElement("select");
-  posHSelect.title = m.captions.posHTitle;
-  for (const [value, label] of [
-    ["left", m.captions.posLeft],
-    ["center", m.captions.posCenter],
-    ["right", m.captions.posRight],
-  ] as const) {
-    const opt = document.createElement("option");
-    opt.value = value;
-    opt.textContent = label;
-    posHSelect.append(opt);
-  }
-  const syncPosFromSelects = (): void => {
-    store.set({
-      textPosition: joinTextPosition(posVSelect.value as TextPosV, posHSelect.value as TextPosH),
-    });
-  };
-  const syncSelectsFromPos = (): void => {
-    const { v, h } = parseTextPosition(state.textPosition);
-    posVSelect.value = v;
-    posHSelect.value = h;
-  };
-  syncSelectsFromPos();
-  posVSelect.addEventListener("change", syncPosFromSelects);
-  posHSelect.addEventListener("change", syncPosFromSelects);
-  posField.append(posVSelect, posHSelect);
-
-  // --- Per-clip caption style (SPEC §6.5) ---------------------------------
-  // Font + colour + emphasis + effects + rotation, edited in situ so each clip
-  // can look different. The controls bind to `state.caption` (a populated working
-  // copy); `addClip` narrows it to a sparse `spec.caption`. The fonts FOLDER stays
-  // in Settings — its dir feeds the "Your fonts" group of the picker here.
-  const FONTS_DIR_KEY = "footlight.fontsDir";
-  const styleWrap = el("div", "fl-cap-style");
-  styleWrap.style.cssText = "display:flex; flex-direction:column; gap:8px; margin-top:8px;";
-
-  // Font picker: a CUSTOM dropdown (trigger button + absolutely-positioned popup
-  // list) grouped into System default / Your fonts / System fonts / Custom path…
-  // A native <select> can't preview faces — browsers and the macOS WKWebView
-  // popup render <option>s in the OS UI font and ignore per-option font-family.
-  // Here each row sets `li.style.fontFamily` to its own family so it renders in
-  // its own typeface. Folder fonts store their FILE PATH (engine resolves family
-  // + fontsdir); system fonts store the family NAME; custom reveals a text field.
-  //
-  // Sentinels for the two non-family rows. A leading space keeps them out of any
-  // real family / path namespace (a stored font value is never " default").
-  const FONT_DEFAULT = " default";
-  const FONT_CUSTOM = " custom";
-
-  // The free-text custom-path field (revealed only by the "Custom path…" row).
-  const fontField = el("div", "fl-field");
-  fontField.style.marginTop = "2px";
-  const fontPathInput = input("text", m.captions.fontPathPlaceholder);
-  fontPathInput.classList.add("mono");
-  fontField.append(fontPathInput);
-  fontField.style.display = "none";
-  fontPathInput.addEventListener("input", () => {
-    if (selected === FONT_CUSTOM) {
-      setCaption("font", fontPathInput.value.trim());
-    }
-  });
-
-  // The trigger (a .fl-field-styled button) + its popup list.
-  const fontRow = el("div", "fl-field");
-  fontRow.style.cssText = "position:relative; cursor:pointer; gap:0;";
-  const fontTrigger = button("", undefined);
-  fontTrigger.type = "button";
-  fontTrigger.title = m.captions.fontTitle;
-  fontTrigger.setAttribute("aria-haspopup", "listbox");
-  fontTrigger.setAttribute("aria-expanded", "false");
-  fontTrigger.style.cssText =
-    "flex:1; min-width:0; display:flex; align-items:center; justify-content:space-between; gap:9px; background:none; border:none; outline:none; color:var(--text); font:inherit; font-size:13px; padding:0; text-align:left; cursor:pointer;";
-  const fontTriggerLabel = el("span");
-  fontTriggerLabel.style.cssText =
-    "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
-  const fontCaret = el("span");
-  fontCaret.textContent = "▾";
-  fontCaret.style.cssText = "flex:none; color:var(--faint); font-size:11px;";
-  fontTrigger.append(fontTriggerLabel, fontCaret);
-  fontRow.append(fontTrigger);
-
-  const fontPopup = el("ul");
-  fontPopup.setAttribute("role", "listbox");
-  fontPopup.setAttribute("aria-label", m.captions.fontTitle);
-  fontPopup.style.cssText =
-    "position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:40; margin:0; padding:5px; list-style:none; max-height:260px; overflow-y:auto; background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); display:none;";
-  fontRow.append(fontPopup);
-
-  const closeFontPopup = (): void => {
-    fontPopup.style.display = "none";
-    fontTrigger.setAttribute("aria-expanded", "false");
-  };
-  const openFontPopup = (): void => {
-    fontPopup.style.display = "block";
-    fontTrigger.setAttribute("aria-expanded", "true");
-    fontPopup
-      .querySelector<HTMLElement>('[aria-selected="true"]')
-      ?.scrollIntoView({ block: "nearest" });
-  };
-  fontTrigger.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (fontPopup.style.display === "block") closeFontPopup();
-    else openFontPopup();
-  });
-  // Click-away closes the popup. Esc is handled locally on the picker (a
-  // capture-free listener on the trigger/popup) so the global keydown transport
-  // handler stays untouched.
-  document.addEventListener("click", (e) => {
-    if (!fontRow.contains(e.target as Node)) closeFontPopup();
-  });
-  const onFontEsc = (e: KeyboardEvent): void => {
-    if (e.key === "Escape") {
-      e.stopPropagation();
-      closeFontPopup();
-      fontTrigger.focus();
-    }
-  };
-  fontTrigger.addEventListener("keydown", onFontEsc);
-  fontPopup.addEventListener("keydown", onFontEsc);
-
-  // An option in the picker. A folder font carries `path` (selection sets
-  // caption.font = path so the engine resolves family + fontsdir); a system font
-  // has no path (selection sets caption.font = family). `face` is the CSS family
-  // for the per-row live preview (best-effort — see the FontFace loading below).
-  type FontOpt = { value: string; label: string; face?: string; path?: string };
-
-  let selected = FONT_DEFAULT; // updated by (re)build / restore; the live selection
-
-  // Reflect a selection onto the trigger label (in its own face) + custom-field
-  // visibility. Single quotes are stripped so the inline family value can't break
-  // out of its quoting. `display` overrides the shown text/face for a value that
-  // is a file path (folder fonts) — show the family, never the raw path.
-  const syncFontTrigger = (value: string, display?: { label: string; face: string }): void => {
-    const custom = value === FONT_CUSTOM;
-    fontField.style.display = custom ? "" : "none";
-    if (custom) {
-      fontTriggerLabel.textContent = m.captions.fontCustomPath;
-      fontTriggerLabel.style.fontFamily = "";
-    } else if (value === FONT_DEFAULT || value === "") {
-      fontTriggerLabel.textContent = m.captions.fontSystemDefault;
-      fontTriggerLabel.style.fontFamily = "";
-    } else if (display) {
-      fontTriggerLabel.textContent = display.label;
-      fontTriggerLabel.style.fontFamily = display.face ? `'${display.face.replace(/'/g, "")}'` : "";
-    } else {
-      fontTriggerLabel.textContent = value;
-      fontTriggerLabel.style.fontFamily = `'${value.replace(/'/g, "")}'`;
-    }
-  };
-
-  const markFontSelected = (value: string): void => {
-    for (const li of Array.from(fontPopup.children) as HTMLElement[]) {
-      if (li.dataset.value === undefined) continue; // group headers aren't options
-      const on = li.dataset.value === value;
-      li.setAttribute("aria-selected", String(on));
-      li.style.background = on ? "var(--panel-3)" : "";
-    }
-  };
-
-  const fontGroupHeader = (text: string): HTMLElement => {
-    const li = el("li");
-    li.setAttribute("role", "presentation");
-    li.textContent = text;
-    li.style.cssText =
-      "padding:8px 10px 4px; font-size:10.5px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:var(--faint); cursor:default;";
-    return li;
-  };
-
-  // Folder fonts aren't installed system-wide, so the OS can't resolve their
-  // family by name. Load each from its file (Tauri asset URL) via the FontFace
-  // API so its row + the trigger preview in the REAL face; fall back silently to
-  // the default face if loading fails (the web dev backend has no local-file URL
-  // for arbitrary paths, or the file is malformed). The burn always uses the file
-  // path, so a missed preview is purely cosmetic — the row still shows the family.
-  const loadedFolderFaces = new Set<string>();
-  const loadFolderFontFace = (family: string, path: string): void => {
-    if (platformName !== "tauri") return; // no cross-backend local-file URL on web
-    const key = `${family}\u0000${path}`;
-    if (loadedFolderFaces.has(key)) return;
-    loadedFolderFaces.add(key);
-    void (async () => {
-      try {
-        const { convertFileSrc } = await import("@tauri-apps/api/core");
-        const url = convertFileSrc(path);
-        const face = new FontFace(family, `url("${url.replace(/"/g, "%22")}")`);
-        await face.load();
-        (document as Document & { fonts: FontFaceSet }).fonts.add(face);
-        // Repaint the trigger if this is the live selection (the row already
-        // carries the family, so it picks up the face once it's registered).
-        if (selected === path) syncFontTrigger(path, { label: family, face: family });
-      } catch {
-        loadedFolderFaces.delete(key); // allow a later retry
-      }
-    })();
-  };
-
-  // All real (non-sentinel) options, so a restored clip whose font is a path or a
-  // family resolves to the right row instead of falling to "Custom path…".
-  let fontOpts: FontOpt[] = [];
-
-  const fontOptionRow = (opt: FontOpt): HTMLElement => {
-    const li = el("li");
-    li.dataset.value = opt.value;
-    li.setAttribute("role", "option");
-    li.tabIndex = 0;
-    li.textContent = opt.label;
-    li.style.cssText =
-      "padding:7px 10px; border-radius:7px; cursor:pointer; font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
-    // Each family row renders in its own face: system fonts resolve by name;
-    // folder fonts are loaded via FontFace above (and previewed once ready).
-    if (opt.face) li.style.fontFamily = `'${opt.face.replace(/'/g, "")}'`;
-    li.addEventListener("mouseenter", () => {
-      if (li.getAttribute("aria-selected") !== "true") li.style.background = "var(--panel-2)";
-    });
-    li.addEventListener("mouseleave", () => {
-      if (li.getAttribute("aria-selected") !== "true") li.style.background = "";
-    });
-    const choose = (): void => {
-      selected = opt.value;
-      markFontSelected(selected);
-      if (opt.value === FONT_DEFAULT) {
-        setCaption("font", "");
-        fontPathInput.value = "";
-      } else if (opt.value === FONT_CUSTOM) {
-        // Reveal the free-text field; keep whatever path is already there.
-        setCaption("font", fontPathInput.value.trim());
-      } else {
-        // A folder font sets caption.font = its file path (engine resolves the
-        // family + fontsdir); a system font sets caption.font = the family.
-        setCaption("font", opt.path ?? opt.value);
-      }
-      const realFont = opt.value !== FONT_DEFAULT && opt.value !== FONT_CUSTOM;
-      syncFontTrigger(
-        opt.value === FONT_CUSTOM ? FONT_CUSTOM : state.caption.font || FONT_DEFAULT,
-        realFont && opt.path ? { label: opt.label, face: opt.face ?? opt.label } : undefined,
-      );
-      closeFontPopup();
-      if (opt.value === FONT_CUSTOM) fontPathInput.focus();
-      else fontTrigger.focus();
-    };
-    li.addEventListener("click", (e) => {
-      e.stopPropagation();
-      choose();
-    });
-    li.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        choose();
-      }
-    });
-    return li;
-  };
-
-  /**
-   * Reflect `state.caption.font` onto the trigger + custom field, after a (re)build
-   * or on clip restore. "" → default; a value matching a listed option → that
-   * option; anything else → Custom path… (the free-text field shows it). Folder
-   * fonts store a path, so show their family (and ensure its face is loaded).
-   */
-  const syncFontSelect = (): void => {
-    const f = state.caption.font.trim();
-    const hit = f ? fontOpts.find((o) => o.value === f) : undefined;
-    if (!f) {
-      selected = FONT_DEFAULT;
-    } else if (hit) {
-      selected = hit.value;
-    } else {
-      selected = FONT_CUSTOM;
-      fontPathInput.value = f;
-    }
-    markFontSelected(selected);
-    if (hit?.path) loadFolderFontFace(hit.label, hit.path);
-    syncFontTrigger(
-      selected === FONT_CUSTOM ? FONT_CUSTOM : state.caption.font || FONT_DEFAULT,
-      hit?.path ? { label: hit.label, face: hit.face ?? hit.label } : undefined,
-    );
-  };
-
-  // (Re)build the dropdown: scan the fonts folder (if set) into a "Your fonts"
-  // group at the top, then list system fonts. Called once on mount and again
-  // whenever the fonts-folder changes. Each rebuild supersedes the last (a stale
-  // async result is dropped via the token).
-  let fontBuildToken = 0;
-  async function rebuildFontPicker(): Promise<void> {
-    const token = ++fontBuildToken;
-    let userFonts: { family: string; path?: string }[] = [];
-    let sysFonts: { family: string; path?: string }[] = [];
-    try {
-      const dir = localStorage.getItem(FONTS_DIR_KEY)?.trim() ?? "";
-      if (dir) userFonts = await platform.listUserFonts(dir);
-    } catch {
-      /* unreadable folder → no "Your fonts" group */
-    }
-    try {
-      sysFonts = await platform.listFonts();
-    } catch {
-      /* enumeration unavailable → system-default + custom path only */
-    }
-    if (token !== fontBuildToken) return; // a newer rebuild started — drop this one
-
-    // Folder fonts: keep those with a real family + path; de-dupe by family.
-    const userByFamily = new Map<string, { family: string; path: string }>();
-    for (const f of userFonts) {
-      const fam = f.family.trim();
-      if (!fam || !f.path) continue;
-      const key = fam.toLowerCase();
-      if (!userByFamily.has(key)) userByFamily.set(key, { family: fam, path: f.path });
-    }
-    const userList = Array.from(userByFamily.values());
-    userList.sort((a, b) => a.family.localeCompare(b.family, undefined, { sensitivity: "base" }));
-    const userKeys = new Set(userList.map((f) => f.family.toLowerCase()));
-
-    // System families: de-dupe + sort; a folder font that also exists system-wide
-    // is dropped here so the file-backed entry wins.
-    const sysFamilies = Array.from(
-      new Set(sysFonts.map((f) => f.family).filter((f) => f.trim())),
-    ).filter((f) => !userKeys.has(f.toLowerCase()));
-    sysFamilies.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-
-    const userOpts: FontOpt[] = userList.map((f) => ({
-      value: f.path,
-      label: f.family,
-      face: f.family,
-      path: f.path,
-    }));
-    const sysOpts: FontOpt[] = sysFamilies.map((f) => ({ value: f, label: f, face: f }));
-    fontOpts = [...userOpts, ...sysOpts];
-
-    fontPopup.replaceChildren();
-    fontPopup.append(fontOptionRow({ value: FONT_DEFAULT, label: m.captions.fontSystemDefault }));
-    if (userOpts.length) {
-      fontPopup.append(fontGroupHeader(m.captions.fontYourFonts));
-      for (const o of userOpts) {
-        fontPopup.append(fontOptionRow(o));
-        if (o.path) loadFolderFontFace(o.label, o.path); // warm the preview face
-      }
-    }
-    if (sysOpts.length) {
-      fontPopup.append(fontGroupHeader(m.captions.fontSystemFonts));
-      for (const o of sysOpts) fontPopup.append(fontOptionRow(o));
-    }
-    fontPopup.append(fontOptionRow({ value: FONT_CUSTOM, label: m.captions.fontCustomPath }));
-
-    syncFontSelect();
-  }
-
-  /** A `#RRGGBB` colour control: swatch + live hex label, bound to `bind`. */
-  /** Patch ONE field of the per-clip caption style through the store (a fresh
-   *  object, so the preview renders via subscription). */
-  function setCaption<K extends keyof EditorState["caption"]>(
-    key: K,
-    value: EditorState["caption"][K],
-  ): void {
-    store.set({ caption: { ...state.caption, [key]: value } });
-  }
-
-  function colorControl(label: string, get: () => string, set: (v: string) => void): HTMLElement {
-    const row = el("div", "fl-rowg");
-    row.style.cssText = "align-items:center; gap:8px;";
-    const lab = el("span", "fl-label");
-    lab.style.cssText = "flex:1; font-size:12px;";
-    lab.textContent = label;
-    const swatch = document.createElement("input");
-    swatch.type = "color";
-    swatch.value = get();
-    const hex = el("span", "mono");
-    hex.style.cssText = "font-size:12px; color:var(--faint); min-width:62px; text-align:right;";
-    hex.textContent = get().toUpperCase();
-    swatch.addEventListener("input", () => {
-      set(swatch.value);
-      hex.textContent = swatch.value.toUpperCase();
-    });
-    (swatch as HTMLInputElement & { _sync?: () => void })._sync = () => {
-      swatch.value = get();
-      hex.textContent = get().toUpperCase();
-    };
-    row.append(lab, swatch, hex);
-    return row;
-  }
-  const fillRow = colorControl(
-    m.captions.fill,
-    () => state.caption.color,
-    (v) => setCaption("color", v),
-  );
-  const outlineRow = colorControl(
-    m.captions.outline,
-    () => state.caption.outlineColor,
-    (v) => setCaption("outlineColor", v),
-  );
-
-  /** A B/I/U-style toggle button bound to a boolean on `state.caption`. */
-  function toggleBtn(
-    glyph: string,
-    css: string,
-    title: string,
-    get: () => boolean,
-    set: (v: boolean) => void,
-  ): HTMLButtonElement {
-    const b = button(glyph, "fl-btn sm");
-    if (css) b.style.cssText = css;
-    b.title = title;
-    const refresh = () => b.classList.toggle("primary", get());
-    b.addEventListener("click", () => {
-      set(!get());
-      refresh();
-    });
-    (b as HTMLButtonElement & { _sync?: () => void })._sync = refresh;
-    refresh();
-    return b;
-  }
-  const boldBtn = toggleBtn(
-    "B",
-    "font-weight:700;",
-    m.captions.bold,
-    () => state.caption.bold,
-    (v) => setCaption("bold", v),
-  );
-  const italicBtn = toggleBtn(
-    "I",
-    "font-style:italic;",
-    m.captions.italic,
-    () => state.caption.italic,
-    (v) => setCaption("italic", v),
-  );
-  const underlineBtn = toggleBtn(
-    "U",
-    "text-decoration:underline;",
-    m.captions.underline,
-    () => state.caption.underline,
-    (v) => setCaption("underline", v),
-  );
-  const emphasisRow = el("div", "fl-rowg");
-  emphasisRow.style.gap = "6px";
-  emphasisRow.append(boldBtn, italicBtn, underlineBtn);
-
-  const boxColorRow = colorControl(
-    m.captions.boxColor,
-    () => state.caption.boxColor,
-    (v) => setCaption("boxColor", v),
-  );
-  const shadowBtn = toggleBtn(
-    m.captions.shadow,
-    "",
-    m.captions.shadowTitle,
-    () => state.caption.shadow,
-    (v) => setCaption("shadow", v),
-  );
-  const boxBtn = toggleBtn(
-    m.captions.box,
-    "",
-    m.captions.boxTitle,
-    () => state.caption.box,
-    (v) => {
-      setCaption("box", v);
-      boxColorRow.style.display = v ? "" : "none";
+  // ----- inspector column (views/inspector.ts) -----
+  // The view owns both tabs (Source/Clip/Framing/Captions/Keyframes/Add +
+  // auto-track, with the caption-style cluster in views/caption-style.ts) and
+  // refreshes its readouts on its own store subscription; the editor keeps the
+  // orchestration (load/browse/render/add-clip) and reaches the fields through
+  // the view's seams. Cross-module deps (timeline, transport, assistant) are
+  // closures - those instances are built below.
+  const inspectorView = buildInspector(store, {
+    platform,
+    snapT: (t) => timeline.snapT(t),
+    extractFrame: (source, t) => extractCached(source, t),
+    currentRegion: () => currentRegion(),
+    contentOrigin: () => contentOrigin(),
+    cropWindowSpec: () => cropWindowSpec(),
+    currentOffset: () => currentOffset(),
+    setWindowDur: (text) => transport.setWindowDur(text),
+    renderRegion: () => timeline.renderRegion(),
+    renderKf: () => timeline.renderKf(),
+    onLoad: () => void load(),
+    onBrowse: () => void browse(),
+    onBrowseOutdir: () => void browseOutdir(),
+    onOutdirChange: (value) => {
+      saveOutdir(value);
+      saveSessionSoon();
     },
-  );
-  boxColorRow.style.display = state.caption.box ? "" : "none";
-  const fxRow = el("div", "fl-rowg");
-  fxRow.style.gap = "6px";
-  fxRow.append(shadowBtn, boxBtn);
-
-  const angleRow = el("div", "fl-rowg");
-  angleRow.style.cssText = "align-items:center; gap:8px;";
-  const angleLab = el("span", "fl-label");
-  angleLab.style.cssText = "flex:none; font-size:12px;";
-  angleLab.textContent = m.captions.rotate;
-  const angleInput = document.createElement("input");
-  angleInput.type = "range";
-  angleInput.min = "-30";
-  angleInput.max = "30";
-  angleInput.step = "1";
-  angleInput.style.flex = "1";
-  angleInput.value = String(state.caption.angle);
-  const angleVal = el("span", "mono");
-  angleVal.style.cssText = "font-size:12px; color:var(--faint); min-width:34px; text-align:right;";
-  angleVal.textContent = `${state.caption.angle}°`;
-  angleInput.addEventListener("input", () => {
-    setCaption("angle", Number(angleInput.value));
-    angleVal.textContent = `${state.caption.angle}°`;
+    onAddClip: () => addClip(),
+    onAsk: () => assistant.open(),
+    ensureApiKey,
+    getApiKey: () => apiKey,
+    setOutput,
   });
-  angleRow.append(angleLab, angleInput, angleVal);
-
-  styleWrap.append(
-    fontRow,
-    fontField,
-    fillRow,
-    outlineRow,
-    emphasisRow,
-    fxRow,
-    boxColorRow,
-    angleRow,
-  );
-
-  /** Refresh every caption-style control from `state.caption` (used on clip restore). */
-  function syncCaptionControls(): void {
-    syncFontSelect();
-    for (const c of [fillRow, outlineRow, boxColorRow]) {
-      const sw = c.querySelector('input[type="color"]') as
-        | (HTMLInputElement & { _sync?: () => void })
-        | null;
-      sw?._sync?.();
-    }
-    for (const b of [boldBtn, italicBtn, underlineBtn, shadowBtn, boxBtn] as Array<
-      HTMLButtonElement & { _sync?: () => void }
-    >) {
-      b._sync?.();
-    }
-    boxColorRow.style.display = state.caption.box ? "" : "none";
-    angleInput.value = String(state.caption.angle);
-    angleVal.textContent = `${state.caption.angle}°`;
-  }
-  void rebuildFontPicker();
-
-  capSect.append(hookField, titleCapField, posField, styleWrap);
-
-  const kfSect = el("div", "fl-sect");
-  kfSect.append(sectionHeader(m.keyframes.header));
-  const kfRow = el("div", "fl-rowg");
-  kfRow.style.marginBottom = "10px";
-  const addKfBtn = button(m.keyframes.add, "fl-btn sm", addKeyframe);
-  addKfBtn.title = m.keyframes.addTitle;
-  const clearKfBtn = button(m.keyframes.clear, "fl-btn sm ghost", () => {
-    store.set({ keyframes: [] });
-  });
-  kfRow.append(addKfBtn, clearKfBtn);
-  const kfList = el("ul", "fl-kf-list") as HTMLUListElement;
-  const scheduleReadout = el("div", "fl-readout");
-  scheduleReadout.style.marginTop = "8px";
-  scheduleReadout.textContent = m.keyframes.scheduleNone;
-  kfSect.append(kfRow, kfList, scheduleReadout);
-
-  const addSect = el("div", "fl-sect");
-  addSect.append(sectionHeader(m.add.header));
-  const nameField = el("div", "fl-field");
-  nameField.style.marginBottom = "12px";
-  const nameInput = input("text", m.add.namePlaceholder);
-  nameInput.classList.add("mono");
-  nameField.append(nameInput);
-  const addClipBtn = button("", "fl-btn lg primary", addClip);
-  addClipBtn.innerHTML = `${ICON_PLUS}${escapeHtml(m.add.addClip)}`;
-  addClipBtn.title = m.add.addClipTitle;
-  const clipErr = el("div", "err-text");
-  addSect.append(nameField, addClipBtn, clipErr);
-
-  framePane.append(srcSect, clipSect, framingSect, capSect, kfSect, addSect);
-
-  // -- Track tab (auto-track) --
-  const trackPane = el("div");
-  const trackSect = el("div", "fl-sect");
-  trackSect.append(sectionHeader(m.track.header));
-  const trackHelp = el("div", "fl-help");
-  trackHelp.textContent = m.track.help;
-  const hintField = el("div", "fl-field");
-  hintField.style.marginBottom = "10px";
-  const hintInput = input("text", m.track.subjectPlaceholder);
-  hintInput.classList.add("mono");
-  hintInput.value = autoTrack.subjectHint;
-  hintField.append(hintInput);
-  const intervalField = el("div", "fl-field");
-  intervalField.style.cssText = "justify-content:space-between; margin-bottom:12px;";
-  const intervalInput = input("number", m.track.intervalPlaceholder);
-  intervalInput.value = String(autoTrack.intervalSec);
-  intervalInput.step = "0.05";
-  intervalInput.min = "0.05";
-  intervalInput.classList.add("mono");
-  intervalInput.style.maxWidth = "90px";
-  const intervalLab = el("span", "hint");
-  intervalLab.textContent = m.track.intervalLabel;
-  intervalField.append(intervalLab, intervalInput);
-  const trackBtnRow = el("div", "fl-rowg");
-  const trackBtn = button(m.track.autoTrack, "fl-btn primary", () => void doAutoTrack());
-  trackBtn.title = m.track.autoTrackTitle;
-  const clearTrackBtn = button(m.track.clearTrack, "fl-btn ghost", clearTrack);
-  clearTrackBtn.title = m.track.clearTrackTitle;
-  trackBtnRow.append(trackBtn, clearTrackBtn);
-  const trackStatus = el("div", "fl-readout");
-  trackStatus.style.marginTop = "10px";
-  trackStatus.textContent = m.track.statusNone;
-  trackSect.append(trackHelp, hintField, intervalField, trackBtnRow, trackStatus);
-  trackPane.append(trackSect);
-
-  const persistAutoTrack = () => {
-    autoTrack.subjectHint = hintInput.value;
-    autoTrack.mock = false;
-    const iv = Number(intervalInput.value);
-    autoTrack.intervalSec = Number.isFinite(iv) && iv > 0 ? iv : 0.75;
-    saveAutoTrackSettings(autoTrack);
-  };
-  hintInput.addEventListener("change", persistAutoTrack);
-  intervalInput.addEventListener("change", persistAutoTrack);
-
-  // Second entry point into the assistant: a button pinned at the inspector base
-  // (the spark in the top bar is the first). Opening the dock hides the inspector.
-  const askSect = el("div", "fl-sect");
-  const askBtn = button("", "fl-btn", () => assistant.open());
-  askBtn.innerHTML = `${ICON_SPARK}${escapeHtml(m.ask.button)}`;
-  askBtn.title = m.ask.title;
-  askSect.append(askBtn);
-
-  inspector.append(seg, framePane, trackPane, askSect);
-
-  function selectTab(which: "frame" | "track"): void {
-    const frameOn = which === "frame";
-    frameTab.classList.toggle("on", frameOn);
-    trackTab.classList.toggle("on", !frameOn);
-    framePane.style.display = frameOn ? "" : "none";
-    trackPane.style.display = frameOn ? "none" : "";
-  }
-  selectTab("frame");
 
   // ----- AI assistant dock (views/assistant.ts; slides over the inspector) -----
   // Commits flow back through the editor's applyCommit; proposal "ghost"
@@ -1165,12 +259,12 @@ export function mountEditor(root: HTMLElement): void {
     applyCommit,
     setGhosts,
     onOpenChange: (open) => {
-      inspector.style.display = open ? "none" : "";
+      inspectorView.element.style.display = open ? "none" : "";
       assistantBtn.classList.toggle("on", open);
     },
   });
 
-  main.append(viewer, inspector, assistant.element);
+  main.append(viewer, inspectorView.element, assistant.element);
 
   // ===== loudness timeline (views/timeline.ts) =====
   // The view owns the track DOM and all its repaints (wave / cuts / swells /
@@ -1184,7 +278,6 @@ export function mountEditor(root: HTMLElement): void {
     extractFrame: (source, t) => extractCached(source, t),
     onDetectScenes: () => void doScenes(),
   });
-  const snapT = (t: number): number => timeline.snapT(t);
 
   // ===== transport (transport.ts) =====
   // Playback/seek (`setT` is the seek/extract-frame core), the jog bar, and
@@ -1280,7 +373,7 @@ export function mountEditor(root: HTMLElement): void {
   const queueView = buildQueueStrip(store, {
     setThumb: (elm, source, t) => void setThumb(elm, source, t),
     openSpec: (spec, outdir) => void openSpec(spec, outdir),
-    getOutdir: () => outdirInput.value.trim(),
+    getOutdir: () => inspectorView.getOutdir(),
     onAdd: () => addClip(),
     onExportJson: () => {
       if (!state.clips.length) return;
@@ -1309,7 +402,7 @@ export function mountEditor(root: HTMLElement): void {
       out_point: (state.outPoint ?? state.duration).toFixed(3),
     };
     Object.assign(spec, framingToSpec(state.t));
-    const name = nameInput.value.trim();
+    const name = inspectorView.getName();
     if (name) spec.out_name = name;
     try {
       const saved = await platform.exportCover(
@@ -1353,7 +446,7 @@ export function mountEditor(root: HTMLElement): void {
             setDropActive(false);
             const path = p.paths?.[0];
             if (path) {
-              srcInput.value = path;
+              inspectorView.setSource(path);
               void load();
             }
           }
@@ -1376,40 +469,34 @@ export function mountEditor(root: HTMLElement): void {
       e.preventDefault();
       setDropActive(false);
       if (e.dataTransfer?.files?.length) {
-        dimsLine.innerHTML = `<span class="err-text">${escapeHtml(m.source.dropHint)}</span>`;
-        srcInput.focus();
+        inspectorView.setDropHint();
+        inspectorView.focusSource();
       }
     });
   }
 
   // ---------- behavior ----------
 
-  loadBtn.addEventListener("click", () => void load());
-  srcInput.addEventListener("keydown", (e) => {
-    if ((e as KeyboardEvent).key === "Enter") void load();
-  });
-
   /** Open the native file picker; on a pick, fill the field and load it. */
   async function browse(): Promise<void> {
     try {
       const picked = await platform.pickSourceFile();
       if (!picked) return; // cancelled
-      srcInput.value = picked;
+      inspectorView.setSource(picked);
       await load();
     } catch (err) {
-      dimsLine.innerHTML = `<span class="err-text">${escapeHtml(errMsg(err))}</span>`;
+      inspectorView.setSourceError(errMsg(err));
     }
   }
 
   async function load(): Promise<void> {
-    const source = srcInput.value.trim();
+    const source = inspectorView.getSource();
     if (!source) {
-      dimsLine.innerHTML = `<span class="err-text">${escapeHtml(m.source.enterPath)}</span>`;
-      srcInput.focus();
+      inspectorView.setSourceError(m.source.enterPath);
+      inspectorView.focusSource();
       return;
     }
-    dimsLine.textContent = m.source.probing;
-    cropdetectLine.textContent = "";
+    inspectorView.setProbing();
     try {
       const p = await platform.probe(source);
       state.source = source;
@@ -1426,21 +513,13 @@ export function mountEditor(root: HTMLElement): void {
         swells: [],
         onsets: [],
       });
-      dimsLine.innerHTML =
-        '<div class="fl-readgrid">' +
-        `<div><span class="k">${escapeHtml(m.source.dimKey)}</span><span class="v">${p.width}×${p.height}</span></div>` +
-        `<div><span class="k">${escapeHtml(m.source.durKey)}</span><span class="v">${p.duration.toFixed(2)}s</span></div>` +
-        `<div><span class="k">${escapeHtml(m.source.arKey)}</span><span class="v">${(p.width / p.height).toFixed(3)}</span></div>` +
-        "</div>";
-      cropdetectLine.textContent = p.cropdetect
-        ? `${m.source.cropdetectPrefix}${p.cropdetect}`
-        : m.source.cropdetectNone;
+      inspectorView.setProbeResult(p);
       crumbPath.textContent = source.split(/[\\/]/).pop() || source;
       crumbDot.classList.add("live");
       viewerView.setLoaded();
       transport.setPlayEnabled(true);
       pushRecent(source);
-      refreshRecents();
+      inspectorView.refreshRecents();
       saveSessionSoon();
       void loadLoudness(source);
       void autoDetectScenes(source);
@@ -1450,7 +529,7 @@ export function mountEditor(root: HTMLElement): void {
       viewerView.initCropBox();
       await setT(state.t, true);
     } catch (err) {
-      dimsLine.innerHTML = `<span class="err-text">${escapeHtml(errMsg(err))}</span>`;
+      inspectorView.setSourceError(errMsg(err));
     }
   }
 
@@ -1532,219 +611,16 @@ export function mountEditor(root: HTMLElement): void {
     return currentRegionPure(state.contentMode, state.contentBox, state.dims!);
   }
 
-  function refreshCropReadout(): void {
-    if (!state.cropBox || !state.dims) return;
-    const win = cropWindowSpec();
-    if (win) {
-      const region = currentRegion();
-      const zoom = (region.height / win.h).toFixed(2);
-      cropReadout.textContent = `${m.framing.punchInPrefix}${win.w}×${win.h} @ (${win.x},${win.y})${m.framing.zoomMid}${zoom}${m.framing.resetSuffix}`;
-    } else {
-      // Full-height box → plain horizontal crop_offset, relative to the content
-      // box when one is active.
-      let box = state.cropBox;
-      const region = currentRegion();
-      if (state.contentMode && state.contentBox) {
-        box = { ...state.cropBox, x: state.cropBox.x - state.contentBox.x };
-      }
-      cropReadout.textContent = `${m.framing.cropOffsetPrefix}${cropBoxToOffset(box, region)}`;
-    }
-    refreshIO(); // keep the Clip "offset" readout in sync with framing changes
-  }
-
-  function refreshContentReadout(): void {
-    if (!state.contentMode || !state.contentBox || state.contentBox.w === 0) {
-      contentReadout.textContent = m.framing.contentOff;
-      return;
-    }
-    contentReadout.textContent = `${m.framing.contentCropPrefix}${contentCropFromBox(state.contentBox)}`;
-  }
-
-  function refreshIO(): void {
-    const fmt = (n: number | null) => (n == null ? "—" : `${n.toFixed(3)}s`);
-    const dur =
-      state.inPoint != null && state.outPoint != null
-        ? `${(state.outPoint - state.inPoint).toFixed(3)}s`
-        : "—";
-    inVal.textContent = fmt(state.inPoint);
-    outVal.textContent = fmt(state.outPoint);
-    durVal.textContent = dur;
-    // The framing mode this clip would render with (mirrors addClip's precedence).
-    offsetVal.textContent =
-      state.push.start && state.push.end
-        ? m.framing.modePush
-        : hasActiveTrack(state)
-          ? m.framing.modeTrack
-          : cropWindowSpec()
-            ? m.framing.modePunchIn
-            : state.keyframes.length
-              ? m.framing.modeSchedule
-              : currentOffset();
-    transport.setWindowDur(dur);
-    // Explicit (not view-subscription) repaints: assistant commits write
-    // In/Out/keyframes directly, without a store notification.
-    timeline.renderRegion();
-    timeline.renderKf(); // keyframe positions are clip-relative to In
-    void refreshLoopSeam(); // the seam frames track In/Out while the panel is open
-  }
-
-  // Phase 3 (#125): rendering is REACTIVE — `store.set` drives the renders, so
-  // mutation sites no longer call the refresh/draw functions by hand. (Direct
-  // legacy writes don't notify; they keep their manual calls until their
-  // cluster migrates.) The In/Out readout also shows the framing MODE, so it
-  // re-renders on framing changes too.
-  const any = (changed: ReadonlySet<string>, ...keys: string[]): boolean =>
-    keys.some((k) => changed.has(k));
+  // The inspector/viewer/timeline views refresh their own DOM on their store
+  // subscriptions; the editor's subscription keeps only the queue dependents
+  // (the render button + session autosave).
   store.onChange((changed) => {
-    if (
-      any(changed, "inPoint", "outPoint", "duration", "keyframes", "cropPath", "push", "cropBox")
-    ) {
-      refreshIO();
-    }
-    if (any(changed, "cropBox", "contentBox", "contentMode")) refreshCropReadout();
-    if (any(changed, "contentBox", "contentMode")) refreshContentReadout();
-    if (changed.has("keyframes")) refreshKeyframes();
-    if (changed.has("push")) refreshPushReadout();
-    // The overlay/preview repaints on framing + caption changes are the viewer
-    // view's own subscription now (views/viewer.ts).
-    if (any(changed, "fadeIn", "fadeOut")) refreshFadeHint();
     if (changed.has("clips")) refreshQueueDependents();
   });
 
   function currentOffset(): string {
     if (!state.cropBox || !state.dims) return "center";
     return offsetForBox(state.cropBox, state.contentMode, state.contentBox, currentRegion());
-  }
-
-  function addKeyframe(): void {
-    if (state.inPoint == null) {
-      flashErr(m.keyframes.needIn);
-      return;
-    }
-    const rel = Math.max(0, state.t - state.inPoint);
-    store.set({ keyframes: [...state.keyframes, { t: round3(rel), offset: currentOffset() }] });
-  }
-
-  function refreshKeyframes(): void {
-    kfList.innerHTML = "";
-    state.keyframes
-      .slice()
-      .sort((a, b) => a.t - b.t)
-      .forEach((kf) => {
-        const li = document.createElement("li");
-        const span = document.createElement("span");
-        span.textContent = `t=${kf.t}s → ${kf.offset}`;
-        const del = button("✕", undefined, () => {
-          store.set({ keyframes: state.keyframes.filter((k) => k !== kf) });
-        });
-        li.append(span, del);
-        kfList.append(li);
-      });
-    scheduleReadout.textContent = state.keyframes.length
-      ? `${m.keyframes.schedulePrefix}${scheduleToString(state.keyframes)}`
-      : m.keyframes.scheduleNoKeyframes;
-    timeline.renderKf();
-  }
-
-  /**
-   * Run the AI subject-tracking pipeline for the current shot (In→Out):
-   * plan sample times (cut-anchored within range) → ask the backend tracker →
-   * smooth into an eased crop path → store it on the draft. Times handed to the
-   * tracker and produced on the path are CLIP-RELATIVE (offset from In), and the
-   * region is the working region (content box if set, else full frame).
-   */
-  async function doAutoTrack(): Promise<void> {
-    persistAutoTrack();
-    if (!state.source || !state.dims) {
-      trackStatus.textContent = m.track.statusLoadSource;
-      return;
-    }
-    if (state.inPoint == null || state.outPoint == null) {
-      trackStatus.textContent = m.track.statusNeedInOut;
-      return;
-    }
-    if (state.outPoint <= state.inPoint) {
-      trackStatus.textContent = m.track.statusOutAfterIn;
-      return;
-    }
-    // First keychain touch happens here (lazily), not at launch — so a user who
-    // never uses Auto-track never sees an OS keychain prompt. Reads fresh so a
-    // key entered in Settings this session is honored. Absent ⇒ "no key".
-    await ensureApiKey();
-    if (!apiKey.trim()) {
-      trackStatus.textContent = m.track.statusNeedKey;
-      return;
-    }
-
-    const inPt = state.inPoint;
-    const shotEnd = state.outPoint - inPt; // clip-relative shot length
-    const region = currentRegion();
-    // Scene cuts inside the In/Out range, expressed clip-relative.
-    const sceneCuts = state.sceneCuts
-      .filter((c) => c > inPt && c < state.outPoint!)
-      .map((c) => c - inPt);
-
-    trackBtn.disabled = true;
-    // Live elapsed counter + spinner so a long run reads as "working", not frozen.
-    let elapsed = 0;
-    const renderTrackStatus = () => {
-      trackStatus.textContent = `${m.track.statusWorkingPrefix}${elapsed}${m.track.statusWorkingSuffix}`;
-    };
-    trackStatus.classList.add("working");
-    renderTrackStatus();
-    const trackTimer = window.setInterval(() => {
-      elapsed += 1;
-      renderTrackStatus();
-    }, 1000);
-    try {
-      const sampleTimes = planSampleTimes({
-        shotStart: 0,
-        shotEnd,
-        intervalSec: autoTrack.intervalSec,
-        sceneCuts,
-      });
-      const samples = await platform.track({
-        sourcePath: state.source,
-        region: { width: region.width, height: region.height },
-        sampleTimes,
-        subjectHint: autoTrack.subjectHint.trim() || undefined,
-        apiKey: apiKey.trim() || undefined,
-        // The shot's In point in source seconds: frames are sampled from here,
-        // and the content crop (if any) keeps frames in the working region.
-        startSec: inPt,
-        contentCrop:
-          state.contentMode && state.contentBox && state.contentBox.w > 0
-            ? contentCropFromBox(state.contentBox)
-            : undefined,
-      });
-      const path = samplesToCropPath(samples, region);
-      if (path.length === 0) {
-        store.set({ cropPath: null });
-        trackStatus.textContent = m.track.statusNoBoxes;
-        setOutput(m.track.noBoxesOutput);
-      } else {
-        store.set({ cropPath: path });
-        trackStatus.textContent = `${m.track.statusOnPrefix}${path.length}${m.track.statusOnSuffix}`;
-        setOutput(
-          `${m.track.resultPrefix}${path.length}${m.track.resultMid}${samples.length}${m.track.resultSuffix}`,
-          "ok",
-        );
-      }
-    } catch (err) {
-      store.set({ cropPath: null });
-      trackStatus.textContent = m.track.statusFailed;
-      setOutput(`${m.track.failedOutputPrefix}${errMsg(err)}`, "err");
-    } finally {
-      window.clearInterval(trackTimer);
-      trackStatus.classList.remove("working");
-      trackBtn.disabled = false;
-    }
-  }
-
-  /** Drop the tracked crop path; revert to the manual crop_offset / schedule. */
-  function clearTrack(): void {
-    store.set({ cropPath: null });
-    trackStatus.textContent = m.track.statusNone;
   }
 
   /**
@@ -1757,16 +633,16 @@ export function mountEditor(root: HTMLElement): void {
     for (const fx of res.effects) {
       switch (fx.kind) {
         case "refreshIO":
-          refreshIO();
+          inspectorView.refreshIO();
           break;
         case "seekToIn":
           void setT(state.inPoint!, true);
           break;
         case "refreshContentReadout":
-          refreshContentReadout();
+          inspectorView.refreshContentReadout();
           break;
         case "refreshCropReadout":
-          refreshCropReadout();
+          inspectorView.refreshCropReadout();
           break;
         case "drawOverlay":
           drawOverlay();
@@ -1775,10 +651,10 @@ export function mountEditor(root: HTMLElement): void {
           void doScenes();
           break;
         case "refreshKeyframes":
-          refreshKeyframes();
+          inspectorView.refreshKeyframes();
           break;
         case "trackStatus":
-          trackStatus.textContent = `${m.assistant.trackFromAssistantPrefix}${fx.count}${m.assistant.trackFromAssistantSuffix}`;
+          inspectorView.setTrackStatusCount(fx.count);
           break;
         case "stagedRender":
           setOutput(m.activity.stagedForRender);
@@ -1789,7 +665,8 @@ export function mountEditor(root: HTMLElement): void {
   }
 
   function addClip(): void {
-    clipErr.textContent = "";
+    const flashErr = inspectorView.flashError;
+    flashErr(""); // clear any previous validation message
     if (!state.source || !state.dims) return flashErr(m.errors.loadSourceFirst);
     if (state.inPoint == null || state.outPoint == null) return flashErr(m.errors.setInOut);
     if (state.outPoint <= state.inPoint) return flashErr(m.errors.outAfterIn);
@@ -1804,7 +681,7 @@ export function mountEditor(root: HTMLElement): void {
       out_point: state.outPoint.toFixed(3),
     };
     Object.assign(spec, framingToSpec());
-    const name = nameInput.value.trim();
+    const name = inspectorView.getName();
     if (name) spec.out_name = name;
 
     // Caption shot-list data (SPEC §6.5) — carried in the manifest regardless
@@ -1824,7 +701,7 @@ export function mountEditor(root: HTMLElement): void {
     }
 
     store.set({ clips: [...state.clips, spec] });
-    nameInput.value = "";
+    inspectorView.clearName();
   }
 
   /**
@@ -1844,8 +721,8 @@ export function mountEditor(root: HTMLElement): void {
 
   /** Write to the shared Output panel (render / scene-detect / auto-track). */
   async function doRender(): Promise<void> {
-    if (!state.clips.length) return flashErr(m.errors.addAtLeastOne);
-    const outdir = outdirInput.value.trim() || (await platform.defaultOutdir());
+    if (!state.clips.length) return inspectorView.flashError(m.errors.addAtLeastOne);
+    const outdir = inspectorView.getOutdir() || (await platform.defaultOutdir());
     saveOutdir(outdir);
     // Pre-flight the output folder so a stale/unwritable path gives a clear
     // message HERE (and keeps the field focused) instead of a raw EACCES from the
@@ -1857,12 +734,7 @@ export function mountEditor(root: HTMLElement): void {
           `${m.activity.cantWritePrefix}${check.resolved || outdir} — ${check.error || m.activity.cantWriteFallbackReason}.`,
           "err",
         );
-        outdirInput.focus();
-        try {
-          outdirInput.select();
-        } catch {
-          /* not selectable — focus is enough */
-        }
+        inspectorView.focusOutdir();
         return;
       }
     } catch {
@@ -1895,7 +767,7 @@ export function mountEditor(root: HTMLElement): void {
     try {
       const picked = await platform.pickDirectory();
       if (!picked) return; // cancelled
-      outdirInput.value = picked;
+      inspectorView.setOutdir(picked);
       saveOutdir(picked);
     } catch (err) {
       setOutput(errMsg(err), "err");
@@ -1903,7 +775,7 @@ export function mountEditor(root: HTMLElement): void {
   }
 
   async function doScenes(): Promise<void> {
-    if (!state.source) return flashErr(m.errors.loadSourceFirst);
+    if (!state.source) return inspectorView.flashError(m.errors.loadSourceFirst);
     setOutput(m.activity.detectingScenes);
     try {
       const cuts = await platform.scenes(state.source);
@@ -1959,9 +831,9 @@ export function mountEditor(root: HTMLElement): void {
    * click-to-edit on a queue card — the user can re-frame / re-cut and render.
    */
   async function openSpec(spec: ClipSpec, outdir?: string): Promise<void> {
-    srcInput.value = spec.source_file;
+    inspectorView.setSource(spec.source_file);
     if (outdir) {
-      outdirInput.value = outdir;
+      inspectorView.setOutdir(outdir);
       saveOutdir(outdir);
     }
     await load();
@@ -2002,15 +874,9 @@ export function mountEditor(root: HTMLElement): void {
       fadeIn: fades.fadeIn,
       fadeOut: fades.fadeOut,
     });
-    nameInput.value = r.name;
-    hookInput.value = state.hook;
-    titleCapInput.value = state.title;
-    autosize(hookInput);
-    autosize(titleCapInput);
-    fadeInInput.value = fades.fadeIn > 0 ? String(fades.fadeIn) : "";
-    fadeOutInput.value = fades.fadeOut > 0 ? String(fades.fadeOut) : "";
-    syncSelectsFromPos();
-    syncCaptionControls();
+    // Re-sync the inspector's inputs/selects/style controls from the restored
+    // state (the patch above landed it all on the store).
+    inspectorView.syncFromState(r.name);
     await setT(r.inPoint, true);
     drawOverlay(); // setT redraws the frame; ensure the overlay lands after it
   }
@@ -2036,7 +902,7 @@ export function mountEditor(root: HTMLElement): void {
     sessionTimer = window.setTimeout(() => {
       const data: SessionData = {
         source: state.source,
-        outdir: outdirInput.value.trim(),
+        outdir: inspectorView.getOutdir(),
         clips: state.clips,
         savedAt: Date.now(),
       };
@@ -2053,12 +919,12 @@ export function mountEditor(root: HTMLElement): void {
       data = null;
     }
     if (!data) return;
-    if (data.outdir) outdirInput.value = data.outdir;
+    if (data.outdir) inspectorView.setOutdir(data.outdir);
     if (Array.isArray(data.clips) && data.clips.length) {
       store.set({ clips: data.clips });
     }
     if (data.source) {
-      srcInput.value = data.source;
+      inspectorView.setSource(data.source);
       await load(); // re-probe; any error is surfaced but the queue stays intact
     }
   }
@@ -2073,7 +939,7 @@ export function mountEditor(root: HTMLElement): void {
     try {
       await platform.saveSession({
         source: "",
-        outdir: outdirInput.value.trim(),
+        outdir: inspectorView.getOutdir(),
         clips: [],
         savedAt: Date.now(),
       });
@@ -2121,10 +987,6 @@ export function mountEditor(root: HTMLElement): void {
     document.addEventListener("keydown", onKey);
   }
 
-  function flashErr(msg: string): void {
-    clipErr.textContent = msg;
-  }
-
   /** Whether the one-time legacy-key migration has been attempted this session. */
   let apiKeyMigrated = false;
 
@@ -2153,11 +1015,10 @@ export function mountEditor(root: HTMLElement): void {
     }
   }
 
-  // Initial readouts.
-  refreshIO();
-  refreshKeyframes();
+  // Initial readouts (the recents datalist seeds in the inspector's build).
+  inspectorView.refreshIO();
+  inspectorView.refreshKeyframes();
   refreshQueueDependents();
-  refreshRecents();
   // NOTE: the keychain is read lazily (see `ensureApiKey`) on first AI use, not
   // here — launching the app must not trigger an OS keychain prompt.
   void restoreSession();
