@@ -11,5 +11,23 @@
         ]
       }
     ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit)",
+      "Bash(npm run build)",
+      "Bash(npx vitest run *)",
+      "Bash(npm test)",
+      "Bash(npm run verify)",
+      "Bash(npm run lint)",
+      "Bash(npm run format:check)",
+      "Bash(ffprobe *)",
+      "Bash(circle services search *)",
+      "Bash(circle services inspect *)",
+      "Bash(circle wallet status)",
+      "Bash(circle wallet balance)",
+      "Bash(circle wallet list)",
+      "mcp__claude_ai_Slack__slack_read_channel"
+    ]
   }
 }
