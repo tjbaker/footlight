@@ -15,6 +15,7 @@
  */
 
 import { vi } from "vitest";
+import type { FootlightPlatform } from "../../src/platform/types.js";
 
 function defaults() {
   return {
@@ -75,3 +76,8 @@ export const platformModule = {
   platformName: "web" as const,
   isTauri: () => false,
 };
+
+/** The mocked platform as the interface the views take — the one sanctioned
+ *  place for the mock→interface cast, so a capability the mock never stubs
+ *  surfaces here instead of in per-suite double-casts. */
+export const mockPlatform = platformModule.platform as unknown as FootlightPlatform;

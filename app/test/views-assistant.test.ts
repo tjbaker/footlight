@@ -45,7 +45,13 @@ vi.mock("../src/assistant/index.js", () => ({
 import { messages } from "../src/i18n/index.js";
 import { createEditorStore } from "../src/editor-store.js";
 import type { AssistantReply, ProposedAction } from "@assistant-types";
-import { installDomShims, resetHarness, flush, buttonByText } from "./helpers/editor-harness.js";
+import {
+  installDomShims,
+  resetHarness,
+  seedLoadedStore,
+  flush,
+  buttonByText,
+} from "./helpers/editor-harness.js";
 
 installDomShims();
 // Import AFTER the mocks/shims above are installed.
@@ -56,15 +62,7 @@ const m = messages.editor;
 /** Build the dock on a real store with recording dep stubs (the editor's wiring). */
 function makeView(opts: { source?: boolean; apiKey?: string } = {}) {
   const store = createEditorStore();
-  if (opts.source !== false) {
-    store.set({
-      source: "/abs/clip.mp4",
-      dims: { width: 1920, height: 1080 },
-      duration: 30,
-      inPoint: 2,
-      outPoint: 10,
-    });
-  }
+  if (opts.source !== false) seedLoadedStore(store, { inPoint: 2, outPoint: 10 });
   const deps = {
     store,
     currentRegion: () => ({ width: 1920, height: 1080 }),
