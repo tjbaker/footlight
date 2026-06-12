@@ -64,6 +64,8 @@ export function installDomShims(): void {
   // Pointer capture: jsdom lacks it; the crop/timeline drag handlers call it.
   Element.prototype.setPointerCapture = () => undefined;
   Element.prototype.releasePointerCapture = () => undefined;
+  // Scrolling: jsdom lacks it; the font-picker popup scrolls its selection into view.
+  Element.prototype.scrollIntoView = () => undefined;
   // Media playback: jsdom's <video>.play() returns undefined (not a Promise)
   // and logs "not implemented"; the transport code does `video.play().catch(…)`.
   HTMLMediaElement.prototype.play = (() =>
