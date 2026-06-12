@@ -185,3 +185,27 @@ pure builders in `src/core.ts` (it cannot import TS); every mirror carries a
 - ffmpeg `cropdetect` sees **black bars only** — colored/blurred pillarboxing is
   invisible to it. Framing is a human call; don't trust metadata over pixels.
 - **No telemetry** — the project does not phone home.
+
+## The verification loop (run this before declaring anything done)
+
+Every change must pass, in order:
+
+1. `npm run verify` at the **root** (engine) AND in **`app/`** — they are
+   separate packages with separate Prettier configs and test runs; a root
+   format/test pass does NOT cover `app/`.
+2. **Behavior-preserving refactors:** the jsdom editor suites must pass
+   **unchanged** — editing a test to make a refactor pass means the refactor
+   changed behavior, which is a finding, not a fix.
+3. **Rust-mirror changes** (`app/src-tauri/`): `cargo test` — the mirrors are
+   pinned to the TS fixtures, so drift fails there, not in review.
+
+## Working the loop (PRs and issues)
+
+- One shippable slice per PR; CI green before merge; squash-merge only
+  (PR titles are Conventional Commits — they ship in the changelog).
+- After pushing a PR, watch CI and fix failures proactively rather than
+  waiting on review; run a code review pass (a separate verifier context)
+  before merging.
+- Issues are the loop's state: write them with **Where things stand / Plan /
+  Guardrails / Done when** sections (see `.github/ISSUE_TEMPLATE/agent-task.md`)
+  so any human or agent can resume them cold.
