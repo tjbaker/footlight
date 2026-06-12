@@ -164,6 +164,11 @@ pure builders in `src/core.ts` (it cannot import TS); every mirror carries a
 
 ## Conventions
 
+- **Read files with the Read tool, search with Grep/Glob — never `sed`/`cat`/
+  `head`/`tail` through Bash**, not even tucked inside compound commands (each
+  Bash read forces a permission prompt, and `sed` cannot be safely allowlisted:
+  `-i`, `w`/`W`/`s///w`, and GNU `e` all write or execute). This applies to
+  subagents too — include it when briefing them.
 - **TypeScript strict**, ESM (`"type": "module"`), `.js` extensions in relative
   imports (NodeNext-style), `noUncheckedIndexedAccess` on (note the `!` assertions).
 - Source files carry the `// Copyright … SPDX-License-Identifier: Apache-2.0` header.
