@@ -39,26 +39,23 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/platform/index.js", async () =>
-  (await import("./helpers/platform-mock.js")).platformModule);
+vi.mock(
+  "../src/platform/index.js",
+  async () => (await import("./helpers/platform-mock.js")).platformModule,
+);
 
 import { platformMocks } from "./helpers/platform-mock.js";
-import {
-  installDomShims,
-  resetHarness,
-  flush,
-} from "./helpers/editor-harness.js";
+import { installDomShims, resetHarness, flush } from "./helpers/editor-harness.js";
+import { firePointer } from "./helpers/pointer.js";
 
 installDomShims();
 // Import AFTER the mocks/shims above are installed.
 const { mountEditor } = await import("../src/editor.js");
 
-
 /**
- * Dispatch a pointer event on `overlay` carrying source-display offset coords.
- * jsdom's PointerEvent leaves offsetX/offsetY at 0 (and read-only), so we redefine
- * them on the instance — the overlay handlers read ONLY offsetX/offsetY (never
- * clientX/clientY) to derive source pixels via `offset / displayScale`.
+ * Dispatch a pointer event on `overlay` carrying source-display offset coords
+ * (positional sugar over the shared helpers/pointer.ts dispatcher — the overlay
+ * handlers read ONLY offsetX/offsetY to derive source pixels).
  */
 function overlayPointer(
   overlay: HTMLElement,
@@ -66,10 +63,7 @@ function overlayPointer(
   x: number,
   y: number,
 ): void {
-  const ev = new PointerEvent(type, { bubbles: true, pointerId: 1 });
-  Object.defineProperty(ev, "offsetX", { value: x });
-  Object.defineProperty(ev, "offsetY", { value: y });
-  overlay.dispatchEvent(ev);
+  firePointer(overlay, type, { offsetX: x, offsetY: y });
 }
 
 describe("editor crop-box drag: move / resize / reset (jsdom)", () => {
