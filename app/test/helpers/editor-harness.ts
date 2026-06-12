@@ -16,6 +16,7 @@
 
 import { expect } from "vitest";
 import { resetPlatformMocks } from "./platform-mock.js";
+import type { EditorStore } from "../../src/editor-store.js";
 
 // --- localStorage: Map-backed shim -------------------------------------------
 const store = new Map<string, string>();
@@ -109,6 +110,21 @@ export function buttonByText(root: HTMLElement, text: string | RegExp): HTMLButt
   );
   expect(btn, `button ${String(text)}`).toBeTruthy();
   return btn!;
+}
+
+/** Seed a store with the canonical loaded source (the platform-mock probe's
+ *  1920×1080 / 30 s shape) — the direct view suites' counterpart to
+ *  `mountLoaded`. `patch` layers any per-suite extras (In/Out, cuts, …). */
+export function seedLoadedStore(
+  store: EditorStore,
+  patch: Parameters<EditorStore["set"]>[0] = {},
+): void {
+  store.set({
+    source: "/abs/clip.mp4",
+    dims: { width: 1920, height: 1080 },
+    duration: 30,
+    ...patch,
+  });
 }
 
 /** Mount the editor and load a 1920×1080 source (the platform-mock probe). */

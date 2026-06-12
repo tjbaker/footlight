@@ -6,7 +6,8 @@
  * stubs, NOT through mountEditor (the editor-*.test.ts integration suites keep
  * the wired paths). Covered:
  *
- *  - the Frame/Track tab switch and both assistant entry points' deps;
+ *  - the Frame/Track tab switch and the Ask entry into the assistant (the
+ *    inspector's one entry point; the top-bar spark lives in the editor);
  *  - the Source/Destination seams: load wiring (Enter + button vs the
  *    file-picker Browse variant), probe readouts (probing / result /
  *    cropdetect / error / drop hint), the recents datalist, and the
@@ -21,16 +22,17 @@
  *  - keyframes: the needs-In guard, add (clip-relative `round3` + offset),
  *    sorted list render, per-row delete, Clear, and the schedule readout;
  *  - captions: hook/title/text-position store patches + `syncFromState`;
- *  - auto-track: every guard, settings persistence, the happy path (args
- *    handed to `platform.track`, the `samplesToCropPath` store write, status +
- *    Output), the no-boxes and failure paths, and Clear track;
+ *  - auto-track: every guard, settings persistence, the happy path (the full
+ *    `TrackRequest` handed to `platform.track`, the `samplesToCropPath` store
+ *    write, status + Output), the in-flight working counter (fake timers), the
+ *    no-boxes and failure paths, and Clear track;
  *  - the small imperative seams (focus/reveal/flashError/setTrackStatusCount).
  *
  * NOT covered under jsdom (documented, not silently skipped):
- *  - the live elapsed-seconds counter inside doAutoTrack (a 1 s wall-clock
- *    interval; the mocked `platform.track` resolves before the first tick);
  *  - real frame pixels in the loop-seam <img>s — jsdom never loads images, so
- *    the assertions stop at the `src` URLs the view assigns.
+ *    the assertions stop at the `src` URLs the view assigns;
+ *  - the content readout's TEXT: its node is deliberately unmounted (the
+ *    content-crop UI is omitted), so only the branch execution is pinned.
  */
 /** @vitest-environment jsdom */
 
@@ -45,11 +47,13 @@ import { messages } from "../src/i18n/index.js";
 import { createEditorStore } from "../src/editor-store.js";
 import { boxToRegionWindow } from "../src/editor-push.js";
 import { samplesToCropPath, planSampleTimes } from "@track";
-import type { FootlightPlatform } from "../src/platform/types.js";
-import { platformMocks, platformModule } from "./helpers/platform-mock.js";
+import type { TrackRequest, TrackSample } from "../src/platform/types.js";
+import type { InspectorViewDeps } from "../src/views/inspector.js";
+import { platformMocks, mockPlatform } from "./helpers/platform-mock.js";
 import {
   installDomShims,
   resetHarness,
+  seedLoadedStore,
   flush,
   buttonByText,
   setValue,
@@ -62,16 +66,18 @@ const { buildInspector } = await import("../src/views/inspector.js");
 const m = messages.editor;
 const REGION = { width: 1920, height: 1080 };
 
-/** Recording dep stubs wired the way the editor wires them. */
-function makeDeps(overrides: Record<string, unknown> = {}) {
+/** Recording dep stubs wired the way the editor wires them. The framing
+ *  wrappers are vi.fns too so a test can re-aim them mid-flight
+ *  (`mockReturnValue`) without rebuilding the view. */
+function makeDeps(overrides: Partial<InspectorViewDeps> = {}): InspectorViewDeps {
   return {
-    platform: platformModule.platform as unknown as FootlightPlatform,
+    platform: mockPlatform,
     snapT: vi.fn((t: number) => t),
     extractFrame: vi.fn(async (_s: string, t: number) => `blob:frame-${t}`),
-    currentRegion: () => REGION,
-    contentOrigin: () => null as { x: number; y: number } | null,
-    cropWindowSpec: () => null as { x: number; y: number; w: number; h: number } | null,
-    currentOffset: () => "center",
+    currentRegion: vi.fn(() => REGION),
+    contentOrigin: vi.fn(() => null),
+    cropWindowSpec: vi.fn(() => null),
+    currentOffset: vi.fn(() => "center"),
     setWindowDur: vi.fn(),
     renderRegion: vi.fn(),
     renderKf: vi.fn(),
@@ -88,14 +94,15 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** Narrow a dep back to the vi.fn makeDeps built it as (for mock methods). */
+const asMock = (fn: unknown): ReturnType<typeof vi.fn> => fn as ReturnType<typeof vi.fn>;
+
 /** Build the view on a real store; `loaded` seeds a 1920×1080 / 30 s source. */
-async function makeView(opts: { loaded?: boolean; deps?: Record<string, unknown> } = {}) {
+async function makeView(opts: { loaded?: boolean; deps?: Partial<InspectorViewDeps> } = {}) {
   const store = createEditorStore();
-  if (opts.loaded !== false) {
-    store.set({ source: "/abs/clip.mp4", dims: { ...REGION }, duration: 30 });
-  }
+  if (opts.loaded !== false) seedLoadedStore(store);
   const deps = makeDeps(opts.deps);
-  const view = buildInspector(store, deps as never);
+  const view = buildInspector(store, deps);
   document.body.append(view.element);
   await flush(); // settle defaultOutdir seeding + the caption-style font build
   return { store, deps, view };
@@ -172,19 +179,14 @@ describe("source + destination seams", () => {
     expect(deps.onLoad).toHaveBeenCalledTimes(1);
     // The Load button is double-wired in the view (the `button()` factory's
     // handler PLUS an explicit addEventListener) — one click fires onLoad
-    // twice. Pinned as-is; flagged for a src fix in its own change.
+    // twice. Pinned as-is; the one-line src fix is tracked in issue #200.
     buttonByText(view.element, m.source.load).click();
     expect(deps.onLoad).toHaveBeenCalledTimes(3);
   });
 
   it("a file-picker platform swaps in Browse buttons for source and destination", async () => {
     const { deps, view } = await makeView({
-      deps: {
-        platform: {
-          ...platformModule.platform,
-          supportsFilePicker: true,
-        } as unknown as FootlightPlatform,
-      },
+      deps: { platform: { ...mockPlatform, supportsFilePicker: true } },
     });
     const browses = Array.from(view.element.querySelectorAll<HTMLButtonElement>("button")).filter(
       (b) => b.textContent?.trim() === m.source.browse,
@@ -299,10 +301,9 @@ describe("In/Out + the readout grid", () => {
     expect(deps.renderKf).toHaveBeenCalled();
   });
 
-  it("the offset cell follows the framing-mode precedence", async () => {
+  it("the offset cell climbs the full framing-mode precedence ladder", async () => {
     const { store, deps, view } = await makeView();
     const offsetCell = () => ioCells(view.element)[3]!.textContent;
-    const win = { x: 100, y: 100, w: 304, h: 540 };
 
     store.set({ inPoint: 0 });
     expect(offsetCell()).toBe("center"); // plain crop_offset
@@ -310,22 +311,17 @@ describe("In/Out + the readout grid", () => {
     store.set({ keyframes: [{ t: 0, offset: "center" }] });
     expect(offsetCell()).toBe(m.framing.modeSchedule);
 
-    (deps.cropWindowSpec as ReturnType<typeof vi.fn>).mockReturnValue?.(win);
+    asMock(deps.cropWindowSpec).mockReturnValue({ x: 100, y: 100, w: 304, h: 540 });
+    view.refreshIO(); // re-aimed dep, no store change — refresh explicitly
+    expect(offsetCell()).toBe(m.framing.modePunchIn); // punch-in beats schedule
+
     store.set({ cropPath: [{ t: 0, x: 0 }] });
-    expect(offsetCell()).toBe(m.framing.modeTrack); // track beats schedule
+    expect(offsetCell()).toBe(m.framing.modeTrack); // track beats punch-in
 
     store.set({
       push: { start: { x: 0, y: 0, w: 304, h: 540 }, end: { x: 50, y: 0, w: 304, h: 540 } },
     });
     expect(offsetCell()).toBe(m.framing.modePush); // push beats everything
-  });
-
-  it("a static punch-in window shows as punch-in mode", async () => {
-    const { store, view } = await makeView({
-      deps: { cropWindowSpec: () => ({ x: 10, y: 20, w: 304, h: 540 }) },
-    });
-    store.set({ inPoint: 0 });
-    expect(ioCells(view.element)[3]!.textContent).toBe(m.framing.modePunchIn);
   });
 });
 
@@ -354,7 +350,7 @@ describe("fades + the loop seam", () => {
   it("the seam panel fetches the Out/In frame pair one frame apart", async () => {
     const { store, deps, view } = await makeView();
     store.set({ inPoint: 2, outPoint: 10, fps: 25 });
-    (deps.extractFrame as ReturnType<typeof vi.fn>).mockClear();
+    asMock(deps.extractFrame).mockClear();
 
     const seamBtn = buttonByText(view.element, m.clip.loopSeam);
     seamBtn.click();
@@ -373,7 +369,7 @@ describe("fades + the loop seam", () => {
   it("a closed panel (or missing In/Out) never fetches frames", async () => {
     const { store, deps, view } = await makeView();
     store.set({ inPoint: 2, outPoint: 10 });
-    (deps.extractFrame as ReturnType<typeof vi.fn>).mockClear();
+    asMock(deps.extractFrame).mockClear();
     view.refreshIO(); // seam closed → refreshLoopSeam early-returns
     await flush();
     expect(deps.extractFrame).not.toHaveBeenCalled();
@@ -420,7 +416,9 @@ describe("push capture", () => {
 });
 
 describe("crop + content readouts", () => {
-  it("a full-height box reads as the plain crop_offset", async () => {
+  it("with no punch-in window the readout falls back to the plain crop_offset", async () => {
+    // The full-height-box → null-window mapping itself lives in the editor's
+    // cropWindowSpec wrapper (stubbed here); this pins the view's else-branch.
     const { store, view } = await makeView();
     store.set({ cropBox: { x: 200, y: 0, w: 608, h: 1080 } });
     expect(cropReadout(view.element).textContent).toBe(`${m.framing.cropOffsetPrefix}center`);
@@ -548,14 +546,14 @@ describe("captions + syncFromState", () => {
 });
 
 describe("auto-track", () => {
-  const SAMPLES = [
+  const SAMPLES: TrackSample[] = [
     { t: 0, box: { x: 0, y: 0, w: 200, h: 1080 } },
     { t: 4, box: { x: 1600, y: 0, w: 200, h: 1080 } },
   ];
 
   async function runTrack(view: { element: HTMLElement }): Promise<void> {
     buttonByText(view.element, m.track.autoTrack).click();
-    await flush(16);
+    await flush();
   }
 
   it("guards: no source, missing In/Out, inverted window, missing key", async () => {
@@ -592,24 +590,18 @@ describe("auto-track", () => {
 
     // The request is clip-relative: cut-anchored samples, startSec = In, the
     // in-range scene cut (5 s) shifted by In.
-    const req = platformMocks.track.mock.calls[0]![0] as never as {
-      sourcePath: string;
-      region: { width: number; height: number };
-      sampleTimes: number[];
-      subjectHint?: string;
-      startSec: number;
-      contentCrop?: string;
-    };
+    const req = platformMocks.track.mock.calls[0]![0] as unknown as TrackRequest;
     expect(req.sourcePath).toBe("/abs/clip.mp4");
     expect(req.region).toEqual(REGION);
     expect(req.startSec).toBe(2);
     expect(req.subjectHint).toBe("the guitarist");
+    expect(req.apiKey).toBe("fake-gemini-key"); // BYOK rides the request
     expect(req.contentCrop).toBeUndefined();
     expect(req.sampleTimes).toEqual(
       planSampleTimes({ shotStart: 0, shotEnd: 8, intervalSec: 0.75, sceneCuts: [3] }),
     );
 
-    const expectedPath = samplesToCropPath(SAMPLES as never, REGION);
+    const expectedPath = samplesToCropPath(SAMPLES, REGION);
     expect(store.state.cropPath).toEqual(expectedPath);
     expect(trackStatus(view.element).textContent).toBe(
       `${m.track.statusOnPrefix}${expectedPath.length}${m.track.statusOnSuffix}`,
@@ -625,6 +617,42 @@ describe("auto-track", () => {
       mock: false,
       intervalSec: 0.75,
     });
+  });
+
+  it("shows the live working counter and disables the button while the tracker runs", async () => {
+    vi.useFakeTimers();
+    try {
+      let resolveTrack!: (s: TrackSample[]) => void;
+      platformMocks.track.mockImplementation(
+        () => new Promise<TrackSample[]>((r) => (resolveTrack = r)),
+      );
+      // (flush() is microtask-only, so fake timers don't stall the harness.)
+      const { store, view } = await makeView();
+      store.set({ inPoint: 2, outPoint: 10 });
+      const status = trackStatus(view.element);
+      const btn = buttonByText(view.element, m.track.autoTrack);
+      btn.click();
+      await flush();
+
+      expect(btn.disabled).toBe(true);
+      expect(status.classList.contains("working")).toBe(true);
+      expect(status.textContent).toBe(
+        `${m.track.statusWorkingPrefix}0${m.track.statusWorkingSuffix}`,
+      );
+      vi.advanceTimersByTime(2000); // two 1 s ticks of the elapsed counter
+      expect(status.textContent).toBe(
+        `${m.track.statusWorkingPrefix}2${m.track.statusWorkingSuffix}`,
+      );
+
+      resolveTrack([]);
+      await flush();
+      expect(btn.disabled).toBe(false);
+      expect(status.classList.contains("working")).toBe(false);
+      vi.advanceTimersByTime(3000); // interval cleared — the counter is dead
+      expect(status.textContent).toBe(m.track.statusNoBoxes);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("an unusable-boxes result falls back to the manual offset", async () => {
