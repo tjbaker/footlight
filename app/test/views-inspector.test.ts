@@ -177,11 +177,9 @@ describe("source + destination seams", () => {
       new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
     );
     expect(deps.onLoad).toHaveBeenCalledTimes(1);
-    // The Load button is double-wired in the view (the `button()` factory's
-    // handler PLUS an explicit addEventListener) — one click fires onLoad
-    // twice. Pinned as-is; the one-line src fix is tracked in issue #200.
+    // Exactly once per click — the duplicate listener was issue #200.
     buttonByText(view.element, m.source.load).click();
-    expect(deps.onLoad).toHaveBeenCalledTimes(3);
+    expect(deps.onLoad).toHaveBeenCalledTimes(2);
   });
 
   it("a file-picker platform swaps in Browse buttons for source and destination", async () => {

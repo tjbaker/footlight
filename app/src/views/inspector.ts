@@ -159,7 +159,6 @@ export function buildInspector(store: EditorStore, deps: InspectorViewDeps): Ins
     loadBtn.style.flex = "none";
     srcRow.append(loadBtn);
   }
-  loadBtn.addEventListener("click", () => deps.onLoad());
   srcInput.addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") deps.onLoad();
   });
