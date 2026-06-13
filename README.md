@@ -181,6 +181,10 @@ footlight probe <source>
 
 # List detected scene-cut timestamps (to seed crop-schedule switch points).
 footlight scenes <source>
+
+# Track a moving subject across one shot → eased crop-path keyframes as JSON
+# (the low-level primitive behind the GUI's Auto-track; opt-in, BYOK).
+footlight track <request.json>
 ```
 
 ### `render` flags
@@ -211,7 +215,10 @@ render-wide on/off switch.
 
 `probe` reports the source's dimensions and a `cropdetect` content-region
 suggestion. `scenes` reports detected cut timestamps you can use as switch points
-in a time-keyed `crop_offset` schedule.
+in a time-keyed `crop_offset` schedule. `track` reads a small JSON request
+(`sourcePath`, `region`, `sampleTimes`, and a BYOK `apiKey` / `provider`) and
+prints the resulting subject-track samples to stdout — the engine behind the
+GUI's Auto-track, broken out for scripting (see [SPEC.md](SPEC.md) §6.9).
 
 ## CSV schema
 
