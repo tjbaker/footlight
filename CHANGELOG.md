@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.8.1](https://github.com/tjbaker/footlight/compare/footlight-v0.8.0...footlight-v0.8.1) (2026-06-13)
+
+
+### Bug Fixes
+
+* **app:** de-dupe the inspector Load button's click wiring ([#202](https://github.com/tjbaker/footlight/issues/202)) ([00c160d](https://github.com/tjbaker/footlight/commit/00c160d17bf459eddbee7001751bb9bd11071428))
+* **release:** sync Cargo.lock on the release PR; drop the broken updater ([#181](https://github.com/tjbaker/footlight/issues/181)) ([c14ff61](https://github.com/tjbaker/footlight/commit/c14ff613ad4eb5ab7bf8e41aa685eab7fbd70f5a))
+
+
+### Refactors
+
+* **app:** extract shared UI primitives and the first editor view ([#125](https://github.com/tjbaker/footlight/issues/125) Phase 4) ([#183](https://github.com/tjbaker/footlight/issues/183)) ([167e2ea](https://github.com/tjbaker/footlight/commit/167e2eafe246ef26e0f7955f0ee93695be9e8d05))
+* **app:** extract the activity/output panel into a view ([#125](https://github.com/tjbaker/footlight/issues/125) Phase 4) ([#185](https://github.com/tjbaker/footlight/issues/185)) ([d3b8245](https://github.com/tjbaker/footlight/commit/d3b8245f326099d339708a322bd7823477404f27))
+* **app:** extract the AI assistant dock into a view ([#125](https://github.com/tjbaker/footlight/issues/125) Phase 4) ([#186](https://github.com/tjbaker/footlight/issues/186)) ([bdb3c29](https://github.com/tjbaker/footlight/commit/bdb3c295b11243b9dfa262b9f7f99aabb493ab41))
+* **app:** extract the filmstrip queue into a view ([#125](https://github.com/tjbaker/footlight/issues/125) Phase 4) ([#184](https://github.com/tjbaker/footlight/issues/184)) ([dc15fe3](https://github.com/tjbaker/footlight/commit/dc15fe3721810ebbc0304b9da656728d987a0812))
+* **app:** extract the inspector column into a view ([#125](https://github.com/tjbaker/footlight/issues/125) Phase 4) ([#191](https://github.com/tjbaker/footlight/issues/191)) ([154e18c](https://github.com/tjbaker/footlight/commit/154e18cd87a330dde57e554f9c445b6d1392e46a))
+* **app:** extract the loudness timeline into a view ([#125](https://github.com/tjbaker/footlight/issues/125) Phase 4) ([#188](https://github.com/tjbaker/footlight/issues/188)) ([9996a21](https://github.com/tjbaker/footlight/commit/9996a21ca83386abf57a1903873b638f84143573))
+* **app:** extract the transport into its own module ([#125](https://github.com/tjbaker/footlight/issues/125) Phase 4) ([#190](https://github.com/tjbaker/footlight/issues/190)) ([abace8d](https://github.com/tjbaker/footlight/commit/abace8d454be81927898d06aaafa552e145297c1))
+* **app:** extract the viewer stage into a view ([#125](https://github.com/tjbaker/footlight/issues/125) Phase 4) ([#189](https://github.com/tjbaker/footlight/issues/189)) ([a706d17](https://github.com/tjbaker/footlight/commit/a706d17767369a40d2d7d18a83e43dd6dc48a2ff))
+* **app:** reduce editor.ts to a thin composition root ([#125](https://github.com/tjbaker/footlight/issues/125) Phase 4) ([#192](https://github.com/tjbaker/footlight/issues/192)) ([35e0285](https://github.com/tjbaker/footlight/commit/35e028511cb9a9a50adc948379ac739c7a22a846))
+
+
+### Documentation
+
+* **readme:** document the footlight track CLI command ([#206](https://github.com/tjbaker/footlight/issues/206)) ([fd182e4](https://github.com/tjbaker/footlight/commit/fd182e49869145879473de96e576def50705b3fd))
+
 ## [0.8.0](https://github.com/tjbaker/footlight/compare/footlight-v0.7.1...footlight-v0.8.0) (2026-06-10)
 
 
