@@ -17,6 +17,7 @@
 import { expect } from "vitest";
 import { resetPlatformMocks } from "./platform-mock.js";
 import type { EditorStore } from "../../src/editor-store.js";
+import type { ClipSpec } from "@manifest";
 
 // --- localStorage: Map-backed shim -------------------------------------------
 const store = new Map<string, string>();
@@ -110,6 +111,13 @@ export function buttonByText(root: HTMLElement, text: string | RegExp): HTMLButt
   );
   expect(btn, `button ${String(text)}`).toBeTruthy();
   return btn!;
+}
+
+/** A minimal valid ClipSpec, overridable per case — the queue/history suites'
+ *  shared fixture. (editor-history.test.ts predates this helper and carries
+ *  its own private copy; new suites use this one.) */
+export function clipSpec(over: Partial<ClipSpec> = {}): ClipSpec {
+  return { source_file: "/abs/clip.mp4", in_point: "2", out_point: "10", ...over };
 }
 
 /** Seed a store with the canonical loaded source (the platform-mock probe's
