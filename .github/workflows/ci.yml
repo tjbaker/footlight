@@ -15,7 +15,7 @@ jobs:
     name: engine (build + test)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: 26
@@ -33,7 +33,7 @@ jobs:
       - run: npm run coverage
       - name: Upload coverage to Codecov
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           files: coverage/cobertura-coverage.xml
           flags: engine
@@ -49,7 +49,7 @@ jobs:
     name: tauri (cargo test)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # Tauri v2 Linux build deps, plus libdbus-1-dev for the keyring crate's
       # sync-secret-service backend.
       - name: Install Tauri system dependencies
@@ -73,7 +73,7 @@ jobs:
     name: app (typecheck + test + build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: 26
@@ -97,7 +97,7 @@ jobs:
         working-directory: app
       - name: Upload coverage to Codecov
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           files: app/coverage/cobertura-coverage.xml
           flags: app
