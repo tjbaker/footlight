@@ -500,8 +500,7 @@ export function buildCaptionStyle(
     syncFontSelect();
     for (const c of [fillRow, outlineRow, boxColorRow]) {
       const sw = c.querySelector('input[type="color"]') as
-        | (HTMLInputElement & { _sync?: () => void })
-        | null;
+        (HTMLInputElement & { _sync?: () => void }) | null;
       sw?._sync?.();
     }
     for (const b of [boldBtn, italicBtn, underlineBtn, shadowBtn, boxBtn] as Array<
