@@ -61,7 +61,9 @@ export interface EditorActionsDeps {
 
 export interface EditorActions {
   browse: () => Promise<void>;
-  load: () => Promise<void>;
+  /** Probe + adopt the source in the field; resolves `false` when it failed
+   *  (the error is already surfaced and the previous source is left in place). */
+  load: () => Promise<boolean>;
   doScenes: () => Promise<void>;
   doRender: () => Promise<void>;
   browseOutdir: () => Promise<void>;
@@ -103,12 +105,12 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
     }
   }
 
-  async function load(): Promise<void> {
+  async function load(): Promise<boolean> {
     const source = inspector.getSource();
     if (!source) {
       inspector.setSourceError(m.source.enterPath);
       inspector.focusSource();
-      return;
+      return false;
     }
     inspector.setProbing();
     try {
@@ -141,8 +143,10 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
       // Default 9:16 crop box: full height, centered.
       viewer.initCropBox();
       await transport.setT(state.t, true);
+      return true;
     } catch (err) {
       inspector.setSourceError(errMsg(err));
+      return false;
     }
   }
 
@@ -288,8 +292,9 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
       inspector.setOutdir(outdir);
       saveOutdir(outdir);
     }
-    await load();
-    if (!state.dims) return; // load failed — the error is already surfaced
+    // A failed load leaves the PREVIOUS source's dims in place, so bail on the
+    // load result itself — never apply this spec onto that other source (#250).
+    if (!(await load()) || !state.dims) return; // the error is already surfaced
     const r = specToEditorState(spec, state.dims);
     // Animated push (#163): rehydrate the captured endpoints from the path's
     // first/last keyframes (v1 authors exactly two; extra mid-keyframes from a

@@ -50,7 +50,14 @@ vi.mock(
 );
 
 import { platformMocks } from "./helpers/platform-mock.js";
-import { installDomShims, resetHarness, flush } from "./helpers/editor-harness.js";
+import {
+  installDomShims,
+  resetHarness,
+  flush,
+  mountLoadAndWindow,
+  setValue,
+  buttonByText,
+} from "./helpers/editor-harness.js";
 
 installDomShims();
 import type { HistoryEntry } from "../src/platform/types.js";
@@ -265,6 +272,49 @@ describe("editor render-history modal (jsdom)", () => {
     };
     expect(valForDot("in")).toBe("2.000s");
     expect(valForDot("out")).toBe("9.000s");
+  });
+
+  it("Open with a missing source leaves the loaded source's editor state untouched (#250)", async () => {
+    // Source A is loaded with its own In/Out window and clip name.
+    const root = await mountLoadAndWindow(mountEditor, "/abs/footage/a.mp4");
+    const nameInput = root.querySelector<HTMLInputElement>(
+      `input[placeholder="${m.add.namePlaceholder}"]`,
+    );
+    expect(nameInput, "clip name field").toBeTruthy();
+    setValue(nameInput!, "a-take");
+    const valForDot = (cls: string): string | null => {
+      for (const dot of root.querySelectorAll<HTMLElement>(`.idot.${cls}`)) {
+        const v = dot.parentElement?.querySelector<HTMLElement>(".v");
+        if (v) return v.textContent;
+      }
+      return null;
+    };
+    const inBefore = valForDot("in");
+    const outBefore = valForDot("out");
+    expect(inBefore).not.toBe("2.000s");
+    expect(outBefore).not.toBe("9.000s");
+
+    // The history entry's file has been moved: its probe rejects.
+    platformMocks.probe.mockRejectedValueOnce(new Error("No such file: solo.mp4"));
+    const historyBtn = [...root.querySelectorAll<HTMLButtonElement>("button")].find(
+      (b) => b.title === m.topbar.historyTitle,
+    );
+    historyBtn!.click();
+    await flush();
+    const modal = document.querySelector<HTMLElement>(".fl-modal-backdrop .fl-modal")!;
+    const solRow = [...modal.querySelectorAll<HTMLElement>(".fl-hist")].find(
+      (r) => r.querySelector(".fl-hist-top .nm")?.textContent === "solo",
+    );
+    buttonByText(solRow!, m.history.open).click();
+    await flush();
+
+    expect(platformMocks.probe).toHaveBeenLastCalledWith("/abs/footage/solo.mp4");
+    // The probe error is surfaced in the source readout.
+    expect(root.querySelector(".err-text")?.textContent).toContain("No such file: solo.mp4");
+    // A's editor state is untouched: the entry's In/Out and name were NOT applied.
+    expect(valForDot("in")).toBe(inBefore);
+    expect(valForDot("out")).toBe(outBefore);
+    expect(nameInput!.value).toBe("a-take");
   });
 
   it("removing a single entry persists the shortened history", async () => {
