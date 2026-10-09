@@ -22,7 +22,8 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
-import { mkdtemp, writeFile, mkdir, stat } from "node:fs/promises";
+import { request as httpRequest } from "node:http";
+import { mkdtemp, writeFile, readFile, mkdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, basename } from "node:path";
 
@@ -34,6 +35,7 @@ vi.mock("node:child_process", () => ({ spawn: spawnMock }));
 // `node dev-server/server.mjs` does.
 import {
   createDevServer,
+  isAllowedRequest,
   collectFontFiles,
   friendlyFsError,
   FONT_SCAN_MAX_DEPTH,
@@ -84,9 +86,7 @@ function fakeChild(script: SpawnScript): EventEmitter {
 
 /** Script the spawn mock: `impl(cmd, args)` returns what that process "does". */
 function onSpawn(impl: (cmd: string, args: string[]) => SpawnScript): void {
-  spawnMock.mockImplementation((cmd: string, args: string[]) =>
-    fakeChild(impl(cmd, args)),
-  );
+  spawnMock.mockImplementation((cmd: string, args: string[]) => fakeChild(impl(cmd, args)));
 }
 
 function spawnCall(n: number): { cmd: string; args: string[] } {
@@ -126,20 +126,135 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const VITE_ORIGIN = "http://localhost:5173";
+
+/**
+ * A request with full header control. `fetch` won't let us set `Host`, and the
+ * access guard keys off Host / Origin / Sec-Fetch-Site, so those tests go raw.
+ */
+function rawRequest(
+  method: string,
+  path: string,
+  headers: Record<string, string> = {},
+  body?: string,
+): Promise<{
+  status: number;
+  headers: Record<string, string | string[] | undefined>;
+  body: string;
+}> {
+  const { port } = server.address() as { port: number };
+  return new Promise((done, fail) => {
+    const req = httpRequest(
+      { host: "127.0.0.1", port, method, path, headers: { host: `127.0.0.1:${port}`, ...headers } },
+      (res) => {
+        let data = "";
+        res.setEncoding("utf8");
+        res.on("data", (d: string) => (data += d));
+        res.on("end", () =>
+          done({ status: res.statusCode ?? 0, headers: res.headers, body: data }),
+        );
+      },
+    );
+    req.on("error", fail);
+    req.end(body);
+  });
+}
+
+// --- access guard (GHSA-rw9r-jx59-83p7) -----------------------------------------
+
+describe("access guard", () => {
+  it("rejects a foreign Origin before doing any work", async () => {
+    const res = await rawRequest("GET", "/env-key", { origin: "https://evil.example" });
+    expect(res.status).toBe(403);
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  it("rejects a foreign-Origin POST without touching the filesystem", async () => {
+    const before = await readFile(sessionPath, "utf8").catch(() => null);
+    const res = await rawRequest(
+      "POST",
+      "/session",
+      { origin: "https://evil.example", "content-type": "text/plain" },
+      JSON.stringify({ data: { pwned: true } }),
+    );
+    expect(res.status).toBe(403);
+    expect(await readFile(sessionPath, "utf8").catch(() => null)).toBe(before);
+  });
+
+  it("rejects a non-loopback Host (DNS rebinding)", async () => {
+    const res = await rawRequest("GET", "/env-key", { host: "evil.example:8787" });
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects an Origin-less cross-site request (no-cors <img>/<video>)", async () => {
+    const outdir = join(root, "should-not-exist");
+    const res = await rawRequest("GET", `/check-outdir?outdir=${encodeURIComponent(outdir)}`, {
+      "sec-fetch-site": "cross-site",
+    });
+    expect(res.status).toBe(403);
+    await expect(stat(outdir)).rejects.toThrow();
+  });
+
+  it("allows loopback origins on any port, and same-site browser requests", async () => {
+    for (const origin of [VITE_ORIGIN, "http://127.0.0.1:5174", "http://[::1]:5173"]) {
+      const res = await rawRequest("GET", "/nope", { origin });
+      expect(res.status, origin).toBe(404);
+      expect(res.headers["access-control-allow-origin"], origin).toBe(origin);
+    }
+    const sameSite = await rawRequest("GET", "/nope", { "sec-fetch-site": "same-site" });
+    expect(sameSite.status).toBe(404);
+  });
+
+  it("allows non-browser clients that send no Origin (curl, tests)", async () => {
+    const res = await rawRequest("GET", "/nope");
+    expect(res.status).toBe(404);
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+});
+
+describe("isAllowedRequest", () => {
+  it.each([
+    [{ host: "localhost:8787" }, true],
+    [{ host: "127.0.0.1:8787" }, true],
+    [{ host: "[::1]:8787" }, true],
+    [{}, false],
+    [{ host: "192.168.1.5:8787" }, false],
+    [{ host: "localhost.evil.example" }, false],
+    [{ host: "localhost:8787", origin: "http://localhost.evil.example" }, false],
+    [{ host: "localhost:8787", origin: "null" }, false],
+    [
+      { host: "localhost:8787", origin: "http://127.0.0.1:5173", "sec-fetch-site": "cross-site" },
+      true,
+    ],
+    [{ host: "localhost:8787", "sec-fetch-site": "cross-site" }, false],
+    [{ host: "localhost:8787", "sec-fetch-site": "CROSS-SITE" }, false],
+    [{ host: "localhost:8787", "sec-fetch-site": "same-origin" }, true],
+    [{ host: "localhost:8787", "sec-fetch-site": "none" }, true],
+    [{ host: "127.1:8787" }, true],
+    [{ host: "LOCALHOST:8787" }, true],
+    [{ host: "0.0.0.0:8787" }, false],
+    [{ host: "[::ffff:127.0.0.1]:8787" }, false],
+    [{ host: "localhost:8787", origin: "file://" }, false],
+  ])("%j -> %s", (headers, allowed) => {
+    expect(isAllowedRequest(headers)).toBe(allowed);
+  });
+});
+
 // --- routing ------------------------------------------------------------------
 
 describe("routing", () => {
-  it("404s an unknown path, with permissive CORS headers", async () => {
-    const res = await fetch(`${base}/nope`);
+  it("404s an unknown path, echoing a loopback Origin for CORS", async () => {
+    const res = await rawRequest("GET", "/nope", { origin: VITE_ORIGIN });
     expect(res.status).toBe(404);
-    expect(await res.text()).toBe("not found");
-    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    expect(res.body).toBe("not found");
+    expect(res.headers["access-control-allow-origin"]).toBe(VITE_ORIGIN);
+    expect(res.headers["vary"]).toBe("Origin");
   });
 
   it("answers OPTIONS preflight with 204", async () => {
-    const res = await fetch(`${base}/render`, { method: "OPTIONS" });
+    const res = await rawRequest("OPTIONS", "/render", { origin: VITE_ORIGIN });
     expect(res.status).toBe(204);
-    expect(res.headers.get("access-control-allow-methods")).toContain("POST");
+    expect(res.headers["access-control-allow-methods"]).toContain("POST");
   });
 
   it("400s every source-taking GET endpoint when ?source is missing", async () => {
@@ -481,22 +596,31 @@ describe("POST /render", () => {
     expect(args[1]).toBe("render");
     expect(basename(args[2]!)).toBe("manifest.json"); // .json so the CLI takes the JSON path
     expect(args.slice(3)).toEqual([
-      "--crf", "19",
-      "--preset", "medium",
-      "--audio-bitrate", "256k",
+      "--crf",
+      "19",
+      "--preset",
+      "medium",
+      "--audio-bitrate",
+      "256k",
       "--dry-run",
       "--burn-captions",
-      "--caption-font", "Inter",
-      "--caption-color", "#ffffff",
-      "--caption-outline-color", "#000000",
+      "--caption-font",
+      "Inter",
+      "--caption-color",
+      "#ffffff",
+      "--caption-outline-color",
+      "#000000",
       "--caption-bold",
       "--caption-italic",
       "--caption-underline",
       "--caption-shadow",
       "--caption-box",
-      "--caption-box-color", "#112233",
-      "--caption-angle", "0",
-      "--outdir", resolve(root, "out"), // relative outdir resolves against the repo root
+      "--caption-box-color",
+      "#112233",
+      "--caption-angle",
+      "0",
+      "--outdir",
+      resolve(root, "out"), // relative outdir resolves against the repo root
     ]);
   });
 
@@ -772,7 +896,12 @@ describe("POST /cover", () => {
 
     expect(spawnCall(0)).toEqual({ cmd: "ffprobe", args: ffprobeStreamArgs("/v/show.mp4") });
     const expected = coverFrameArgs(
-      { source_file: "/v/show.mp4", in_point: "10.000", out_point: "20.000", crop_offset: "0=left; 4=right" },
+      {
+        source_file: "/v/show.mp4",
+        in_point: "10.000",
+        out_point: "20.000",
+        crop_offset: "0=left; 4=right",
+      },
       15,
       { dims: [1920, 1080] },
     );

@@ -22,7 +22,12 @@ import type {
   OutdirCheck,
 } from "./types.js";
 
-const BASE = "http://localhost:8787";
+// Talk to the backend under the same hostname the page was opened with, so the
+// browser treats the requests as same-site. A page at 127.0.0.1:5173 asking
+// localhost:8787 is cross-site, and the dev server rejects Origin-less cross-site
+// requests such as the <video> stream.
+const BASE =
+  globalThis.location?.hostname === "127.0.0.1" ? "http://127.0.0.1:8787" : "http://localhost:8787";
 
 // localStorage key prefix for the DEV-ONLY secret shim (see getSecret below).
 const SECRET_PREFIX = "footlight.secret.";
