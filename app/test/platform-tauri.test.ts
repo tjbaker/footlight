@@ -51,8 +51,12 @@ beforeEach(() => {
 });
 
 describe("extractFrame", () => {
-  it("invokes extract_frame and wraps the temp path as a cache-busted asset URL", async () => {
-    invokeMock.mockResolvedValue("/tmp/footlight-frame.jpg");
+  it("invokes extract_frame and wraps the returned JPEG bytes in an object URL", async () => {
+    // The command returns the frame's raw bytes (its per-call temp file is
+    // deleted natively, #249), not a shared temp path.
+    const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer;
+    invokeMock.mockResolvedValue(bytes);
+    const createSpy = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:frame-url");
 
     const out = await tauriPlatform.extractFrame("/clips/My Show.mp4", 12.5);
 
@@ -60,14 +64,12 @@ describe("extractFrame", () => {
       source: "/clips/My Show.mp4",
       t: 12.5,
     });
-    expect(convertFileSrcMock).toHaveBeenCalledWith("/tmp/footlight-frame.jpg");
-    // Cache-buster keyed on BOTH t and source, so switching clips at the same t
-    // still produces a fresh URL.
-    expect(out).toBe(
-      `asset://localhost/tmp/footlight-frame.jpg?v=12.5&s=${encodeURIComponent(
-        "/clips/My Show.mp4",
-      )}`,
-    );
+    expect(convertFileSrcMock).not.toHaveBeenCalled();
+    expect(out).toBe("blob:frame-url");
+    const blob = createSpy.mock.calls[0]![0] as Blob;
+    expect(blob.type).toBe("image/jpeg");
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(new Uint8Array(bytes));
+    createSpy.mockRestore();
   });
 
   it("propagates an invoke rejection", async () => {
