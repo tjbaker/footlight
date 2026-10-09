@@ -20,6 +20,7 @@
  */
 
 import { spawn } from "node:child_process";
+import { constants as osConstants } from "node:os";
 
 import { ffprobeStreamArgs, parseProbe, ffmpegListHasFilter } from "./core.js";
 
@@ -55,15 +56,23 @@ export async function probeDimensions(path: string): Promise<[number, number]> {
 
 /** Result of running a subprocess. */
 export interface RunResult {
+  /** Exit code. A signal-killed child gets the shell convention `128 + signo`. */
   code: number;
+  /** Set only when the child was killed by a signal (OOM killer, `kill`, …). */
+  signal?: NodeJS.Signals;
   stdout: string;
   stderr: string;
 }
 
+/** "exited 1" / "killed by SIGKILL" — how a failed child ended, for messages. */
+export function describeExit(result: Pick<RunResult, "code" | "signal">): string {
+  return result.signal ? `killed by ${result.signal}` : `exited ${result.code}`;
+}
+
 /**
- * Spawn a subprocess, collecting stdout/stderr. Rejects on non-zero exit
- * unless `allowFailure` is set, in which case the resolved result carries the
- * exit code for the caller to inspect.
+ * Spawn a subprocess, collecting stdout/stderr. Rejects on non-zero exit (or
+ * death by signal) unless `allowFailure` is set, in which case the resolved
+ * result carries the exit code / signal for the caller to inspect.
  */
 export function run(
   command: string,
@@ -79,12 +88,16 @@ export function run(
     child.stdout?.on("data", (d) => (stdout += d.toString()));
     child.stderr?.on("data", (d) => (stderr += d.toString()));
     child.on("error", (err) => reject(err));
-    child.on("close", (code) => {
-      const result: RunResult = { code: code ?? 0, stdout, stderr };
+    child.on("close", (code, signal) => {
+      // Node reports `code === null` when the child died by signal. That is a
+      // failure (a killed ffmpeg leaves a truncated MP4), never a clean exit.
+      const result: RunResult =
+        code === null
+          ? { code: 128 + (signal ? (osConstants.signals[signal] ?? 0) : 0), stdout, stderr }
+          : { code, stdout, stderr };
+      if (code === null && signal) result.signal = signal;
       if (result.code !== 0 && !opts.inheritStdio && !opts.allowFailure) {
-        reject(
-          new Error(`${command} exited ${result.code}: ${stderr.trim() || stdout.trim()}`),
-        );
+        reject(new Error(`${command} ${describeExit(result)}: ${stderr.trim() || stdout.trim()}`));
         return;
       }
       resolve(result);

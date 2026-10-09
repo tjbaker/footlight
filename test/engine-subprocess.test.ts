@@ -18,7 +18,7 @@ vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 
 import { spawn } from "node:child_process";
 
-import { run, probeDimensions, ffmpegHasFilter } from "../src/engine.js";
+import { run, probeDimensions, ffmpegHasFilter, describeExit } from "../src/engine.js";
 
 /**
  * A fake child process whose stdout/stderr are EventEmitters and whose own
@@ -130,14 +130,28 @@ describe("run", () => {
     await expect(p).resolves.toEqual({ code: 2, stdout: "", stderr: "" });
   });
 
-  it("treats a null exit code as 0", async () => {
+  it("rejects when the child is killed by a signal (null exit code)", async () => {
     const child = makeFakeChild();
     vi.mocked(spawn).mockReturnValue(child as never);
 
-    const p = run("ffprobe", []);
-    child.emit("close", null);
+    const p = run("ffmpeg", []);
+    child.stderr.emit("data", Buffer.from("frame= 120"));
+    child.emit("close", null, "SIGKILL");
 
-    await expect(p).resolves.toEqual({ code: 0, stdout: "", stderr: "" });
+    await expect(p).rejects.toThrow(/ffmpeg killed by SIGKILL: frame= 120/);
+  });
+
+  it("reports a signal death as a non-zero code + signal (inheritStdio / allowFailure)", async () => {
+    for (const opts of [{ inheritStdio: true }, { allowFailure: true }]) {
+      const child = makeFakeChild();
+      vi.mocked(spawn).mockReturnValue(child as never);
+
+      const p = run("ffmpeg", [], opts);
+      child.emit("close", null, "SIGKILL");
+
+      // 128 + SIGKILL(9) — the shell convention.
+      await expect(p).resolves.toEqual({ code: 137, signal: "SIGKILL", stdout: "", stderr: "" });
+    }
   });
 
   it("rejects with the child's error when it emits 'error'", async () => {
@@ -238,5 +252,12 @@ describe("ffmpegHasFilter", () => {
     child.emit("close", 1); // non-zero, but allowFailure inside ffmpegHasFilter
 
     await expect(p).resolves.toBe(true);
+  });
+});
+
+describe("describeExit", () => {
+  it("names the signal for a killed child, else the exit code", () => {
+    expect(describeExit({ code: 137, signal: "SIGKILL" })).toBe("killed by SIGKILL");
+    expect(describeExit({ code: 1 })).toBe("exited 1");
   });
 });

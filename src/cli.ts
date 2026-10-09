@@ -35,6 +35,7 @@ import {
   type CropWindowSpec,
   type CropWindowKeyframe,
   DEFAULT_RENDER_OPTIONS,
+  describeExit,
 } from "./engine.js";
 import type { ClipSpec, CaptionStyle } from "./manifest.js";
 import type { Dims } from "./manifest.js";
@@ -317,7 +318,9 @@ async function cmdRender(argv: string[]): Promise<number> {
         captionShadow: clipShadow,
         captionBox: clipBox,
         ...(clipBoxColor ? { captionBoxColor: clipBoxColor } : {}),
-        ...(clipAngle !== undefined && Number.isFinite(clipAngle) ? { captionAngle: clipAngle } : {}),
+        ...(clipAngle !== undefined && Number.isFinite(clipAngle)
+          ? { captionAngle: clipAngle }
+          : {}),
       });
       if (ass !== null) {
         const path = join(tmpdir(), `footlight_cap_${i}_${process.pid}.ass`);
@@ -380,7 +383,7 @@ async function cmdRender(argv: string[]): Promise<number> {
       console.log(`${label} ${built.outPath}`);
       const result = await run("ffmpeg", built.args, { inheritStdio: true });
       if (result.code !== 0) {
-        console.error(`${label} FAILED — ffmpeg exit ${result.code}`);
+        console.error(`${label} FAILED — ffmpeg ${describeExit(result)}`);
         failures++;
       }
     } finally {
