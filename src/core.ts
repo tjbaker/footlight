@@ -1067,14 +1067,17 @@ function assEscape(value: string): string {
  * Argv is passed without a shell, so there is no third level.
  */
 export function filterEscape(value: string): string {
-  // Both levels also trim UNESCAPED leading/trailing whitespace, so escape the
-  // first and last character when it is whitespace (a font folder ending in a
-  // space). Only the edge character matters: once it is escaped, the run of
-  // whitespace beside it is interior.
-  const optionLevel = value
-    .replace(/[\\':]/g, "\\$&")
-    .replace(/^[ \t\n\r]|[ \t\n\r]$/g, "\\$&");
-  return optionLevel.replace(/[\\'[\],;]/g, "\\$&");
+  // One pass that yields both levels at once (equivalent to escaping for the
+  // option level, then escaping THAT for the graph level):
+  //  - option-level specials (`\` `'` `:`), plus a whitespace first/last char
+  //    (both levels trim unescaped edge whitespace), get an option-level `\`,
+  //    which the graph level doubles to `\\`; if the char is itself
+  //    graph-special (`\` `'`) it is graph-escaped too;
+  //  - graph-only specials (`[` `]` `,` `;`) get a single `\`.
+  return value.replace(/[\\':[\],;]|^[ \t\n\r]|[ \t\n\r]$/g, (c) => {
+    if (c === "[" || c === "]" || c === "," || c === ";") return `\\${c}`;
+    return c === "\\" || c === "'" ? `\\\\\\${c}` : `\\\\${c}`;
+  });
 }
 
 /** Directory portion of a path (`.` when there is none). Index-based (no
