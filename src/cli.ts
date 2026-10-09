@@ -236,7 +236,7 @@ async function cmdRender(argv: string[]): Promise<number> {
 
   // A .json manifest is an array of clip specs (with optional cropPath); any
   // other extension is parsed as the unchanged CSV manifest.
-  let items: RenderItem[];
+  let items: (RenderItem | InvalidItem)[];
   try {
     items = manifestPath.toLowerCase().endsWith(".json")
       ? parseJsonManifest(text)
@@ -273,8 +273,15 @@ async function cmdRender(argv: string[]): Promise<number> {
 
   let failures = 0;
   for (let i = 0; i < items.length; i++) {
-    const { row, cropPath, caption } = items[i]!;
+    const item = items[i]!;
     const label = `[${i + 1}/${items.length}]`;
+    // A clip the JSON parser rejected is skipped like any other bad row (issue #257).
+    if ("error" in item) {
+      console.error(`${label} SKIP — ${item.error}`);
+      failures++;
+      continue;
+    }
+    const { row, cropPath, caption } = item;
 
     // Per-clip caption style merged over the render-wide CLI defaults: a clip's
     // own `caption.*` wins, falling back to the flag value (then engine default).
@@ -297,48 +304,47 @@ async function cmdRender(argv: string[]): Promise<number> {
     const clipBoxColor = caption?.boxColor ?? captionBoxColor;
     const clipAngle = caption?.angle ?? captionAngle;
 
-    // Per-clip caption ASS document (SPEC §6.5). When captions are on and the
-    // row has a hook/title, `buildCaptionAss` returns an ASS document; write it
-    // to a unique temp file and hand its path to the engine, which appends a
-    // `subtitles=filename=…` filter (path escaped by `filterEscape`). The file
-    // is always removed below.
     let captionAssPath: string | undefined;
-    if (burnCaptions) {
-      const ass = buildCaptionAss(row, {
-        crf,
-        preset,
-        audioBitrate,
-        burnCaptions,
-        ...(clipFontFile ? { captionFontFile: clipFontFile } : {}),
-        ...(clipFontName ? { captionFontName: clipFontName } : {}),
-        ...(clipColor ? { captionColor: clipColor } : {}),
-        ...(clipOutlineColor ? { captionOutlineColor: clipOutlineColor } : {}),
-        captionBold: clipBold,
-        captionItalic: clipItalic,
-        captionUnderline: clipUnderline,
-        captionShadow: clipShadow,
-        captionBox: clipBox,
-        ...(clipBoxColor ? { captionBoxColor: clipBoxColor } : {}),
-        ...(clipAngle !== undefined && Number.isFinite(clipAngle)
-          ? { captionAngle: clipAngle }
-          : {}),
-      });
-      if (ass !== null) {
-        const path = join(tmpdir(), `footlight_cap_${i}_${process.pid}.ass`);
-        try {
-          writeFileSync(path, ass, "utf8");
-          captionAssPath = path;
-        } catch (err) {
-          console.error(`${label} SKIP — cannot write caption file: ${errMsg(err)}`);
-          failures++;
-          continue;
-        }
-      }
-    }
-
     try {
       let built;
       try {
+        // Per-clip caption ASS document (SPEC §6.5). When captions are on and the
+        // row has a hook/title, `buildCaptionAss` returns an ASS document; write it
+        // to a unique temp file and hand its path to the engine, which appends a
+        // `subtitles=filename=…` filter (path escaped by `filterEscape`). The file
+        // is always removed below. Built INSIDE the per-clip try so a clip whose
+        // caption cannot be built is skipped, not a batch abort (issue #257).
+        if (burnCaptions) {
+          const ass = buildCaptionAss(row, {
+            crf,
+            preset,
+            audioBitrate,
+            burnCaptions,
+            ...(clipFontFile ? { captionFontFile: clipFontFile } : {}),
+            ...(clipFontName ? { captionFontName: clipFontName } : {}),
+            ...(clipColor ? { captionColor: clipColor } : {}),
+            ...(clipOutlineColor ? { captionOutlineColor: clipOutlineColor } : {}),
+            captionBold: clipBold,
+            captionItalic: clipItalic,
+            captionUnderline: clipUnderline,
+            captionShadow: clipShadow,
+            captionBox: clipBox,
+            ...(clipBoxColor ? { captionBoxColor: clipBoxColor } : {}),
+            ...(clipAngle !== undefined && Number.isFinite(clipAngle)
+              ? { captionAngle: clipAngle }
+              : {}),
+          });
+          if (ass !== null) {
+            const path = join(tmpdir(), `footlight_cap_${i}_${process.pid}.ass`);
+            try {
+              writeFileSync(path, ass, "utf8");
+            } catch (err) {
+              throw new Error(`cannot write caption file: ${errMsg(err)}`, { cause: err });
+            }
+            captionAssPath = path;
+          }
+        }
+
         const source = (row.source_file ?? "").trim();
         if (!source) {
           throw new Error("source_file is empty");
@@ -354,8 +360,8 @@ async function cmdRender(argv: string[]): Promise<number> {
           audioBitrate,
           dims,
           cropPath,
-          cropWindow: items[i]!.cropWindow,
-          cropWindowPath: items[i]!.cropWindowPath,
+          cropWindow: item.cropWindow,
+          cropWindowPath: item.cropWindowPath,
           burnCaptions,
           ...(captionAssPath ? { captionAssPath } : {}),
           ...(clipFontFile ? { captionFontFile: clipFontFile } : {}),
@@ -404,13 +410,33 @@ async function cmdRender(argv: string[]): Promise<number> {
   return failures ? 1 : 0;
 }
 
+/** A JSON clip rejected at parse time: rendered as a per-clip SKIP, not a batch abort. */
+interface InvalidItem {
+  error: string;
+}
+
+/** Optional string fields of a JSON clip, copied onto the engine `ClipRow`. */
+const JSON_STRING_FIELDS = [
+  "content_crop",
+  "out_name",
+  "notes",
+  "hook",
+  "title",
+  "text_position",
+] as const;
+const CAPTION_STRING_FIELDS = ["font", "color", "outlineColor", "boxColor"] as const;
+const CAPTION_BOOLEAN_FIELDS = ["bold", "italic", "underline", "shadow", "box"] as const;
+
 /**
  * Parse a JSON manifest (array of `ClipSpec`) into render items. Each spec maps
  * to a `ClipRow` for the engine; a `cropPath` (eased {t,x} keyframes) is carried
  * separately so `buildFfmpegArgs` renders the smoothstep expression and it takes
- * precedence over `crop_offset`. Throws on a non-array or malformed shape.
+ * precedence over `crop_offset`. Throws only when the manifest as a whole is
+ * unusable (not JSON / not an array); a malformed clip becomes an `InvalidItem`
+ * so the render loop skips it and the rest of the batch still renders — the same
+ * per-row convention as a CSV row with an empty `source_file` (issue #257).
  */
-function parseJsonManifest(text: string): RenderItem[] {
+function parseJsonManifest(text: string): (RenderItem | InvalidItem)[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -421,90 +447,133 @@ function parseJsonManifest(text: string): RenderItem[] {
     throw new Error("JSON manifest must be an array of clip specs");
   }
   return parsed.map((raw, i) => {
-    if (!raw || typeof raw !== "object") {
-      throw new Error(`clip [${i}] is not an object`);
+    try {
+      return parseJsonClip(raw, i);
+    } catch (err) {
+      return { error: errMsg(err) };
     }
-    const spec = raw as ClipSpec;
-    if (typeof spec.source_file !== "string" || !spec.source_file.trim()) {
-      throw new Error(`clip [${i}] missing source_file`);
-    }
-    if (typeof spec.in_point !== "string" || typeof spec.out_point !== "string") {
-      throw new Error(`clip [${i}] missing in_point/out_point`);
-    }
-    const row: ClipRow = {
-      source_file: spec.source_file,
-      in_point: spec.in_point,
-      out_point: spec.out_point,
-    };
-    if (spec.crop_offset !== undefined) row.crop_offset = spec.crop_offset;
-    if (spec.content_crop !== undefined) row.content_crop = spec.content_crop;
-    if (spec.out_name !== undefined) row.out_name = spec.out_name;
-    if (spec.notes !== undefined) row.notes = spec.notes;
-    if (spec.hook !== undefined) row.hook = spec.hook;
-    if (spec.title !== undefined) row.title = spec.title;
-    if (spec.text_position !== undefined) row.text_position = spec.text_position;
-    // Fades are plain numbers (seconds) in JSON; the engine row carries strings
-    // (CSV parity) and `parseFadeSeconds` validates them with a clear error.
-    if (spec.fade_in !== undefined) row.fade_in = String(spec.fade_in);
-    if (spec.fade_out !== undefined) row.fade_out = String(spec.fade_out);
+  });
+}
 
-    let caption: CaptionStyle | undefined;
-    if (spec.caption !== undefined) {
-      if (!spec.caption || typeof spec.caption !== "object") {
-        throw new Error(`clip [${i}] caption must be an object`);
+/** Validate + convert one JSON clip spec; throws naming the clip index and field. */
+function parseJsonClip(raw: unknown, i: number): RenderItem {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(`clip [${i}] is not an object`);
+  }
+  const spec = raw as ClipSpec;
+  const fields = raw as Record<string, unknown>;
+  if (typeof spec.source_file !== "string" || !spec.source_file.trim()) {
+    throw new Error(`clip [${i}] missing source_file`);
+  }
+  if (typeof spec.in_point !== "string" || typeof spec.out_point !== "string") {
+    throw new Error(`clip [${i}] missing in_point/out_point`);
+  }
+  const row: ClipRow = {
+    source_file: spec.source_file,
+    in_point: spec.in_point,
+    out_point: spec.out_point,
+  };
+  // crop_offset: a JSON author will reasonably write the integer x as a bare
+  // number (440); coerce a finite number to the string form the engine parses.
+  const cropOffset = fields["crop_offset"];
+  if (cropOffset !== undefined) {
+    if (typeof cropOffset === "number" && Number.isFinite(cropOffset)) {
+      row.crop_offset = String(cropOffset);
+    } else if (typeof cropOffset === "string") {
+      row.crop_offset = cropOffset;
+    } else {
+      throw new Error(`clip [${i}] crop_offset must be a string or a finite number`);
+    }
+  }
+  for (const key of JSON_STRING_FIELDS) {
+    const value = fields[key];
+    if (value === undefined) continue;
+    if (typeof value !== "string") throw new Error(`clip [${i}] ${key} must be a string`);
+    row[key] = value;
+  }
+  // Fades are plain numbers (seconds) in JSON; the engine row carries strings
+  // (CSV parity) and `parseFadeSeconds` validates the value with a clear error.
+  // A numeric string is still accepted (it always was); anything else is a type error.
+  for (const key of ["fade_in", "fade_out"] as const) {
+    const value = fields[key];
+    if (value === undefined) continue;
+    if (typeof value !== "number" && typeof value !== "string") {
+      throw new Error(`clip [${i}] ${key} must be a number (seconds)`);
+    }
+    row[key] = String(value);
+  }
+
+  let caption: CaptionStyle | undefined;
+  if (spec.caption !== undefined) {
+    if (!spec.caption || typeof spec.caption !== "object" || Array.isArray(spec.caption)) {
+      throw new Error(`clip [${i}] caption must be an object`);
+    }
+    const style = spec.caption as Record<string, unknown>;
+    for (const key of CAPTION_STRING_FIELDS) {
+      if (style[key] !== undefined && typeof style[key] !== "string") {
+        throw new Error(`clip [${i}] caption.${key} must be a string`);
       }
-      caption = spec.caption;
     }
-
-    let cropPath: CropPathKeyframe[] | undefined;
-    if (spec.cropPath !== undefined) {
-      if (!Array.isArray(spec.cropPath)) {
-        throw new Error(`clip [${i}] cropPath must be an array of {t,x}`);
+    for (const key of CAPTION_BOOLEAN_FIELDS) {
+      if (style[key] !== undefined && typeof style[key] !== "boolean") {
+        throw new Error(`clip [${i}] caption.${key} must be a boolean`);
       }
-      cropPath = spec.cropPath.map((kf, k) => {
-        const t = Number((kf as { t?: unknown })?.t);
-        const x = Number((kf as { x?: unknown })?.x);
-        if (!Number.isFinite(t) || !Number.isFinite(x)) {
-          throw new Error(`clip [${i}] cropPath[${k}] needs numeric t and x`);
-        }
-        return { t, x };
-      });
     }
+    const angle = style["angle"];
+    if (angle !== undefined && (typeof angle !== "number" || !Number.isFinite(angle))) {
+      throw new Error(`clip [${i}] caption.angle must be a finite number (degrees)`);
+    }
+    caption = spec.caption;
+  }
 
-    let cropWindow: CropWindowSpec | undefined;
-    if (spec.cropWindow !== undefined) {
-      const raw = spec.cropWindow as Partial<Record<keyof CropWindowSpec, unknown>>;
+  let cropPath: CropPathKeyframe[] | undefined;
+  if (spec.cropPath !== undefined) {
+    if (!Array.isArray(spec.cropPath)) {
+      throw new Error(`clip [${i}] cropPath must be an array of {t,x}`);
+    }
+    cropPath = spec.cropPath.map((kf, k) => {
+      const t = Number((kf as { t?: unknown })?.t);
+      const x = Number((kf as { x?: unknown })?.x);
+      if (!Number.isFinite(t) || !Number.isFinite(x)) {
+        throw new Error(`clip [${i}] cropPath[${k}] needs numeric t and x`);
+      }
+      return { t, x };
+    });
+  }
+
+  let cropWindow: CropWindowSpec | undefined;
+  if (spec.cropWindow !== undefined) {
+    const raw = spec.cropWindow as Partial<Record<keyof CropWindowSpec, unknown>>;
+    const x = Number(raw.x);
+    const y = Number(raw.y);
+    const w = Number(raw.w);
+    const h = Number(raw.h);
+    if (![x, y, w, h].every((n) => Number.isFinite(n))) {
+      throw new Error(`clip [${i}] cropWindow needs numeric x, y, w, h`);
+    }
+    cropWindow = { x, y, w, h };
+  }
+
+  let cropWindowPath: CropWindowKeyframe[] | undefined;
+  if (spec.cropWindowPath !== undefined) {
+    if (!Array.isArray(spec.cropWindowPath)) {
+      throw new Error(`clip [${i}] cropWindowPath must be an array of {t,x,y,w,h}`);
+    }
+    cropWindowPath = spec.cropWindowPath.map((kf, k) => {
+      const raw = kf as Partial<Record<"t" | "x" | "y" | "w" | "h", unknown>>;
+      const t = Number(raw.t);
       const x = Number(raw.x);
       const y = Number(raw.y);
       const w = Number(raw.w);
       const h = Number(raw.h);
-      if (![x, y, w, h].every((n) => Number.isFinite(n))) {
-        throw new Error(`clip [${i}] cropWindow needs numeric x, y, w, h`);
+      if (![t, x, y, w, h].every((n) => Number.isFinite(n))) {
+        throw new Error(`clip [${i}] cropWindowPath[${k}] needs numeric t, x, y, w, h`);
       }
-      cropWindow = { x, y, w, h };
-    }
+      return { t, x, y, w, h };
+    });
+  }
 
-    let cropWindowPath: CropWindowKeyframe[] | undefined;
-    if (spec.cropWindowPath !== undefined) {
-      if (!Array.isArray(spec.cropWindowPath)) {
-        throw new Error(`clip [${i}] cropWindowPath must be an array of {t,x,y,w,h}`);
-      }
-      cropWindowPath = spec.cropWindowPath.map((kf, k) => {
-        const raw = kf as Partial<Record<"t" | "x" | "y" | "w" | "h", unknown>>;
-        const t = Number(raw.t);
-        const x = Number(raw.x);
-        const y = Number(raw.y);
-        const w = Number(raw.w);
-        const h = Number(raw.h);
-        if (![t, x, y, w, h].every((n) => Number.isFinite(n))) {
-          throw new Error(`clip [${i}] cropWindowPath[${k}] needs numeric t, x, y, w, h`);
-        }
-        return { t, x, y, w, h };
-      });
-    }
-
-    return { row, cropPath, cropWindow, cropWindowPath, caption };
-  });
+  return { row, cropPath, cropWindow, cropWindowPath, caption };
 }
 
 /** `footlight probe` — print dims and a cropdetect (black-bar) suggestion. */
