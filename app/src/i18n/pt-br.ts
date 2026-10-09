@@ -489,6 +489,8 @@ export const ptBR: Messages = {
       apiKeyHint: "Armazenada no chaveiro do sistema operacional, nunca em arquivos do projeto.",
       model: "Modelo de IA",
       recommended: "recomendado",
+      perFrame: "/quadro",
+      perRequest: "/req.",
       costNote:
         "O rastreamento é o que gera custo: o Footlight envia quadros amostrados, não vídeo, então o custo escala com os quadros — definido pelo seu intervalo. Um plano típico de 20s a",
       costInterval: "Intervalo",
@@ -851,6 +853,7 @@ export const ptBR: Messages = {
       modeTrack: "rastreamento",
       modePunchIn: "aproximação",
       modeKeyframes: "keyframes",
+      kfKey: "kf",
     },
     errors: {
       loadSourceFirst: "Carregue uma origem primeiro.",

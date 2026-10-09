@@ -128,6 +128,9 @@ export interface SettingsMessages {
     apiKeyHint: string;
     model: string;
     recommended: string;
+    /** Model-card cost-unit suffixes: `$0.0001{perFrame}` · `~$0.01{perRequest}`. */
+    perFrame: string;
+    perRequest: string;
     costNote: string;
     costInterval: string;
     /** Chat-stills budget (#40): label, the "off" option, and the hint. */
@@ -487,6 +490,8 @@ export interface EditorMessages {
     modeTrack: string;
     modePunchIn: string;
     modeKeyframes: string;
+    /** Short readout label before a render's keyframe count. */
+    kfKey: string;
   };
   /** Add-clip / render validation errors (inline or in Output). */
   errors: {

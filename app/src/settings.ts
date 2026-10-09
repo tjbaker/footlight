@@ -891,7 +891,7 @@ function buildAiPanel(): HTMLElement {
       // Only show a cost tag for a model we have a published rate for — never a
       // misleading $0.0000 for an unpriced model.
       if (priceForModel(m.id)) {
-        cost.innerHTML = `${fmtUsd(perFrameUsd(m.id))}/frame <span class="tier">· ~${fmtUsd(perRequestUsd(m.id))}/req</span>`;
+        cost.innerHTML = `${fmtUsd(perFrameUsd(m.id))}${s.perFrame} <span class="tier">· ~${fmtUsd(perRequestUsd(m.id))}${s.perRequest}</span>`;
       }
       meta.append(speed, cost);
       body.append(top, cap, meta);
