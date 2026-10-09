@@ -2,3 +2,5 @@
 # automatically; locally: git config blame.ignoreRevsFile .git-blame-ignore-revs
 # chore: adopt Prettier and codify the DRY convention (#176) — one-time format
 ed44d6811545f1dd22ed61cf62a16322f03a6b66
+# ci: quote Prettier globs so format:check covers every file (#285) — one-time format
+f471397e6a98760f70574ea9fd781a64b4df8e2a
