@@ -14,7 +14,7 @@
  *     (await import("./helpers/platform-mock.js")).platformModule);
  */
 
-import { vi } from "vitest";
+import { vi, type Mock } from "vitest";
 import type { FootlightPlatform } from "../../src/platform/types.js";
 
 function defaults() {
@@ -56,10 +56,13 @@ function defaults() {
 
 type Defaults = ReturnType<typeof defaults>;
 
-/** Every platform capability as a vi.fn, pre-loaded with the harness default. */
+/** Every platform capability as a vi.fn, pre-loaded with the harness default.
+ *  Typed by the REAL `FootlightPlatform` signatures (not the defaults' narrow
+ *  inferred ones, e.g. `async () => []` → `never[]`), so per-case overrides and
+ *  `mock.calls[i]![j]` reads type-check against the interface. */
 export const platformMocks = Object.fromEntries(
   Object.entries(defaults()).map(([k, impl]) => [k, vi.fn(impl as (...a: never[]) => unknown)]),
-) as { [K in keyof Defaults]: ReturnType<typeof vi.fn<Defaults[K]>> };
+) as { [K in keyof Defaults]: Mock<FootlightPlatform[K]> };
 
 /** Restore every capability to its default implementation and clear calls. */
 export function resetPlatformMocks(): void {

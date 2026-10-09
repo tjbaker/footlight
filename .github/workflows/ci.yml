@@ -30,6 +30,9 @@ jobs:
       # rules only — Prettier owns style, tsc owns types.
       - run: npm run lint
       - run: npm run build
+      # The build's tsconfig excludes test/; this one type-checks src + tests
+      # (Vitest strips types without checking them).
+      - run: npm run typecheck
       - run: npm run coverage
       - name: Upload coverage to Codecov
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -89,7 +92,9 @@ jobs:
         working-directory: app
       - run: npm run format:check
         working-directory: app
-      - run: npx tsc --noEmit
+      # tsconfig.test.json covers src + vite.config.ts (the old `tsc --noEmit`
+      # scope) PLUS test/, so a type error in a test fails CI too.
+      - run: npm run typecheck
         working-directory: app
       - run: npm run coverage
         working-directory: app

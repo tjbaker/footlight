@@ -277,6 +277,6 @@ describe("buildGenerateContentBody (pure, no network — issue #40)", () => {
     });
     expect(body.contents).toHaveLength(3);
     expect(body.contents[1]).toEqual({ role: "model", parts: [{ text: "ok" }] });
-    expect(body.tools[0].functionDeclarations.length).toBeGreaterThan(0);
+    expect(body.tools[0]!.functionDeclarations.length).toBeGreaterThan(0);
   });
 });

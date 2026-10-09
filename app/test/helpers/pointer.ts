@@ -18,7 +18,7 @@ export interface FirePointerOpts extends PointerEventInit {
 /** Dispatch a bubbling pointer event carrying the given coords on `target`. */
 export function firePointer(
   target: EventTarget,
-  type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel",
+  type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "pointerleave",
   opts: FirePointerOpts = {},
 ): void {
   const { offsetX, offsetY, ...init } = opts;
