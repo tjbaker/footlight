@@ -48,4 +48,21 @@ describe("parseCsv", () => {
       crop_offset: "",
     });
   });
+
+  it("strips a leading UTF-8 BOM (as Excel writes) from the first header", () => {
+    const text = "\uFEFFsource_file,in_point,out_point\r\na.mp4,0,10\r\n";
+    expect(parseCsv(text)).toEqual([{ source_file: "a.mp4", in_point: "0", out_point: "10" }]);
+  });
+
+  it("trims whitespace around header names but leaves cell values untouched", () => {
+    const text = "source_file, in_point ,\tout_point,notes\na.mp4,0,10,  padded  \n";
+    expect(parseCsv(text)).toEqual([
+      { source_file: "a.mp4", in_point: "0", out_point: "10", notes: "  padded  " },
+    ]);
+  });
+
+  it("only strips a BOM at the very start, not inside cell values", () => {
+    const text = "source_file,notes\na.mp4,\uFEFFx\n";
+    expect(parseCsv(text)[0]!.notes).toBe("\uFEFFx");
+  });
 });

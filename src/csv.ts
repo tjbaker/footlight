@@ -6,15 +6,19 @@
  * Handles quoted fields containing commas, escaped quotes (`""`), and CRLF or
  * LF line endings. Returns one record object per data row, keyed by the header
  * columns. Unknown columns are preserved on the object but ignored by callers.
+ *
+ * A leading UTF-8 byte-order mark (which Excel writes on "CSV UTF-8" export) is
+ * stripped, and header names are trimmed, so `\uFEFFsource_file` and
+ * ` in_point` key as `source_file` / `in_point`. Cell values are never trimmed.
  */
 
 /** Parse CSV text into an array of header-keyed record objects. */
 export function parseCsv(text: string): Array<Record<string, string>> {
-  const rows = parseRows(text);
+  const rows = parseRows(text.startsWith("\uFEFF") ? text.slice(1) : text);
   if (rows.length === 0) {
     return [];
   }
-  const header = rows[0]!;
+  const header = rows[0]!.map((name) => name.trim());
   const records: Array<Record<string, string>> = [];
   for (let i = 1; i < rows.length; i++) {
     const fields = rows[i]!;

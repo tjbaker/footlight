@@ -443,6 +443,55 @@ describe("render flag validation (issue: fail fast, not per-clip at ffmpeg time)
   });
 });
 
+describe("render CSV header robustness (issue #255)", () => {
+  it("renders an Excel-style CSV (UTF-8 BOM, CRLF, spaced headers) under --dry-run", () => {
+    const dir = tmp();
+    const src = join(dir, "src.mp4");
+    execFileSync("ffmpeg", [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc=size=1920x1080:rate=30:duration=1",
+      "-frames:v",
+      "5",
+      src,
+    ]);
+    const p = join(dir, "excel.csv");
+    writeFileSync(
+      p,
+      `\uFEFFsource_file, in_point, out_point, crop_offset\r\n${src},0,0.1,center\r\n`,
+      "utf8",
+    );
+    const { stdout, stderr, code } = runCli([
+      "render",
+      p,
+      "--outdir",
+      join(dir, "out"),
+      "--dry-run",
+    ]);
+    expect(stderr).toBe("");
+    expect(code).toBe(0);
+    const base = computeCrop(1920, 1080, "center");
+    expect(stdout).toContain(`crop=${base.cw}:${base.ch}:${base.x}:${base.y}`);
+  });
+
+  it("fails fast with one error naming every missing required column", () => {
+    const dir = tmp();
+    const p = join(dir, "m.csv");
+    writeFileSync(p, "source,in_point\nmissing.mp4,0\nmissing.mp4,1\n", "utf8");
+    const { stdout, stderr, code } = runCli(["render", p, "--dry-run"]);
+    expect(code).toBe(1);
+    expect(stderr).toContain("missing required column(s): source_file, out_point");
+    // One up-front error, not a per-row SKIP.
+    expect(stderr).not.toContain("SKIP");
+    expect(stdout).toBe("");
+  });
+});
+
 describe.skipIf(process.platform === "win32")("render when ffmpeg dies by signal", () => {
   it("counts the clip as failed, names the signal, and exits non-zero", () => {
     // Fake ffprobe (valid 1920x1080 probe) and an ffmpeg that SIGKILLs itself
