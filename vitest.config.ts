@@ -20,6 +20,17 @@ export default defineConfig({
       // for the Codecov upload in CI. No HTML report — console + Codecov suffice.
       reporter: ["text", "text-summary", "cobertura"],
       reportsDirectory: "coverage",
+      // Engine coverage floor: `npm run coverage` (CI's engine job and
+      // `npm run verify`) fails if any metric drops below these. Set a couple of
+      // points under the measured levels (stmts 95.29 / branch 89.68 /
+      // funcs 97.2 / lines 95.85), rounded down so normal churn doesn't flake.
+      // Raise them as coverage grows; never lower them to land a PR.
+      thresholds: {
+        statements: 93,
+        branches: 87,
+        functions: 95,
+        lines: 93,
+      },
     },
   },
 });
