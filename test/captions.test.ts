@@ -11,6 +11,7 @@ import {
   buildCaptionAss,
   buildFfmpegArgs,
   ffmpegListHasFilter,
+  filterEscape,
   DEFAULT_RENDER_OPTIONS,
   TARGET_H,
   type ClipRow,
@@ -224,7 +225,7 @@ describe("buildFfmpegArgs caption integration", () => {
       { ...opts(), dims, outdir: "out", captionAssPath: "/tmp/c.ass" },
     );
     const vf = args[args.indexOf("-vf") + 1]!;
-    expect(vf).toContain("subtitles=filename='/tmp/c.ass'");
+    expect(vf).toContain("subtitles=filename=/tmp/c.ass");
     expect(vf.indexOf("setsar=1")).toBeLessThan(vf.indexOf("subtitles="));
   });
 
@@ -240,7 +241,7 @@ describe("buildFfmpegArgs caption integration", () => {
       },
     );
     const vf = args[args.indexOf("-vf") + 1]!;
-    expect(vf).toContain("subtitles=filename='/tmp/c.ass':fontsdir='/f'");
+    expect(vf).toContain("subtitles=filename=/tmp/c.ass:fontsdir=/f");
   });
 
   it("points fontsdir at the root for a root-level font file", () => {
@@ -255,12 +256,41 @@ describe("buildFfmpegArgs caption integration", () => {
       },
     );
     const vf = args[args.indexOf("-vf") + 1]!;
-    expect(vf).toContain("subtitles=filename='/tmp/c.ass':fontsdir='/'");
+    expect(vf).toContain("subtitles=filename=/tmp/c.ass:fontsdir=/");
   });
 
   it("emits no subtitles filter without an ASS path (clean export)", () => {
     const { args } = buildFfmpegArgs({ ...ROW, hook: "Yo" }, { ...opts(), dims, outdir: "out" });
     const vf = args[args.indexOf("-vf") + 1]!;
     expect(vf).not.toContain("subtitles");
+  });
+});
+
+describe("filterEscape (two-level filtergraph escaping)", () => {
+  it("leaves an ordinary POSIX path untouched", () => {
+    expect(filterEscape("/tmp/footlight_cap_0_123.ass")).toBe("/tmp/footlight_cap_0_123.ass");
+  });
+
+  it("escapes ' and : for the option level, then again for the graph level", () => {
+    // option level: ' -> \'   graph level: \ -> \\ and ' -> \'  => \\\'
+    expect(filterEscape("it's")).toBe("it\\\\\\'s");
+    // option level: : -> \:   graph level: \ -> \\  => \\:
+    expect(filterEscape("a:b")).toBe("a\\\\:b");
+  });
+
+  it("escapes the graph-level separators once", () => {
+    expect(filterEscape("a,b;c[d]")).toBe("a\\,b\\;c\\[d\\]");
+  });
+
+  it("escapes edge whitespace, which ffmpeg would otherwise trim", () => {
+    // Leading/trailing space -> "\ " (option) -> "\\ " (graph); interior untouched.
+    expect(filterEscape(" a b ")).toBe("\\\\ a b\\\\ ");
+    expect(filterEscape("/Fonts /")).toBe("/Fonts /");
+    expect(filterEscape(" ")).toBe("\\\\ ");
+  });
+
+  it("handles a Windows drive path", () => {
+    // \ -> \\ (option) -> \\\\ (graph);  : -> \: (option) -> \\: (graph)
+    expect(filterEscape("C:\\t\\c.ass")).toBe("C\\\\:\\\\\\\\t\\\\\\\\c.ass");
   });
 });

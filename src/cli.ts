@@ -300,7 +300,8 @@ async function cmdRender(argv: string[]): Promise<number> {
     // Per-clip caption ASS document (SPEC §6.5). When captions are on and the
     // row has a hook/title, `buildCaptionAss` returns an ASS document; write it
     // to a unique temp file and hand its path to the engine, which appends a
-    // `subtitles=filename='…'` filter. The file is always removed below.
+    // `subtitles=filename=…` filter (path escaped by `filterEscape`). The file
+    // is always removed below.
     let captionAssPath: string | undefined;
     if (burnCaptions) {
       const ass = buildCaptionAss(row, {
