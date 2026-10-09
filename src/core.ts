@@ -781,9 +781,9 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
   // builder stays pure. PlayResX/Y in the ASS match the output, so positions and
   // sizes are 1:1. A custom font FILE is exposed to libass via `fontsdir`.
   if (opts.captionAssPath) {
-    let sub = `subtitles=filename=${filterQuote(opts.captionAssPath)}`;
+    let sub = `subtitles=filename=${filterEscape(opts.captionAssPath)}`;
     if (opts.captionFontFile) {
-      sub += `:fontsdir=${filterQuote(dirname(opts.captionFontFile))}`;
+      sub += `:fontsdir=${filterEscape(dirname(opts.captionFontFile))}`;
     }
     filters.push(sub);
   }
@@ -1055,9 +1055,20 @@ function assEscape(value: string): string {
     .join("\\N");
 }
 
-/** Single-quote a value for a filtergraph option (`\` and `'` escaped; `:`/`,` are literal inside quotes). */
-function filterQuote(value: string): string {
-  return `'${value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+/**
+ * Escape an arbitrary string (e.g. a file path) as a filter option VALUE inside
+ * an `-vf` filtergraph. ffmpeg unescapes it twice (see "Quoting and escaping" in
+ * ffmpeg-filters), so we escape for each level, innermost first:
+ *  1. the filter's option parser splits on `:` and treats `\` and `'` specially;
+ *  2. the filtergraph parser treats `\ ' [ ] , ;` specially.
+ * Quoting is NOT used: inside `'…'` a backslash is literal, so a path containing
+ * `'` can't be expressed, and the option-level `:` split still applies after the
+ * graph level strips the quotes (a Windows `C:\…` path broke every caption).
+ * Argv is passed without a shell, so there is no third level.
+ */
+export function filterEscape(value: string): string {
+  const optionLevel = value.replace(/[\\':]/g, "\\$&");
+  return optionLevel.replace(/[\\'[\],;]/g, "\\$&");
 }
 
 /** Directory portion of a path (`.` when there is none). Index-based (no
