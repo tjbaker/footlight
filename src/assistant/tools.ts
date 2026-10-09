@@ -18,8 +18,8 @@
  *     `buildSuggestCropAction` / `buildTrackSubjectAction` with the result.
  */
 
-import { TARGET_AR, parseContentCrop, type CropPathKeyframe } from "../core.js";
-import { cropBoxToOffset, roundEven, type Box, type Dims } from "../manifest.js";
+import { computeCrop, parseContentCrop, type CropPathKeyframe } from "../core.js";
+import { cropBoxToOffset, type Box, type Dims } from "../manifest.js";
 import { samplesToCropPath } from "../track.js";
 import type { TrackSample } from "../providers/types.js";
 import type { ProposedAction, ToolName } from "./types.js";
@@ -142,22 +142,15 @@ export const DETERMINISTIC_TOOLS: ReadonlySet<ToolName> = new Set([
 /** Lookup a tool spec by name. */
 export const TOOL_BY_NAME: ReadonlyMap<ToolName, ToolSpec> = new Map(TOOLS.map((t) => [t.name, t]));
 
-// ---- crop math (mirrors the engine / manifest exactly) ----
-
-/** Fixed 9:16 crop width for a landscape region: `even(round(height * 9/16))`. */
-function cropWidth(region: Dims): number {
-  const w = Math.round(region.height * TARGET_AR);
-  return w - (w % 2);
-}
+// ---- crop math (delegated to the engine) ----
 
 /**
- * Clamp a crop-window x into frame the SAME way the engine + `cropBoxToOffset`
- * do: even-round, then bound to `[0, region.width - cropWidth]`.
+ * Clamp a crop-window x into frame exactly as the render will: delegates the
+ * crop width, the `[0, maxX]` clamp and the even-rounding to `computeCrop`, so
+ * the result is the x the engine renders (even on an odd-maxX region).
  */
 export function clampCropX(x: number, region: Dims): number {
-  const maxX = region.width - cropWidth(region);
-  const xe = roundEven(x);
-  return Math.max(0, Math.min(xe, maxX));
+  return computeCrop(region.width, region.height, String(x)).x;
 }
 
 // ---- helpers ----
