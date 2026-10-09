@@ -1067,7 +1067,13 @@ function assEscape(value: string): string {
  * Argv is passed without a shell, so there is no third level.
  */
 export function filterEscape(value: string): string {
-  const optionLevel = value.replace(/[\\':]/g, "\\$&");
+  // Both levels also trim UNESCAPED leading/trailing whitespace, so escape the
+  // first and last character when it is whitespace (a font folder ending in a
+  // space). Only the edge character matters: once it is escaped, the run of
+  // whitespace beside it is interior.
+  const optionLevel = value
+    .replace(/[\\':]/g, "\\$&")
+    .replace(/^[ \t\n\r]|[ \t\n\r]$/g, "\\$&");
   return optionLevel.replace(/[\\'[\],;]/g, "\\$&");
 }
 

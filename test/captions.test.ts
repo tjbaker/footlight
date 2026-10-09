@@ -282,6 +282,13 @@ describe("filterEscape (two-level filtergraph escaping)", () => {
     expect(filterEscape("a,b;c[d]")).toBe("a\\,b\\;c\\[d\\]");
   });
 
+  it("escapes edge whitespace, which ffmpeg would otherwise trim", () => {
+    // Leading/trailing space -> "\ " (option) -> "\\ " (graph); interior untouched.
+    expect(filterEscape(" a b ")).toBe("\\\\ a b\\\\ ");
+    expect(filterEscape("/Fonts /")).toBe("/Fonts /");
+    expect(filterEscape(" ")).toBe("\\\\ ");
+  });
+
   it("handles a Windows drive path", () => {
     // \ -> \\ (option) -> \\\\ (graph);  : -> \: (option) -> \\: (graph)
     expect(filterEscape("C:\\t\\c.ass")).toBe("C\\\\:\\\\\\\\t\\\\\\\\c.ass");

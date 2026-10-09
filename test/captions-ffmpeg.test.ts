@@ -3,8 +3,8 @@
 /**
  * Burned captions through REAL ffmpeg (issue #247). The pure tests in
  * captions.test.ts only pin the filter string; this proves ffmpeg actually opens
- * the caption file and fonts dir when their paths contain characters that are
- * special to the filtergraph (`'`, `:`, `,`, `[`, `]`, `;`). Skipped when ffmpeg
+ * the caption file when its path contains characters that are special to the
+ * filtergraph (`'`, `:`, `,`, `[`, `]`, `;`, edge spaces). Skipped when ffmpeg
  * (or its libass-backed `subtitles` filter) isn't available.
  */
 
@@ -66,7 +66,8 @@ describe.skipIf(!hasSubtitlesFilter())("burned captions through real ffmpeg", ()
       crop_offset: "center",
       hook: "Hello",
     };
-    const assPath = join(dir, "cap.ass");
+    // Leading/trailing spaces too: ffmpeg trims unescaped edge whitespace.
+    const assPath = join(dir, " cap.ass ");
     const renderOpts = { ...DEFAULT_RENDER_OPTIONS, burnCaptions: true };
     writeFileSync(assPath, buildCaptionAss(row, renderOpts)!, "utf8");
 
@@ -87,7 +88,10 @@ describe.skipIf(!hasSubtitlesFilter())("burned captions through real ffmpeg", ()
     mkdirSync(join(root, "out"));
 
     // Throws (with ffmpeg's stderr) if the filtergraph can't be parsed or the
-    // caption file / fonts dir can't be opened.
+    // caption file can't be opened. NOTE: this proves the `filename=` escaping
+    // only — libass silently ignores a `fontsdir` it can't open, so a broken
+    // fontsdir would still render. Both values go through the same
+    // `filterEscape`, which the unit tests pin.
     execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", ...args], {
       stdio: ["ignore", "pipe", "pipe"],
     });
