@@ -125,32 +125,37 @@ export function parseFadeSeconds(value: string | undefined | null, field: string
   return n;
 }
 
-/** Parse `HH:MM:SS`, `MM:SS`, or plain seconds into float seconds. */
+/** One `:`-separated timestamp part: unsigned decimal digits, optional `.fraction`. */
+const TIMESTAMP_PART = /^\d+(\.\d+)?$/;
+
+/**
+ * Parse `HH:MM:SS`, `MM:SS`, or plain seconds into float seconds. Each
+ * `:`-separated part (whitespace-trimmed) must be unsigned decimal — `\d+` with
+ * an optional `.\d+` — so empty parts (`"1::30"`, `"1:"`), signs, hex, exponents
+ * and `Infinity` are rejected rather than silently coerced by `Number()`. The
+ * result is always finite and ≥ 0.
+ */
 export function parseTimestamp(value: string): number {
   value = value.trim();
   if (!value) {
     throw new Error("empty timestamp");
   }
-  if (value.includes(":")) {
-    const parts = value.split(":");
-    if (parts.length > 3) {
-      throw new Error(`bad timestamp: ${JSON.stringify(value)}`);
-    }
-    let secs = 0;
-    for (const part of parts) {
-      const n = Number(part);
-      if (Number.isNaN(n)) {
-        throw new Error(`bad timestamp: ${JSON.stringify(value)}`);
-      }
-      secs = secs * 60 + n;
-    }
-    return secs;
-  }
-  const n = Number(value);
-  if (Number.isNaN(n)) {
+  const parts = value.split(":");
+  if (parts.length > 3) {
     throw new Error(`bad timestamp: ${JSON.stringify(value)}`);
   }
-  return n;
+  let secs = 0;
+  for (const raw of parts) {
+    const part = raw.trim();
+    if (!TIMESTAMP_PART.test(part)) {
+      throw new Error(`bad timestamp: ${JSON.stringify(value)}`);
+    }
+    secs = secs * 60 + Number(part);
+  }
+  if (!Number.isFinite(secs)) {
+    throw new Error(`bad timestamp: ${JSON.stringify(value)}`);
+  }
+  return secs;
 }
 
 /** Parse a `"W:H:X:Y"` content region (for stripping letterbox bars), or null. */
