@@ -274,13 +274,31 @@ export function createTransport(store: EditorStore, deps: TransportDeps): Transp
 
   // ---- keyboard-first operation ----
   const CROP_NUDGE_PX = 4;
+  // The editor's modals: history/settings/clear-confirm use `.fl-modal-backdrop`;
+  // the shortcuts and help dialogs use `.modal-backdrop`.
+  const MODAL_BACKDROP = ".fl-modal-backdrop, .modal-backdrop:not([hidden])";
+
+  /** True when the focused control handles `key` natively, so a global hotkey
+   *  must not steal it. Text fields and selects own every key (typing, arrows,
+   *  type-ahead); buttons and switches own only their activation keys, so the
+   *  editor's letter hotkeys keep working after a button is clicked (Chromium
+   *  leaves focus on it); radios also own the arrows that move the selection. */
+  function controlOwnsKey(tgt: HTMLElement, key: string): boolean {
+    if (tgt.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(tgt.tagName)) return true;
+    const activation = key === " " || key === "Enter";
+    if (tgt.matches('button, [role="button"], [role="switch"]')) return activation;
+    if (tgt.matches('[role="radio"]')) return activation || key.startsWith("Arrow");
+    return false;
+  }
 
   window.addEventListener("keydown", (e) => {
-    // Never hijack typing in a field; let browser/OS combos through.
+    // Never hijack a key the focused control uses itself; let browser/OS combos through.
     const tgt = e.target as HTMLElement | null;
-    if (tgt && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" || tgt.isContentEditable))
-      return;
+    if (tgt instanceof HTMLElement && controlOwnsKey(tgt, e.key)) return;
     if (e.metaKey || e.ctrlKey) return;
+    // A modal is open: the editor behind it is inert, `?` included (it would
+    // stack another dialog). Each modal handles its own Escape.
+    if (document.querySelector(MODAL_BACKDROP)) return;
     if (e.key === "?") {
       openShortcuts();
       return;
