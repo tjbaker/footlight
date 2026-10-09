@@ -31,8 +31,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
-    "format": "prettier --write src/**/*.ts test/**/*.ts",
-    "format:check": "prettier --check src/**/*.ts test/**/*.ts",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "lint": "eslint src test app/src app/test app/dev-server",
     "verify": "npm run format:check && npm run lint && npm run build && npm test"
   },
