@@ -118,7 +118,7 @@ export function isAllowedRequest(headers) {
   if (!host || !LOOPBACK_HOSTNAMES.has(hostnameOf(host))) return false;
   const origin = headers.origin;
   if (origin !== undefined) return LOOPBACK_HOSTNAMES.has(hostnameOf(origin));
-  return headers["sec-fetch-site"] !== "cross-site";
+  return headers["sec-fetch-site"]?.toLowerCase() !== "cross-site";
 }
 
 /** CORS for the local Vite frontend: echo the (already vetted) loopback origin. */

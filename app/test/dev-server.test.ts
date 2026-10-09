@@ -23,7 +23,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
-import { mkdtemp, writeFile, mkdir, stat } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, mkdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, basename } from "node:path";
 
@@ -170,6 +170,7 @@ describe("access guard", () => {
   });
 
   it("rejects a foreign-Origin POST without touching the filesystem", async () => {
+    const before = await readFile(sessionPath, "utf8").catch(() => null);
     const res = await rawRequest(
       "POST",
       "/session",
@@ -177,7 +178,7 @@ describe("access guard", () => {
       JSON.stringify({ data: { pwned: true } }),
     );
     expect(res.status).toBe(403);
-    await expect(stat(sessionPath)).rejects.toThrow();
+    expect(await readFile(sessionPath, "utf8").catch(() => null)).toBe(before);
   });
 
   it("rejects a non-loopback Host (DNS rebinding)", async () => {
@@ -226,7 +227,14 @@ describe("isAllowedRequest", () => {
       true,
     ],
     [{ host: "localhost:8787", "sec-fetch-site": "cross-site" }, false],
+    [{ host: "localhost:8787", "sec-fetch-site": "CROSS-SITE" }, false],
     [{ host: "localhost:8787", "sec-fetch-site": "same-origin" }, true],
+    [{ host: "localhost:8787", "sec-fetch-site": "none" }, true],
+    [{ host: "127.1:8787" }, true],
+    [{ host: "LOCALHOST:8787" }, true],
+    [{ host: "0.0.0.0:8787" }, false],
+    [{ host: "[::ffff:127.0.0.1]:8787" }, false],
+    [{ host: "localhost:8787", origin: "file://" }, false],
   ])("%j -> %s", (headers, allowed) => {
     expect(isAllowedRequest(headers)).toBe(allowed);
   });

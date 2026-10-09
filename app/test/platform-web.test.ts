@@ -102,9 +102,7 @@ describe("probe", () => {
     const out = await webPlatform.probe("/clips/My Show.mp4");
 
     expect(out).toEqual(result);
-    expect(lastCall().url).toBe(
-      `${BASE}/probe?source=${encodeURIComponent("/clips/My Show.mp4")}`,
-    );
+    expect(lastCall().url).toBe(`${BASE}/probe?source=${encodeURIComponent("/clips/My Show.mp4")}`);
     // GET => no explicit init.
     expect(lastCall().init).toBeUndefined();
   });
@@ -122,9 +120,7 @@ describe("scenes", () => {
     mockFetch(() => ok({ json: async () => [1.2, 8.4, 15.0] }));
     const out = await webPlatform.scenes("/a b.mp4");
     expect(out).toEqual([1.2, 8.4, 15.0]);
-    expect(lastCall().url).toBe(
-      `${BASE}/scenes?source=${encodeURIComponent("/a b.mp4")}`,
-    );
+    expect(lastCall().url).toBe(`${BASE}/scenes?source=${encodeURIComponent("/a b.mp4")}`);
   });
 
   it("throws on a non-ok response", async () => {
@@ -143,9 +139,7 @@ describe("loudness", () => {
     mockFetch(() => ok({ json: async () => result }));
     const out = await webPlatform.loudness("/song.mp4");
     expect(out).toEqual(result);
-    expect(lastCall().url).toBe(
-      `${BASE}/loudness?source=${encodeURIComponent("/song.mp4")}`,
-    );
+    expect(lastCall().url).toBe(`${BASE}/loudness?source=${encodeURIComponent("/song.mp4")}`);
   });
 
   it("throws on a non-ok response", async () => {
@@ -158,9 +152,7 @@ describe("extractFrame", () => {
   it("GETs /frame with source+t and returns a created object URL for the blob", async () => {
     const blob = new Blob(["jpegbytes"], { type: "image/jpeg" });
     mockFetch(() => ok({ blob: async () => blob }));
-    const createSpy = vi
-      .spyOn(URL, "createObjectURL")
-      .mockReturnValue("blob:fake-url");
+    const createSpy = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:fake-url");
 
     const out = await webPlatform.extractFrame("/v.mp4", 12.5);
 
@@ -196,9 +188,7 @@ describe("track", () => {
     const { url, init } = lastCall();
     expect(url).toBe(`${BASE}/track`);
     expect(init?.method).toBe("POST");
-    expect((init?.headers as Record<string, string>)["content-type"]).toBe(
-      "application/json",
-    );
+    expect((init?.headers as Record<string, string>)["content-type"]).toBe("application/json");
     expect(JSON.parse(init?.body as string)).toEqual(req);
   });
 
@@ -261,9 +251,7 @@ describe("checkOutdir", () => {
     mockFetch(() => ok({ json: async () => ({ ok: true, resolved: "/abs/clips" }) }));
     const out = await webPlatform.checkOutdir("clips");
     expect(out).toEqual({ ok: true, resolved: "/abs/clips" });
-    expect(lastCall().url).toBe(
-      `${BASE}/check-outdir?outdir=${encodeURIComponent("clips")}`,
-    );
+    expect(lastCall().url).toBe(`${BASE}/check-outdir?outdir=${encodeURIComponent("clips")}`);
   });
 
   it("returns a not-reachable OutdirCheck when fetch rejects", async () => {
@@ -314,17 +302,13 @@ describe("listUserFonts", () => {
     mockFetch(() => ok({ json: async () => fonts }));
     const out = await webPlatform.listUserFonts("/my fonts");
     expect(out).toEqual(fonts);
-    expect(lastCall().url).toBe(
-      `${BASE}/fonts?dir=${encodeURIComponent("/my fonts")}`,
-    );
+    expect(lastCall().url).toBe(`${BASE}/fonts?dir=${encodeURIComponent("/my fonts")}`);
   });
 });
 
 describe("history round-trip", () => {
   it("loadHistory GETs /history and parses HistoryEntry[]", async () => {
-    const entries = [
-      { id: "a", ts: 1, spec: {}, outdir: "clips" },
-    ] as unknown as HistoryEntry[];
+    const entries = [{ id: "a", ts: 1, spec: {}, outdir: "clips" }] as unknown as HistoryEntry[];
     mockFetch(() => ok({ json: async () => entries }));
     const out = await webPlatform.loadHistory();
     expect(out).toEqual(entries);
@@ -333,9 +317,7 @@ describe("history round-trip", () => {
 
   it("saveHistory POSTs { entries } as JSON", async () => {
     mockFetch(() => ok({ json: async () => ({}) }));
-    const entries = [
-      { id: "a", ts: 1, spec: {}, outdir: "clips" },
-    ] as unknown as HistoryEntry[];
+    const entries = [{ id: "a", ts: 1, spec: {}, outdir: "clips" }] as unknown as HistoryEntry[];
     await webPlatform.saveHistory(entries);
     const { url, init } = lastCall();
     expect(url).toBe(`${BASE}/history`);
@@ -443,6 +425,19 @@ describe("static / no-network capabilities", () => {
     );
   });
 
+  it("targets 127.0.0.1:8787 when the page itself is on 127.0.0.1 (stays same-site)", async () => {
+    vi.resetModules();
+    vi.stubGlobal("location", { hostname: "127.0.0.1" });
+    try {
+      const { webPlatform: on127 } = await import("../src/platform/web.js");
+      expect(await on127.videoSrc("/a.mp4")).toBe(
+        `http://127.0.0.1:8787/video?source=${encodeURIComponent("/a.mp4")}`,
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("file picker is unsupported and the pickers resolve null", async () => {
     expect(webPlatform.supportsFilePicker).toBe(false);
     expect(await webPlatform.pickSourceFile()).toBeNull();
@@ -480,16 +475,12 @@ describe("exportCover", () => {
     urlAny.revokeObjectURL = () => undefined;
 
     try {
-      fetchMock.mockResolvedValue(
-        ok({ blob: async () => ({ size: 3 }) as unknown as Blob }),
-      );
+      fetchMock.mockResolvedValue(ok({ blob: async () => ({ size: 3 }) as unknown as Blob }));
       const saved = await webPlatform.exportCover("/v/show.mp4", 12.5, spec, "x_cover.png");
       expect(saved).toBe(true);
 
       const [url, init] = fetchMock.mock.calls.at(-1)! as [string, RequestInit];
-      expect(url).toBe(
-        `${BASE}/cover?source=${encodeURIComponent("/v/show.mp4")}&t=12.5`,
-      );
+      expect(url).toBe(`${BASE}/cover?source=${encodeURIComponent("/v/show.mp4")}&t=12.5`);
       expect(init.method).toBe("POST");
       expect(JSON.parse(String(init.body))).toEqual(spec);
       expect(clicked).toEqual([{ href: "blob:cover", download: "x_cover.png" }]);
@@ -501,8 +492,8 @@ describe("exportCover", () => {
 
   it("throws with the server detail on a non-OK response", async () => {
     fetchMock.mockResolvedValueOnce(fail(400, "bad cover spec"));
-    await expect(
-      webPlatform.exportCover("/v.mp4", 0, spec, "c.png"),
-    ).rejects.toThrow(/cover failed \(400\): bad cover spec/);
+    await expect(webPlatform.exportCover("/v.mp4", 0, spec, "c.png")).rejects.toThrow(
+      /cover failed \(400\): bad cover spec/,
+    );
   });
 });
