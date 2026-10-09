@@ -25,7 +25,8 @@ a libass-enabled build — `homebrew-ffmpeg/ffmpeg` on macOS, not core). Require
 ## Repo layout (two npm packages)
 
 - **Root** (`package.json`, `src/`, `test/`) — the render engine + `footlight` CLI,
-  published as an npm package (`bin/footlight.js` → `dist/cli.js`).
+  packaged to be publishable to npm but not published there yet
+  (`bin/footlight.js` → `dist/cli.js`).
 - **`app/`** (`app/package.json`) — the Tauri v2 desktop GUI (separate package,
   separate `node_modules`). Frontend is Vite + TypeScript; native shell is Rust in
   `app/src-tauri/`.
@@ -42,7 +43,7 @@ npm install
 npm run build        # tsc -> dist/
 npm test             # vitest run
 npm run test:watch   # vitest (watch)
-npx vitest run test/core.test.ts          # single file
+npx vitest run test/engine.test.ts        # single file
 npx vitest run -t "computeCrop"           # single test by name
 ```
 
