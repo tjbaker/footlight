@@ -63,6 +63,13 @@ describe("clampCropX parity with the engine/manifest", () => {
     const box: Box = { x, y: 0, w: 608, h: 1080 };
     expect(String(clampCropX(x, region))).toBe(cropBoxToOffset(box, region));
   });
+
+  it("returns an even x on an odd-maxX region (content_crop 1799:1010 -> maxX 1231)", () => {
+    const odd: Dims = { width: 1799, height: 1010 };
+    expect(clampCropX(99999, odd)).toBe(1230);
+    expect(clampCropX(1231, odd)).toBe(1230);
+    expect(clampCropX(1229, odd)).toBe(1228);
+  });
 });
 
 describe("interpretTool (deterministic tools)", () => {
