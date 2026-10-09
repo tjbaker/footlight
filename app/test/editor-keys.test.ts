@@ -221,6 +221,113 @@ describe("editor keyboard shortcuts (jsdom integration)", () => {
       expect(root.querySelector(".fl-app")).not.toBeNull();
     });
 
+    describe("focused controls and open modals (#251)", () => {
+      /** Dispatch a cancelable keydown from `target` (bubbles to `window`). */
+      function keyOn(target: EventTarget, init: KeyboardEventInit): KeyboardEvent {
+        const ev = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+        target.dispatchEvent(ev);
+        return ev;
+      }
+      const queueCards = (): Element[] => [...root.querySelectorAll(".fl-strip-card.edit")];
+      const captionSelect = (): HTMLSelectElement => {
+        const sel = root.querySelector<HTMLSelectElement>("select");
+        expect(sel).not.toBeNull();
+        return sel!;
+      };
+      const anyButton = (): HTMLButtonElement => root.querySelector<HTMLButtonElement>("button")!;
+
+      /** Mark a valid In/Out window so `S` would add a clip. */
+      async function markWindow(): Promise<void> {
+        key({ key: "i" });
+        key({ key: "Escape" }); // deselect In so Shift+→ seeks the playhead
+        for (let n = 0; n < 5; n++) {
+          key({ key: "ArrowRight", shiftKey: true });
+          await flush(2);
+        }
+        key({ key: "o" });
+        await flush();
+      }
+
+      it("ArrowUp on a focused <select> is left to the select (no scene-cut jump)", () => {
+        const sel = captionSelect();
+        sel.focus();
+        expect(keyOn(sel, { key: "ArrowUp" }).defaultPrevented).toBe(false);
+        expect(keyOn(sel, { key: "ArrowDown" }).defaultPrevented).toBe(false);
+        // Control: from the body the editor claims ArrowUp.
+        expect(keyOn(document.body, { key: "ArrowUp" }).defaultPrevented).toBe(true);
+      });
+
+      it("`s` on a focused <select> does not add a clip; from the body it does", async () => {
+        await markWindow();
+        keyOn(captionSelect(), { key: "s" });
+        await flush();
+        expect(queueCards()).toHaveLength(0);
+        keyOn(document.body, { key: "s" });
+        await flush();
+        expect(queueCards()).toHaveLength(1);
+      });
+
+      it("Space on a focused button is left to the button; from the body it toggles play", () => {
+        const btn = anyButton();
+        btn.focus();
+        expect(keyOn(btn, { key: " " }).defaultPrevented).toBe(false);
+        expect(keyOn(document.body, { key: " " }).defaultPrevented).toBe(true);
+      });
+
+      it("letter hotkeys still work while a button has focus (only activation keys are exempt)", async () => {
+        await markWindow();
+        keyOn(anyButton(), { key: "s" });
+        await flush();
+        expect(queueCards()).toHaveLength(1);
+      });
+
+      it("radio/switch roles own their activation (and radios their arrow) keys", () => {
+        const radio = document.createElement("div");
+        radio.setAttribute("role", "radio");
+        radio.tabIndex = 0;
+        const sw = document.createElement("div");
+        sw.setAttribute("role", "switch");
+        sw.tabIndex = 0;
+        root.append(radio, sw);
+        expect(keyOn(radio, { key: "ArrowRight" }).defaultPrevented).toBe(false);
+        expect(keyOn(radio, { key: " " }).defaultPrevented).toBe(false);
+        expect(keyOn(sw, { key: " " }).defaultPrevented).toBe(false);
+      });
+
+      it("S / Space / `?` do nothing to the editor while a modal backdrop is open", async () => {
+        await markWindow();
+        const backdrop = document.createElement("div");
+        backdrop.className = "fl-modal-backdrop";
+        document.body.append(backdrop);
+
+        keyOn(document.body, { key: "s" });
+        keyOn(document.body, { key: "S" });
+        expect(keyOn(document.body, { key: " " }).defaultPrevented).toBe(false);
+        expect(keyOn(document.body, { key: "ArrowUp" }).defaultPrevented).toBe(false);
+        keyOn(document.body, { key: "?" });
+        await flush();
+        expect(queueCards()).toHaveLength(0);
+        expect(document.querySelector(".modal.shortcuts")).toBeNull();
+
+        // Modal closed → the shortcuts work again.
+        backdrop.remove();
+        keyOn(document.body, { key: "s" });
+        await flush();
+        expect(queueCards()).toHaveLength(1);
+      });
+
+      it("the shortcuts dialog (`.modal-backdrop`) also makes the editor inert", async () => {
+        await markWindow();
+        key({ key: "?" });
+        expect(document.querySelector(".modal.shortcuts")).not.toBeNull();
+        keyOn(document.body, { key: "s" });
+        keyOn(document.body, { key: "?" });
+        await flush();
+        expect(queueCards()).toHaveLength(0);
+        expect(document.querySelectorAll(".modal.shortcuts")).toHaveLength(1);
+      });
+    });
+
     it("Cmd/Ctrl-modified keys are passed through (not hijacked)", () => {
       // The guard returns on metaKey/ctrlKey so OS combos still work. I-with-Cmd
       // must NOT set the In point.
