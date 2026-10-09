@@ -12,8 +12,10 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-vi.mock("../src/platform/index.js", async () =>
-  (await import("./helpers/platform-mock.js")).platformModule);
+vi.mock(
+  "../src/platform/index.js",
+  async () => (await import("./helpers/platform-mock.js")).platformModule,
+);
 
 import { platformMocks } from "./helpers/platform-mock.js";
 import {

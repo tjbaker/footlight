@@ -40,16 +40,13 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/platform/index.js", async () =>
-  (await import("./helpers/platform-mock.js")).platformModule);
+vi.mock(
+  "../src/platform/index.js",
+  async () => (await import("./helpers/platform-mock.js")).platformModule,
+);
 
 import { platformMocks } from "./helpers/platform-mock.js";
-import {
-  installDomShims,
-  resetHarness,
-  flush,
-  pressKey,
-} from "./helpers/editor-harness.js";
+import { installDomShims, resetHarness, flush, pressKey } from "./helpers/editor-harness.js";
 
 installDomShims();
 
@@ -63,8 +60,6 @@ Object.defineProperty(window, "location", {
 
 // --- platform: mocked wholesale; `probe` returns a real-ish source -----------
 const { mountEditor } = await import("../src/editor.js");
-
-
 
 interface Mounted {
   root: HTMLElement;
@@ -102,11 +97,9 @@ async function mountLoadAndMark(): Promise<Mounted> {
     root,
     // Queue CARDS carry `.edit`; the always-present "+ add clip" card is
     // `.fl-strip-card` WITHOUT `.edit`, so this filter excludes it.
-    queueCards: () =>
-      [...root.querySelectorAll<HTMLElement>(".fl-strip-card.edit")],
+    queueCards: () => [...root.querySelectorAll<HTMLElement>(".fl-strip-card.edit")],
     queueLabel: () => root.querySelector<HTMLElement>(".fl-filmstrip > .fl-label")!,
-    renderBtn: () =>
-      root.querySelector<HTMLButtonElement>(".fl-actions .fl-btn.primary")!,
+    renderBtn: () => root.querySelector<HTMLButtonElement>(".fl-actions .fl-btn.primary")!,
   };
 }
 

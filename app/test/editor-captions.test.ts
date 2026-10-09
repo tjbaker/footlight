@@ -43,8 +43,10 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/platform/index.js", async () =>
-  (await import("./helpers/platform-mock.js")).platformModule);
+vi.mock(
+  "../src/platform/index.js",
+  async () => (await import("./helpers/platform-mock.js")).platformModule,
+);
 
 import { platformMocks } from "./helpers/platform-mock.js";
 import {
@@ -58,9 +60,6 @@ import {
 installDomShims();
 // Import AFTER the mocks/shims above are installed.
 const { mountEditor } = await import("../src/editor.js");
-
-
-
 
 /** Mount, load a 1920×1080 source, and mark a 0→0.5s In/Out window so `addClip`
  *  passes its guards. Returns the root + the caption section element. */
@@ -153,8 +152,8 @@ describe("editor caption controls (jsdom)", () => {
 
     // Add the clip, then render so we can read the serialized manifest the editor
     // hands to platform.render — its clip should carry the typed hook/title.
-    const addBtn = Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find((b) =>
-      b.title?.startsWith("Add this clip") || /add clip/i.test(b.textContent ?? ""),
+    const addBtn = Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(
+      (b) => b.title?.startsWith("Add this clip") || /add clip/i.test(b.textContent ?? ""),
     );
     expect(addBtn, "Add clip button").toBeTruthy();
     addBtn!.click();
@@ -182,8 +181,8 @@ describe("editor caption controls (jsdom)", () => {
     setValue(hook, "BIG\nNIGHT");
     setValue(title, "live\nat the roxy");
 
-    const addBtn = Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find((b) =>
-      b.title?.startsWith("Add this clip") || /add clip/i.test(b.textContent ?? ""),
+    const addBtn = Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(
+      (b) => b.title?.startsWith("Add this clip") || /add clip/i.test(b.textContent ?? ""),
     );
     addBtn!.click();
     await flush();

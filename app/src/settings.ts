@@ -21,7 +21,11 @@
  */
 
 import { messages } from "./i18n/index.js";
-import { GEMINI_API_KEY_SECRET, loadAutoTrackSettings, saveAutoTrackSettings } from "./autotrack.js";
+import {
+  GEMINI_API_KEY_SECRET,
+  loadAutoTrackSettings,
+  saveAutoTrackSettings,
+} from "./autotrack.js";
 import { platform } from "./platform/index.js";
 import { BASE_PROMPT } from "./assistant/base-prompt.js";
 import { priceForModel } from "@assistant-cost";
@@ -32,13 +36,7 @@ import {
   perRequestUsd,
   resolveThemeMode,
 } from "./settings-util.js";
-import {
-  APP_NAME,
-  APP_VERSION,
-  LICENSE,
-  REPO_URL,
-  ISSUES_NEW_URL,
-} from "./version.js";
+import { APP_NAME, APP_VERSION, LICENSE, REPO_URL, ISSUES_NEW_URL } from "./version.js";
 
 // ---- tiny DOM builders (self-contained; mirror editor.ts's el()/button()) ----
 
@@ -279,8 +277,7 @@ function applyThemeMode(mode: ThemeMode): void {
   document.documentElement.setAttribute("data-theme", resolve());
   if (mode === "system" && typeof window.matchMedia === "function") {
     systemThemeMql = window.matchMedia("(prefers-color-scheme: dark)");
-    systemThemeListener = () =>
-      document.documentElement.setAttribute("data-theme", resolve());
+    systemThemeListener = () => document.documentElement.setAttribute("data-theme", resolve());
     systemThemeMql.addEventListener("change", systemThemeListener);
   }
 }
@@ -354,7 +351,12 @@ const MODEL_CATALOG = {
       cap: "Fast, capable multimodal — the sweet spot for tracking.",
       speed: "fast",
     },
-    { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", cap: "Cheapest; good for dense sampling.", speed: "fastest" },
+    {
+      id: "gemini-3.5-flash-lite",
+      name: "Gemini 3.5 Flash-Lite",
+      cap: "Cheapest; good for dense sampling.",
+      speed: "fastest",
+    },
   ],
   // Anthropic / OpenAI have no adapter yet (see IMPLEMENTED_PROVIDERS) — no models listed.
 } satisfies Record<string, ModelOpt[]>;
@@ -514,7 +516,8 @@ function buildGeneralPanel(): HTMLElement {
     ),
   );
   const intervalHint = el("div", "fl-rowhint");
-  intervalHint.style.cssText = "font-family:inherit; width:100%; color:var(--faint); margin-top:2px;";
+  intervalHint.style.cssText =
+    "font-family:inherit; width:100%; color:var(--faint); margin-top:2px;";
   intervalHint.textContent = s.trackingIntervalHint;
 
   defaults.body.append(destRow, destHint, intervalRow, intervalHint);
@@ -572,7 +575,13 @@ function buildRenderingPanel(): HTMLElement {
   const ends = el("div", "fl-range-ends");
   const readout = el("span");
   const qualityWord = (crf: number): string =>
-    crf <= 17 ? s.qualityNearLossless : crf <= 20 ? s.qualityHigh : crf <= 23 ? s.qualityGood : s.qualitySmaller;
+    crf <= 17
+      ? s.qualityNearLossless
+      : crf <= 20
+        ? s.qualityHigh
+        : crf <= 23
+          ? s.qualityGood
+          : s.qualitySmaller;
   const paintReadout = () => {
     readout.textContent = `CRF ${prefs.crf} · ${qualityWord(prefs.crf)}`;
   };
@@ -717,7 +726,8 @@ function buildRenderingPanel(): HTMLElement {
     writeStr(FONTS_DIR_KEY, fontsDirInput.value.trim());
   });
   const fontsDirHint = el("div", "fl-rowhint");
-  fontsDirHint.style.cssText = "font-family:inherit; width:100%; color:var(--faint); margin-top:2px;";
+  fontsDirHint.style.cssText =
+    "font-family:inherit; width:100%; color:var(--faint); margin-top:2px;";
   fontsDirHint.textContent = s.fontsDirHint;
 
   capBlock.body.append(capToggle, fontsDirRow, fontsDirHint);
@@ -860,40 +870,40 @@ function buildAiPanel(): HTMLElement {
       return;
     }
     for (const m of modelsFor(prefs.provider)) {
-    const card = el("div", m.id === prefs.model ? "fl-opt sel" : "fl-opt");
-    const radio = el("span", "radio");
-    const body = el("div", "fl-opt-body");
-    const top = el("div", "fl-opt-top");
-    const name = el("span", "fl-opt-name");
-    name.textContent = m.name;
-    top.append(name);
-    if (m.recommended) {
-      const badge = el("span", "fl-pill on");
-      badge.textContent = s.recommended;
-      top.append(badge);
-    }
-    const cap = el("div", "fl-opt-cap");
-    cap.textContent = m.cap;
-    const meta = el("div", "fl-opt-meta");
-    const speed = el("span", "fl-tag-speed");
-    speed.textContent = m.speed;
-    const cost = el("span", "fl-tag-cost");
-    // Only show a cost tag for a model we have a published rate for — never a
-    // misleading $0.0000 for an unpriced model.
-    if (priceForModel(m.id)) {
-      cost.innerHTML = `${fmtUsd(perFrameUsd(m.id))}/frame <span class="tier">· ~${fmtUsd(perRequestUsd(m.id))}/req</span>`;
-    }
-    meta.append(speed, cost);
-    body.append(top, cap, meta);
-    card.append(radio, body);
-    card.addEventListener("click", () => {
-      for (const c of Array.from(optList.children)) c.classList.remove("sel");
-      card.classList.add("sel");
-      prefs.model = m.id;
-      save();
-      paintCost();
-    });
-    optList.append(card);
+      const card = el("div", m.id === prefs.model ? "fl-opt sel" : "fl-opt");
+      const radio = el("span", "radio");
+      const body = el("div", "fl-opt-body");
+      const top = el("div", "fl-opt-top");
+      const name = el("span", "fl-opt-name");
+      name.textContent = m.name;
+      top.append(name);
+      if (m.recommended) {
+        const badge = el("span", "fl-pill on");
+        badge.textContent = s.recommended;
+        top.append(badge);
+      }
+      const cap = el("div", "fl-opt-cap");
+      cap.textContent = m.cap;
+      const meta = el("div", "fl-opt-meta");
+      const speed = el("span", "fl-tag-speed");
+      speed.textContent = m.speed;
+      const cost = el("span", "fl-tag-cost");
+      // Only show a cost tag for a model we have a published rate for — never a
+      // misleading $0.0000 for an unpriced model.
+      if (priceForModel(m.id)) {
+        cost.innerHTML = `${fmtUsd(perFrameUsd(m.id))}/frame <span class="tier">· ~${fmtUsd(perRequestUsd(m.id))}/req</span>`;
+      }
+      meta.append(speed, cost);
+      body.append(top, cap, meta);
+      card.append(radio, body);
+      card.addEventListener("click", () => {
+        for (const c of Array.from(optList.children)) c.classList.remove("sel");
+        card.classList.add("sel");
+        prefs.model = m.id;
+        save();
+        paintCost();
+      });
+      optList.append(card);
     }
   }
   renderModels();
@@ -933,7 +943,8 @@ function buildAiPanel(): HTMLElement {
     note.style.display = "";
     const interval = loadAutoTrackSettings().intervalSec || 0.75;
     const frames = Math.max(1, Math.round(20 / interval));
-    const model = models.find((m) => m.id === prefs.model) ?? models.find((m) => m.recommended) ?? models[0]!;
+    const model =
+      models.find((m) => m.id === prefs.model) ?? models.find((m) => m.recommended) ?? models[0]!;
     const trackCost = frames * perFrameUsd(model.id);
     noteText.innerHTML = `${s.costNote} ${interval.toFixed(2)}s ≈ <b>${frames} frames</b> ≈ <b>${fmtUsd(trackCost)}</b> with ${model.name}. The assistant adds about ~<b>${fmtUsd(perRequestUsd(model.id))}</b> per request.`;
   }
@@ -1152,11 +1163,31 @@ function buildAboutPanel(): HTMLElement {
 type PanelId = "general" | "rendering" | "ai" | "shortcuts" | "about";
 
 const NAV: { id: PanelId; icon: string; label: () => string; build: () => HTMLElement }[] = [
-  { id: "general", icon: ICON_GEAR, label: () => messages.settings.nav.general, build: buildGeneralPanel },
-  { id: "rendering", icon: ICON_FILM, label: () => messages.settings.nav.rendering, build: buildRenderingPanel },
+  {
+    id: "general",
+    icon: ICON_GEAR,
+    label: () => messages.settings.nav.general,
+    build: buildGeneralPanel,
+  },
+  {
+    id: "rendering",
+    icon: ICON_FILM,
+    label: () => messages.settings.nav.rendering,
+    build: buildRenderingPanel,
+  },
   { id: "ai", icon: ICON_SPARK, label: () => messages.settings.nav.ai, build: buildAiPanel },
-  { id: "shortcuts", icon: ICON_KEYBOARD, label: () => messages.settings.nav.shortcuts, build: buildShortcutsPanel },
-  { id: "about", icon: ICON_INFO, label: () => messages.settings.nav.about, build: buildAboutPanel },
+  {
+    id: "shortcuts",
+    icon: ICON_KEYBOARD,
+    label: () => messages.settings.nav.shortcuts,
+    build: buildShortcutsPanel,
+  },
+  {
+    id: "about",
+    icon: ICON_INFO,
+    label: () => messages.settings.nav.about,
+    build: buildAboutPanel,
+  },
 ];
 
 /** Show the Settings modal, landing on `panel` (default General). */

@@ -355,9 +355,7 @@ export function specToEditorState(spec: ClipSpec, dims: Dims): RehydratedClip {
   }
 
   // The working region the engine crops within, plus its origin in source px.
-  const region: Dims = contentMode
-    ? { width: contentBox.w, height: contentBox.h }
-    : dims;
+  const region: Dims = contentMode ? { width: contentBox.w, height: contentBox.h } : dims;
   const originX = contentMode ? contentBox.x : 0;
   const originY = contentMode ? contentBox.y : 0;
 

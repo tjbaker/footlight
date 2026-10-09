@@ -12,12 +12,7 @@
 
 import type { CommitOp } from "@assistant-types";
 import { specToEditorState } from "@manifest";
-import {
-  clampInOut,
-  clampTrimOut,
-  keyframeFromCommit,
-  type EditorState,
-} from "./editor-store.js";
+import { clampInOut, clampTrimOut, keyframeFromCommit, type EditorState } from "./editor-store.js";
 
 /** One UI side effect the editor must run after a commit, in list order. */
 export type CommitEffect =
@@ -63,7 +58,12 @@ export function applyCommitToState(state: EditorState, commit: CommitOp): Commit
       // content-crop UI is currently inert in the editor; round-trip the spec
       // string through the manifest restorer so the box + mode are consistent.
       const r = specToEditorState(
-        { source_file: state.source, in_point: "0", out_point: "0", content_crop: commit.contentCrop },
+        {
+          source_file: state.source,
+          in_point: "0",
+          out_point: "0",
+          content_crop: commit.contentCrop,
+        },
         state.dims!,
       );
       state.contentBox = r.contentBox;
@@ -91,15 +91,16 @@ export function applyCommitToState(state: EditorState, commit: CommitOp): Commit
       // render, so clear it so this fixed offset is what the user sees.
       state.cropPath = null;
       const r = specToEditorState(
-        { source_file: state.source, in_point: "0", out_point: "0", crop_offset: commit.cropOffset },
+        {
+          source_file: state.source,
+          in_point: "0",
+          out_point: "0",
+          crop_offset: commit.cropOffset,
+        },
         state.dims!,
       );
       state.cropBox = r.cropBox;
-      return ok([
-        { kind: "refreshCropReadout" },
-        { kind: "drawOverlay" },
-        { kind: "refreshIO" },
-      ]);
+      return ok([{ kind: "refreshCropReadout" }, { kind: "drawOverlay" }, { kind: "refreshIO" }]);
     }
     case "trackSubject": {
       // Same engine as the Track-subject tab: adopt the eased crop path.

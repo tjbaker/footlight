@@ -27,12 +27,7 @@ import { serializeManifestJSON } from "@manifest";
 import { platform, platformName } from "./platform/index.js";
 import { initTheme } from "./settings.js";
 import { errMsg } from "./editor-util.js";
-import {
-  contentOrigin,
-  currentRegion,
-  cropWindowSpec,
-  currentOffset,
-} from "./editor-framing.js";
+import { contentOrigin, currentRegion, cropWindowSpec, currentOffset } from "./editor-framing.js";
 import { createEditorStore } from "./editor-store.js";
 import { createEditorActions } from "./editor-actions.js";
 import { createTransport } from "./transport.js";

@@ -37,12 +37,8 @@ const localStorageMock = {
   localStorageMock;
 
 // Import AFTER the mock is installed so module-eval-time access (if any) is safe.
-const {
-  easedCropXAt,
-  loadAutoTrackSettings,
-  saveAutoTrackSettings,
-  DEFAULT_AUTOTRACK,
-} = await import("../src/autotrack.js");
+const { easedCropXAt, loadAutoTrackSettings, saveAutoTrackSettings, DEFAULT_AUTOTRACK } =
+  await import("../src/autotrack.js");
 
 const kf = (t: number, x: number): CropPathKeyframe => ({ t, x });
 
@@ -163,10 +159,7 @@ describe("loadAutoTrackSettings / saveAutoTrackSettings", () => {
     );
     expect(loadAutoTrackSettings().intervalSec).toBe(DEFAULT_AUTOTRACK.intervalSec);
 
-    localStorageMock.setItem(
-      "footlight.autotrack",
-      JSON.stringify({ intervalSec: "fast" }),
-    );
+    localStorageMock.setItem("footlight.autotrack", JSON.stringify({ intervalSec: "fast" }));
     expect(loadAutoTrackSettings().intervalSec).toBe(DEFAULT_AUTOTRACK.intervalSec);
   });
 

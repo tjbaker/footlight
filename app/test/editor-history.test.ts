@@ -44,15 +44,13 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/platform/index.js", async () =>
-  (await import("./helpers/platform-mock.js")).platformModule);
+vi.mock(
+  "../src/platform/index.js",
+  async () => (await import("./helpers/platform-mock.js")).platformModule,
+);
 
 import { platformMocks } from "./helpers/platform-mock.js";
-import {
-  installDomShims,
-  resetHarness,
-  flush,
-} from "./helpers/editor-harness.js";
+import { installDomShims, resetHarness, flush } from "./helpers/editor-harness.js";
 
 installDomShims();
 import type { HistoryEntry } from "../src/platform/types.js";
@@ -128,7 +126,6 @@ const { mountEditor } = await import("../src/editor.js");
 const { messages } = await import("../src/i18n/index.js");
 const m = messages.editor;
 
-
 describe("editor render-history modal (jsdom)", () => {
   beforeEach(() => {
     resetHarness();
@@ -187,8 +184,8 @@ describe("editor render-history modal (jsdom)", () => {
     const { modal } = await mountAndOpenHistory();
     // Locate each row by its name, then read the readout's `kf` value.
     const rowFor = (name: string): HTMLElement => {
-      const row = [...modal.querySelectorAll<HTMLElement>(".fl-hist")].find((r) =>
-        r.querySelector(".fl-hist-top .nm")?.textContent === name,
+      const row = [...modal.querySelectorAll<HTMLElement>(".fl-hist")].find(
+        (r) => r.querySelector(".fl-hist-top .nm")?.textContent === name,
       );
       expect(row, `row for ${name}`).toBeTruthy();
       return row!;
@@ -208,8 +205,8 @@ describe("editor render-history modal (jsdom)", () => {
 
   it("groups entries under Today / Yesterday day-dividers", async () => {
     const { modal } = await mountAndOpenHistory();
-    const dividers = [...modal.querySelectorAll(".fl-hist-day")].map((d) =>
-      d.querySelector("span")?.textContent,
+    const dividers = [...modal.querySelectorAll(".fl-hist-day")].map(
+      (d) => d.querySelector("span")?.textContent,
     );
     expect(dividers).toContain(m.history.today);
     expect(dividers).toContain(m.history.yesterday);
