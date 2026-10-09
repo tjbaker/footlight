@@ -13,9 +13,9 @@
 
 import { describe, it, expect, beforeAll } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { serializeManifestJSON, type ClipSpec } from "../src/manifest.js";
@@ -440,5 +440,33 @@ describe("render flag validation (issue: fail fast, not per-clip at ffmpeg time)
       expect(code, ok.join(" ")).toBe(0);
       expect(stderr).toBe("");
     }
+  });
+});
+
+describe.skipIf(process.platform === "win32")("render when ffmpeg dies by signal", () => {
+  it("counts the clip as failed, names the signal, and exits non-zero", () => {
+    // Fake ffprobe (valid 1920x1080 probe) and an ffmpeg that SIGKILLs itself
+    // (OOM-killer stand-in) on PATH; the source only has to exist on disk.
+    const dir = tmp();
+    const bin = join(dir, "bin");
+    mkdirSync(bin);
+    const probe = JSON.stringify({
+      streams: [{ width: 1920, height: 1080 }],
+      format: { duration: "10" },
+    });
+    writeFileSync(join(bin, "ffprobe"), `#!/bin/sh\necho '${probe}'\n`, { mode: 0o755 });
+    writeFileSync(join(bin, "ffmpeg"), "#!/bin/sh\nkill -9 $$\n", { mode: 0o755 });
+    const src = join(dir, "src.mp4");
+    writeFileSync(src, "");
+    const manifest = join(dir, "m.csv");
+    writeFileSync(manifest, `source_file,in_point,out_point\n${src},0,1\n`, "utf8");
+
+    const { code, stdout, stderr } = runCli(["render", manifest, "--outdir", join(dir, "out")], {
+      env: { PATH: `${bin}${delimiter}${process.env.PATH ?? ""}` },
+    });
+
+    expect(code).toBe(1);
+    expect(stderr).toContain("FAILED — ffmpeg killed by SIGKILL");
+    expect(stdout).toContain("Done: 0/1 clips, 1 failed/skipped");
   });
 });
