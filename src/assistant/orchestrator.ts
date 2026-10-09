@@ -18,6 +18,7 @@ import type { Box, Dims } from "../manifest.js";
 import type { ResolvedModels } from "../model.js";
 import type { TrackSample } from "../providers/types.js";
 import type { AssistantReply, Grounding, ProposedAction, ToolName, Usage } from "./types.js";
+import { numArg, optStrArg, strArg } from "./args.js";
 import { estimateCostUsd } from "./cost.js";
 import {
   TOOLS,
@@ -195,7 +196,7 @@ async function materialize(
   }
   if (call.name === "suggestCropForFrame") {
     const t = numArg(call.args, "t");
-    const hint = optStr(call.args, "subjectHint");
+    const hint = optStrArg(call.args, "subjectHint");
     const box = await vision.suggestCropForFrame(
       hint !== undefined ? { t, subjectHint: hint } : { t },
       ctx,
@@ -203,28 +204,9 @@ async function materialize(
     return buildSuggestCropAction(t, box, ctx.region);
   }
   if (call.name === "trackSubject") {
-    const subjectHint = reqStr(call.args, "subjectHint");
+    const subjectHint = strArg(call.args, "subjectHint");
     const samples = await vision.trackSubject({ subjectHint }, ctx);
     return buildTrackSubjectAction(samples, ctx.region);
   }
   throw new Error(`unknown tool "${call.name}"`);
-}
-
-function numArg(args: Record<string, unknown>, key: string): number {
-  const v = args[key];
-  if (typeof v !== "number" || !Number.isFinite(v)) {
-    throw new Error(`"${key}" must be a finite number`);
-  }
-  return v;
-}
-function reqStr(args: Record<string, unknown>, key: string): string {
-  const v = args[key];
-  if (typeof v !== "string" || v.length === 0) {
-    throw new Error(`"${key}" must be a non-empty string`);
-  }
-  return v;
-}
-function optStr(args: Record<string, unknown>, key: string): string | undefined {
-  const v = args[key];
-  return typeof v === "string" && v.length > 0 ? v : undefined;
 }
