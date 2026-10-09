@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.8.2](https://github.com/tjbaker/footlight/compare/footlight-v0.8.1...footlight-v0.8.2) (2026-10-09)
+
+
+### Bug Fixes
+
+* **app:** give each native temp file a unique, auto-deleted path ([#293](https://github.com/tjbaker/footlight/issues/293)) ([1c01ee6](https://github.com/tjbaker/footlight/commit/1c01ee6403c8ed2747c35783030edc40e4831e42))
+* **app:** keep global hotkeys out of selects, buttons and open modals ([#288](https://github.com/tjbaker/footlight/issues/288)) ([c20058f](https://github.com/tjbaker/footlight/commit/c20058ff9d575c0c1347ea51501577361e8ec6e9))
+* **app:** keep the current source when a history entry's source fails to load ([#287](https://github.com/tjbaker/footlight/issues/287)) ([1a2cf4f](https://github.com/tjbaker/footlight/commit/1a2cf4f42094af31483c02f54910e92212acdc37))
+* **app:** restrict the dev server to loopback and same-machine origins ([#282](https://github.com/tjbaker/footlight/issues/282)) ([9fb62bb](https://github.com/tjbaker/footlight/commit/9fb62bb81eb505fe12707d4770adefc2308c402d))
+* **app:** translate the Activity window and remaining hard-coded strings ([#301](https://github.com/tjbaker/footlight/issues/301)) ([5c744a5](https://github.com/tjbaker/footlight/commit/5c744a5aad1006040eec43b1ba8b18e26cd32be6))
+* **engine:** accept BOM-prefixed and spaced CSV headers; fail fast on missing columns ([#286](https://github.com/tjbaker/footlight/issues/286)) ([846df30](https://github.com/tjbaker/footlight/commit/846df30726c9d08c66408a4eff44aceb2a445c81))
+* **engine:** escape caption and fontsdir paths for both filtergraph levels ([#284](https://github.com/tjbaker/footlight/issues/284)) ([6188880](https://github.com/tjbaker/footlight/commit/61888803413343964ff27a499e197913654e36ea))
+* **engine:** reject malformed timestamps in parseTimestamp and its Rust mirror ([#292](https://github.com/tjbaker/footlight/issues/292)) ([c4d695b](https://github.com/tjbaker/footlight/commit/c4d695b23f873bd0d7ec25961ed2152d6b0a59e2))
+* **engine:** treat an ffmpeg killed by a signal as a failure ([#283](https://github.com/tjbaker/footlight/issues/283)) ([b172f1b](https://github.com/tjbaker/footlight/commit/b172f1b20c43016b50d3b73312980f167745fcf1))
+
+
+### Documentation
+
+* add SECURITY.md with private vulnerability reporting policy ([#280](https://github.com/tjbaker/footlight/issues/280)) ([1cd80ae](https://github.com/tjbaker/footlight/commit/1cd80ae83ffbb9c664a6517f987ad4b5d90998a2))
+
+
+### Build System
+
+* clean npm tarball with prepack build, NOTICE, and no sourcemaps ([#297](https://github.com/tjbaker/footlight/issues/297)) ([a0b60f2](https://github.com/tjbaker/footlight/commit/a0b60f28e44eec69487a854cd8109fbc5b073bfb))
+
 ## [0.8.1](https://github.com/tjbaker/footlight/compare/footlight-v0.8.0...footlight-v0.8.1) (2026-06-13)
 
 
