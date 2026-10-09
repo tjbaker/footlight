@@ -467,7 +467,7 @@ describe("render option parity (tauri invoke args vs web query string)", () => {
     await tauriPlatform.render("[]", opts);
     const tauriArgs = invokeMock.mock.calls[0]![1] as Record<string, unknown>;
 
-    const fetchMock = vi.fn(async () => ({
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => ({
       ok: true,
       status: 200,
       json: async () => ({ ok: true, log: "" }),
