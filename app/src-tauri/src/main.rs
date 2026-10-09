@@ -294,31 +294,45 @@ fn even_f(n: f64) -> i64 {
     (n - (n % 2.0)) as i64
 }
 
-/// Parse `HH:MM:SS`, `MM:SS`, or plain seconds into float seconds.
-/// HAND MIRROR of core.ts `parseTimestamp`.
+/// One `:`-separated timestamp part: unsigned decimal digits with an optional
+/// `.fraction` (`^\d+(\.\d+)?$`). HAND MIRROR of core.ts `TIMESTAMP_PART`.
+fn is_timestamp_part(part: &str) -> bool {
+    let (int, frac) = match part.split_once('.') {
+        Some((i, f)) => (i, Some(f)),
+        None => (part, None),
+    };
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    digits(int) && frac.map_or(true, digits)
+}
+
+/// Parse `HH:MM:SS`, `MM:SS`, or plain seconds into float seconds. Each part
+/// must be unsigned decimal (no empty parts, signs, hex, exponents, inf/NaN) and
+/// the result finite and ≥ 0. HAND MIRROR of core.ts `parseTimestamp`; both are
+/// pinned to test/fixtures/timestamps.json.
 fn parse_timestamp(value: &str) -> Result<f64, String> {
     let value = value.trim();
     if value.is_empty() {
         return Err("empty timestamp".into());
     }
-    if value.contains(':') {
-        let parts: Vec<&str> = value.split(':').collect();
-        if parts.len() > 3 {
+    let parts: Vec<&str> = value.split(':').collect();
+    if parts.len() > 3 {
+        return Err(format!("bad timestamp: {value:?}"));
+    }
+    let mut secs = 0.0;
+    for part in parts {
+        let part = part.trim();
+        if !is_timestamp_part(part) {
             return Err(format!("bad timestamp: {value:?}"));
         }
-        let mut secs = 0.0;
-        for part in parts {
-            let n: f64 = part
-                .trim()
-                .parse()
-                .map_err(|_| format!("bad timestamp: {value:?}"))?;
-            secs = secs * 60.0 + n;
-        }
-        return Ok(secs);
+        let n: f64 = part
+            .parse()
+            .map_err(|_| format!("bad timestamp: {value:?}"))?;
+        secs = secs * 60.0 + n;
     }
-    value
-        .parse::<f64>()
-        .map_err(|_| format!("bad timestamp: {value:?}"))
+    if !secs.is_finite() {
+        return Err(format!("bad timestamp: {value:?}"));
+    }
+    Ok(secs)
 }
 
 /// Parse a `"W:H:X:Y"` content region (strip letterbox bars), or None.
@@ -1960,6 +1974,47 @@ mod tests {
         assert_eq!(names, vec!["a.ttf", "b.OTF", "c.ttc"]);
 
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // --- parse_timestamp (issue #256) --------------------------------------
+
+    /// The SAME accept/reject fixtures test/engine.test.ts runs against
+    /// core.ts `parseTimestamp` — read from the shared JSON so drift fails here.
+    fn timestamp_fixtures() -> serde_json::Value {
+        serde_json::from_str(include_str!("../../../test/fixtures/timestamps.json")).unwrap()
+    }
+
+    #[test]
+    fn parse_timestamp_accepts_shared_fixtures() {
+        let fx = timestamp_fixtures();
+        let accept = fx["accept"].as_array().unwrap();
+        assert!(!accept.is_empty());
+        for case in accept {
+            let input = case[0].as_str().unwrap();
+            let want = case[1].as_f64().unwrap();
+            assert_eq!(parse_timestamp(input), Ok(want), "input {input:?}");
+        }
+    }
+
+    #[test]
+    fn parse_timestamp_rejects_shared_fixtures() {
+        let fx = timestamp_fixtures();
+        let reject = fx["reject"].as_array().unwrap();
+        assert!(!reject.is_empty());
+        for case in reject {
+            let input = case.as_str().unwrap();
+            let err = parse_timestamp(input).expect_err(input);
+            assert!(err.contains("timestamp"), "input {input:?} -> {err}");
+        }
+    }
+
+    /// Mirrors test/engine.test.ts "names the offending value in the error".
+    #[test]
+    fn parse_timestamp_names_offending_value() {
+        assert_eq!(
+            parse_timestamp("1::30"),
+            Err("bad timestamp: \"1::30\"".to_string())
+        );
     }
 
     // --- cover export (issue #166) -----------------------------------------

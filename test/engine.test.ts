@@ -1,5 +1,6 @@
 // Copyright 2026 Trevor Baker, all rights reserved.
 // SPDX-License-Identifier: Apache-2.0
+import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 
 import {
@@ -48,6 +49,23 @@ describe("parseTimestamp", () => {
     expect(() => parseTimestamp("")).toThrow();
     expect(() => parseTimestamp("1:2:3:4")).toThrow();
     expect(() => parseTimestamp("abc")).toThrow();
+  });
+
+  // Shared with the Rust `parse_timestamp` mirror (include_str! in main.rs).
+  const fixtures = JSON.parse(
+    readFileSync(new URL("./fixtures/timestamps.json", import.meta.url), "utf8"),
+  ) as { accept: [string, number][]; reject: string[] };
+
+  it.each(fixtures.accept)("accepts %j as %d seconds", (input, secs) => {
+    expect(parseTimestamp(input)).toBe(secs);
+  });
+
+  it.each(fixtures.reject.map((r) => [r]))("rejects %j", (input) => {
+    expect(() => parseTimestamp(input)).toThrow(/timestamp/);
+  });
+
+  it("names the offending value in the error", () => {
+    expect(() => parseTimestamp("1::30")).toThrow('bad timestamp: "1::30"');
   });
 });
 
@@ -281,6 +299,15 @@ describe("buildFfmpegArgs golden cases", () => {
         [1920, 1080],
       ),
     ).toThrow();
+  });
+
+  it("rejects a negative or non-decimal in_point instead of emitting -ss -5.000 (#256)", () => {
+    const row = { source_file: "in.mp4", out_point: "10", crop_offset: "center" };
+    expect(() => build({ ...row, in_point: "-5" }, [1920, 1080])).toThrow(/bad timestamp/);
+    expect(() => build({ ...row, in_point: "0x1" }, [1920, 1080])).toThrow(/bad timestamp/);
+    expect(() =>
+      build({ ...row, in_point: "0", crop_offset: "0=center; 1::30=left" }, [1920, 1080]),
+    ).toThrow(/bad timestamp/);
   });
 });
 
