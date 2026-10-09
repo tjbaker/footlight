@@ -90,9 +90,42 @@ function run(command, args, { collectStdoutBinary = false } = {}) {
   });
 }
 
-/** Permissive CORS for localhost dev. */
-function cors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** Hostname of a `Host` header or origin URL, or null if unparseable. */
+function hostnameOf(hostOrOrigin) {
+  try {
+    const u = new URL(hostOrOrigin.includes("://") ? hostOrOrigin : `http://${hostOrOrigin}`);
+    return u.hostname;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Only the local machine may drive this server: it reads arbitrary paths, writes
+ * render output and hands out the BYOK key. Binding to loopback keeps the network
+ * out; this keeps OTHER WEBSITES in the user's browser out:
+ *  - `Host` must be loopback (defeats DNS rebinding, where evil.example resolves
+ *    to 127.0.0.1 and the browser treats the server as same-origin);
+ *  - a present `Origin` must be loopback (any port, so Vite on :5173/:5174 works);
+ *  - an Origin-less request must not be `Sec-Fetch-Site: cross-site` (covers
+ *    no-cors `<img>`/`<video>` GETs, e.g. one that would mkdir via /check-outdir).
+ * Non-browser clients (curl, tests) send neither header and are allowed.
+ */
+export function isAllowedRequest(headers) {
+  const host = headers.host;
+  if (!host || !LOOPBACK_HOSTNAMES.has(hostnameOf(host))) return false;
+  const origin = headers.origin;
+  if (origin !== undefined) return LOOPBACK_HOSTNAMES.has(hostnameOf(origin));
+  return headers["sec-fetch-site"] !== "cross-site";
+}
+
+/** CORS for the local Vite frontend: echo the (already vetted) loopback origin. */
+function cors(req, res) {
+  res.setHeader("Vary", "Origin");
+  if (req.headers.origin === undefined) return;
+  res.setHeader("Access-Control-Allow-Origin", req.headers.origin);
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
@@ -555,7 +588,8 @@ export function createRequestListener({
   const session = sessionPath ?? resolve(repoRoot, ".footlight-session.json");
 
   return async (req, res) => {
-    cors(res);
+    if (!isAllowedRequest(req.headers)) return sendText(res, 403, "forbidden");
+    cors(req, res);
     if (req.method === "OPTIONS") {
       res.writeHead(204);
       res.end();
@@ -701,7 +735,8 @@ export function createDevServer(config = {}) {
 // i.e. `npm run dev:server`) — importing this module must NOT bind the port.
 const runAsScript = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (runAsScript) {
-  createDevServer().listen(PORT, () => {
+  // Loopback only — never reachable from the network.
+  createDevServer().listen(PORT, "127.0.0.1", () => {
     console.log(`Footlight dev backend listening on http://localhost:${PORT}`);
     console.log(`  CLI: ${CLI_PATH}`);
   });
