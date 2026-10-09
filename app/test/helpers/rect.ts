@@ -5,8 +5,6 @@
  * has no layout engine, so every `getBoundingClientRect()` is all-zero and
  * handlers that divide by `rect.width` early-return; pinning an element to a
  * fixed rect at the origin makes the px↔value mapping deterministic.
- * (editor-timeline-drag.test.ts predates this helper and carries its own
- * private copy it may not rewrite history for; new suites use this one.)
  */
 
 /** A `width`×`height` DOMRect at the origin. */

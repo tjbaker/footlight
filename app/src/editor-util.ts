@@ -116,11 +116,6 @@ export function round3(n: number): number {
   return Math.round(n * 1000) / 1000;
 }
 
-export function roundEvenLocal(n: number): number {
-  const i = Math.round(n);
-  return i - (i % 2);
-}
-
 export function shorten(p: string): string {
   const base = p.split(/[\\/]/).pop() ?? p;
   return base.length > 28 ? base.slice(0, 25) + "…" : base;

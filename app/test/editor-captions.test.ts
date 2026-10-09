@@ -53,38 +53,18 @@ import {
   installDomShims,
   resetHarness,
   flush,
-  pressKey,
   setValue,
+  mountLoadAndWindow,
 } from "./helpers/editor-harness.js";
 
 installDomShims();
 // Import AFTER the mocks/shims above are installed.
 const { mountEditor } = await import("../src/editor.js");
 
-/** Mount, load a 1920×1080 source, and mark a 0→0.5s In/Out window so `addClip`
- *  passes its guards. Returns the root + the caption section element. */
-async function mountLoadAndWindow(): Promise<{ root: HTMLElement; capSect: HTMLElement }> {
-  const root = document.createElement("div");
-  document.body.append(root);
-  mountEditor(root);
-  await flush();
-
-  const srcInput = root.querySelector<HTMLInputElement>(".fl-field.path input");
-  expect(srcInput).not.toBeNull();
-  srcInput!.value = "/abs/path/to/clip.mp4";
-  srcInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  await flush();
-
-  // Mark In at t=0, seek forward, mark Out — so addClip's In/Out guards pass.
-  pressKey("i");
-  await flush();
-  pressKey("Escape");
-  for (let i = 0; i < 5; i++) {
-    pressKey("ArrowRight", { shiftKey: true });
-    await flush(2);
-  }
-  pressKey("o");
-  await flush();
+/** The shared `mountLoadAndWindow` (load a 1920×1080 source + a 0→0.5s In/Out
+ *  window so `addClip` passes its guards), plus the caption section element. */
+async function mountWithCaptions(): Promise<{ root: HTMLElement; capSect: HTMLElement }> {
+  const root = await mountLoadAndWindow(mountEditor);
 
   // The caption section is the .fl-sect whose header text is "Captions".
   let capSect: HTMLElement | null = null;
@@ -144,7 +124,7 @@ describe("editor caption controls (jsdom)", () => {
   });
 
   it("typing hook + title text reflects into the emitted manifest", async () => {
-    const { root, capSect } = await mountLoadAndWindow();
+    const { root, capSect } = await mountWithCaptions();
     const { hook, title } = captionTextInputs(capSect);
 
     setValue(hook, "MY HOOK");
@@ -175,7 +155,7 @@ describe("editor caption controls (jsdom)", () => {
   });
 
   it("multiline hook/title (Enter = line break) survives into the emitted manifest", async () => {
-    const { root, capSect } = await mountLoadAndWindow();
+    const { root, capSect } = await mountWithCaptions();
     const { hook, title } = captionTextInputs(capSect);
 
     setValue(hook, "BIG\nNIGHT");
@@ -199,7 +179,7 @@ describe("editor caption controls (jsdom)", () => {
   });
 
   it("bold / italic / underline / shadow / box toggles flip their active class", async () => {
-    const { capSect } = await mountLoadAndWindow();
+    const { capSect } = await mountWithCaptions();
 
     for (const text of ["B", "I", "U", "Shadow", "Box"]) {
       const btn = toggleByText(capSect, text);
@@ -212,7 +192,7 @@ describe("editor caption controls (jsdom)", () => {
   });
 
   it("the Box toggle reveals/hides the box-colour row", async () => {
-    const { capSect } = await mountLoadAndWindow();
+    const { capSect } = await mountWithCaptions();
 
     const { row: boxColorRow } = colorRowByLabel(capSect, "Box color");
     // Hidden by default (box off).
@@ -226,7 +206,7 @@ describe("editor caption controls (jsdom)", () => {
   });
 
   it("fill + outline colour swatches update their hex readout", async () => {
-    const { capSect } = await mountLoadAndWindow();
+    const { capSect } = await mountWithCaptions();
 
     const fill = colorRowByLabel(capSect, "Fill");
     expect(fill.hex.textContent).toBe("#FFFFFF"); // default
@@ -240,7 +220,7 @@ describe("editor caption controls (jsdom)", () => {
   });
 
   it("placement selects + non-default style flow into the emitted caption object", async () => {
-    const { root, capSect } = await mountLoadAndWindow();
+    const { root, capSect } = await mountWithCaptions();
 
     // Caption text is required for the engine to emit hook/text_position/caption.
     const { hook } = captionTextInputs(capSect);

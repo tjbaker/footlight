@@ -37,22 +37,7 @@ import {
   resolveThemeMode,
 } from "./settings-util.js";
 import { APP_NAME, APP_VERSION, LICENSE, REPO_URL, ISSUES_NEW_URL } from "./version.js";
-
-// ---- tiny DOM builders (self-contained; mirror editor.ts's el()/button()) ----
-
-function el(tag: string, cls?: string): HTMLElement {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  return e;
-}
-
-function button(label: string, cls?: string, onClick?: () => void): HTMLButtonElement {
-  const b = document.createElement("button");
-  b.textContent = label;
-  if (cls) b.className = cls;
-  if (onClick) b.addEventListener("click", onClick);
-  return b;
-}
+import { el, button } from "./ui.js";
 
 /** A `<span class="fl-set-secth">` heading + optional `.fl-set-secsub` sub. */
 function panelHeader(title: string, sub?: string): HTMLElement {

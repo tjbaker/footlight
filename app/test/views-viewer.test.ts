@@ -31,6 +31,7 @@
 /** @vitest-environment jsdom */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { computeCrop } from "@core";
 import type { GhostPreview } from "@assistant-types";
 import { createEditorStore, type EditorState } from "../src/editor-store.js";
 import { currentRegion, contentOrigin } from "../src/editor-framing.js";
@@ -138,6 +139,18 @@ describe("initCropBox", () => {
     view.initCropBox();
     // ch = roundEven(1080 / (9/16)) = 1920, y = floor((2400 − 1920) / 2) = 240.
     expect(store.state.cropBox).toEqual({ x: 0, y: 240, w: 1080, h: 1920 });
+  });
+
+  it("seeds exactly the engine's computeCrop box for an odd-height source (#259)", () => {
+    const { store, view } = makeViewer({ dims: { width: 1920, height: 1081 } });
+    view.initCropBox();
+    // The drawn box must be what the engine renders — reuse computeCrop, never
+    // restate it: even height (1080, not 1081) and even x.
+    const { x, y, cw, ch } = computeCrop(1920, 1081, "center");
+    expect(store.state.cropBox).toEqual({ x, y, w: cw, h: ch });
+    expect(store.state.cropBox!.h).toBe(1080);
+    // The content box still covers the full (odd) frame.
+    expect(store.state.contentBox).toEqual({ x: 0, y: 0, w: 1920, h: 1081 });
   });
 
   it("is a no-op before dims are known", () => {
