@@ -1361,8 +1361,8 @@ export function parseScenes(stderr: string): number[] {
 // dynamic moments correctly, where raw RMS mis-ranks bright vs. low-frequency
 // content of equal energy. Per-frame `M:` LUFS values are parsed from ebur128's
 // log, mapped to 0..1 over a fixed floor/ceiling, and bucketed across the
-// duration. A raw-RMS path (`loudnessArgs` + `bucketLoudness`) is kept as a
-// simpler, perceptually-weaker FALLBACK. The bar-rendering color lerp, the swell
+// duration. The same decode also emits raw PCM for a raw-RMS envelope
+// (`bucketLoudness`) that feeds the swell detector. The bar-rendering color lerp, the swell
 // heuristic's *relative* thresholds, and the chip UI live elsewhere; this module
 // owns only the numbers.
 //
@@ -1381,34 +1381,13 @@ export const LUFS_FLOOR = -40;
 export const LUFS_CEIL = -5;
 
 /**
- * ffmpeg args to measure perceived loudness with the EBU R128 `ebur128` filter,
- * emitting per-frame momentary-loudness lines to the LOG (stderr) while
- * discarding A/V output (`-f null -`). `-loglevel verbose` is REQUIRED — ebur128
- * prints only its end-of-run Summary at the default `info` level; the per-frame
- * `[Parsed_ebur128…] t: … M:<LUFS> …` lines (≈10/sec) appear at verbose.
- * `-nostats` keeps the periodic progress line out. Collect stderr as TEXT and
- * pass it to `parseEbur128Momentary`.
- */
-export function loudnessEbur128Args(source: string): string[] {
-  return [
-    "-hide_banner",
-    "-nostats",
-    "-loglevel",
-    "verbose",
-    "-i",
-    source,
-    "-af",
-    "ebur128=metadata=1",
-    "-f",
-    "null",
-    "-",
-  ];
-}
-
-/**
  * ffmpeg args for the production loudness pass — ONE decode yielding BOTH signals
  * the timeline needs (the `ebur128` analysis filter passes audio through, so we
- * can log LUFS *and* emit PCM from the same run):
+ * can log LUFS *and* emit PCM from the same run). `-loglevel verbose` is REQUIRED
+ * — ebur128 prints only its end-of-run Summary at the default `info` level; the
+ * per-frame `[Parsed_ebur128…] t: … M:<LUFS> …` lines (≈10/sec) appear at
+ * verbose. `-nostats` keeps the periodic progress line out. `-ac 1 -ar 8000` is
+ * plenty for an energy envelope (loudness over time, not fidelity).
  *   • stderr — per-frame momentary LUFS (`parseEbur128Momentary` → `bucketLufs`),
  *     the *perceptual* envelope for the waveform BARS;
  *   • stdout — mono 8 kHz `f32le` PCM (`bucketLoudness`), the raw-energy RMS
@@ -1490,29 +1469,40 @@ export function bucketLufs(lufs: number[], buckets: number = LOUDNESS_BUCKETS): 
 }
 
 /**
- * FALLBACK path (perceptually weaker than `loudnessEbur128Args`; use only when
- * ebur128 is unavailable). ffmpeg args to decode a source to raw mono PCM float
- * samples on stdout, for RMS bucketing. `-ac 1` downmixes to mono, `-ar 8000` is
- * plenty for an energy envelope (we only need loudness over time, not fidelity),
- * and `-f f32le -` emits little-endian 32-bit floats to stdout. Collect stdout as
- * BINARY and read it as a `Float32Array` (mind 4-byte alignment), then
- * `bucketLoudness`.
+ * The ONE RMS-envelope builder behind `bucketLoudness` and `onsetEnvelope`:
+ * the RMS of each of `windows` windows of `samples` (window k spans
+ * [bound(k), bound(k+1)); an empty window → 0), then max-normalized to 0..1
+ * (max=0 → all zeros, unnormalized). `decimals`, when given, rounds each
+ * normalized value to that many places.
  */
-export function loudnessArgs(source: string): string[] {
-  return [
-    "-hide_banner",
-    "-loglevel",
-    "error",
-    "-i",
-    source,
-    "-ac",
-    "1",
-    "-ar",
-    "8000",
-    "-f",
-    "f32le",
-    "-",
-  ];
+function rmsEnvelope(
+  samples: Float32Array,
+  windows: number,
+  bound: (k: number) => number,
+  decimals?: number,
+): number[] {
+  const out = new Array<number>(windows).fill(0);
+  for (let k = 0; k < windows; k++) {
+    const start = bound(k);
+    const end = bound(k + 1);
+    let sumSq = 0;
+    for (let i = start; i < end; i++) {
+      const s = samples[i]!;
+      sumSq += s * s;
+    }
+    const count = end - start;
+    out[k] = count > 0 ? Math.sqrt(sumSq / count) : 0;
+  }
+
+  let max = 0;
+  for (const v of out) if (v > max) max = v;
+  if (max <= 0) return out;
+  const scale = decimals === undefined ? undefined : 10 ** decimals;
+  for (let k = 0; k < windows; k++) {
+    const v = out[k]! / max;
+    out[k] = scale === undefined ? v : Math.round(v * scale) / scale;
+  }
+  return out;
 }
 
 /**
@@ -1520,36 +1510,17 @@ export function loudnessArgs(source: string): string[] {
  * the RMS of each window, then normalize the whole array to 0..1 by dividing by
  * the max (guarding max=0 → all zeros). Returns an array of length `buckets`.
  *
- * Pure: pass a `Float32Array` (e.g. from the f32le stdout of `loudnessArgs`) and
- * a bucket count (default `LOUDNESS_BUCKETS`). Empty input yields all zeros.
+ * Pure: pass a `Float32Array` (e.g. from the f32le stdout of
+ * `loudnessCombinedArgs`) and a bucket count (default `LOUDNESS_BUCKETS`).
+ * Empty input yields all zeros.
  */
 export function bucketLoudness(
   samples: Float32Array,
   buckets: number = LOUDNESS_BUCKETS,
 ): number[] {
-  const out = new Array<number>(buckets).fill(0);
-  const n = samples.length;
   if (buckets <= 0) return [];
-  if (n === 0) return out;
-
-  for (let b = 0; b < buckets; b++) {
-    const start = Math.floor((b * n) / buckets);
-    const end = Math.floor(((b + 1) * n) / buckets);
-    let sumSq = 0;
-    let count = 0;
-    for (let i = start; i < end; i++) {
-      const s = samples[i]!;
-      sumSq += s * s;
-      count++;
-    }
-    out[b] = count > 0 ? Math.sqrt(sumSq / count) : 0;
-  }
-
-  let max = 0;
-  for (const v of out) if (v > max) max = v;
-  if (max <= 0) return out;
-  for (let b = 0; b < buckets; b++) out[b] = out[b]! / max;
-  return out;
+  const n = samples.length;
+  return rmsEnvelope(samples, buckets, (b) => Math.floor((b * n) / buckets));
 }
 
 // Tunable thresholds for the swell heuristic — kept named so they are easy to
@@ -1582,6 +1553,26 @@ export const SWELL_MAX_SPAN_SEC = 6;
 export const SWELL_MERGE_SEC = 2;
 
 /**
+ * Centered moving average with a half-window of `halfWindow` entries each side
+ * (truncated at the edges), shared by `detectSwells` and `detectOnsets`.
+ */
+function movingAverage(values: number[], halfWindow: number): number[] {
+  const n = values.length;
+  const w = Math.max(0, Math.floor(halfWindow));
+  const smooth = new Array<number>(n);
+  for (let i = 0; i < n; i++) {
+    let sum = 0;
+    let count = 0;
+    for (let j = Math.max(0, i - w); j <= Math.min(n - 1, i + w); j++) {
+      sum += values[j]!;
+      count++;
+    }
+    smooth[i] = sum / count;
+  }
+  return smooth;
+}
+
+/**
  * Detect "swell" suggestions — quiet→loud build-ups — in a normalized loudness
  * envelope. Explainable heuristic (this is a *suggestion*, never a verdict),
  * tuned for live-music footage where the audio is loud throughout and the
@@ -1607,17 +1598,7 @@ export function detectSwells(
   if (n < 2 || !(durationSec > 0)) return [];
 
   // (a) Smooth with a small centered moving average.
-  const w = Math.max(0, Math.floor(SWELL_SMOOTH_WINDOW));
-  const smooth = new Array<number>(n);
-  for (let i = 0; i < n; i++) {
-    let sum = 0;
-    let count = 0;
-    for (let j = Math.max(0, i - w); j <= Math.min(n - 1, i + w); j++) {
-      sum += loudness[j]!;
-      count++;
-    }
-    smooth[i] = sum / count;
-  }
+  const smooth = movingAverage(loudness, SWELL_SMOOTH_WINDOW);
 
   // Map a bucket index to a source-seconds timestamp (bucket center).
   const toSec = (idx: number): number => Number((((idx + 0.5) / n) * durationSec).toFixed(3));
@@ -1720,21 +1701,7 @@ export const ONSET_FRAME_SEC = 0.02;
 export function onsetEnvelope(samples: Float32Array, sampleRate = 8000): number[] {
   const frameLen = Math.max(1, Math.round(sampleRate * ONSET_FRAME_SEC));
   const frames = Math.floor(samples.length / frameLen);
-  const out = new Array<number>(frames);
-  for (let f = 0; f < frames; f++) {
-    let sumSq = 0;
-    for (let i = f * frameLen; i < (f + 1) * frameLen; i++) {
-      const s = samples[i]!;
-      sumSq += s * s;
-    }
-    out[f] = Math.sqrt(sumSq / frameLen);
-  }
-  let max = 0;
-  for (const v of out) if (v > max) max = v;
-  if (max > 0) {
-    for (let f = 0; f < frames; f++) out[f] = Math.round((out[f]! / max) * 1e4) / 1e4;
-  }
-  return out;
+  return rmsEnvelope(samples, frames, (f) => f * frameLen, 4);
 }
 
 // Tunable thresholds for the onset detector — named so they are easy to adjust.
@@ -1772,18 +1739,8 @@ export function detectOnsets(envelope: number[], frameSec = ONSET_FRAME_SEC): nu
   const n = envelope.length;
   if (n < 3 || !(frameSec > 0)) return [];
 
-  // (a) Smooth with a small centered moving average (mirrors detectSwells).
-  const w = Math.max(0, Math.floor(ONSET_SMOOTH_WINDOW));
-  const smooth = new Array<number>(n);
-  for (let i = 0; i < n; i++) {
-    let sum = 0;
-    let count = 0;
-    for (let j = Math.max(0, i - w); j <= Math.min(n - 1, i + w); j++) {
-      sum += envelope[j]!;
-      count++;
-    }
-    smooth[i] = sum / count;
-  }
+  // (a) Smooth with a small centered moving average (same smoother as detectSwells).
+  const smooth = movingAverage(envelope, ONSET_SMOOTH_WINDOW);
 
   // (b) Half-wave-rectified first difference (d[0] = 0: a source that starts
   // loud is not an "onset" — there is nothing before it to cut against).

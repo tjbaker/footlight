@@ -23,6 +23,7 @@ import { cropBoxToOffset, roundEven, type Box, type Dims } from "../manifest.js"
 import { samplesToCropPath } from "../track.js";
 import type { TrackSample } from "../providers/types.js";
 import type { ProposedAction, ToolName } from "./types.js";
+import { numArg as num, strArg as str } from "./args.js";
 
 /** Minimal JSON-schema fragment describing a tool's parameters (for function-calling). */
 export interface JsonSchema {
@@ -161,22 +162,6 @@ export function clampCropX(x: number, region: Dims): number {
 }
 
 // ---- helpers ----
-
-function num(args: Record<string, unknown>, key: string): number {
-  const v = args[key];
-  if (typeof v !== "number" || !Number.isFinite(v)) {
-    throw new Error(`tool arg "${key}" must be a finite number (got ${JSON.stringify(v)})`);
-  }
-  return v;
-}
-
-function str(args: Record<string, unknown>, key: string): string {
-  const v = args[key];
-  if (typeof v !== "string" || v.length === 0) {
-    throw new Error(`tool arg "${key}" must be a non-empty string`);
-  }
-  return v;
-}
 
 /** Format a clip-relative time for the mono readout, trimming trailing zeros. */
 function fmtSec(t: number): string {

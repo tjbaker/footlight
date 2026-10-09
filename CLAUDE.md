@@ -133,8 +133,8 @@ custom fonts folder and the burn-captions toggle remain in Settings.
 ### Subject tracking (AI-assisted, opt-in, BYOK)
 
 `track.ts` (pure) turns a moving subject in **one continuous shot** into an eased
-`CropPathKeyframe[]`: `planSampleTimes` → injected `VisionTracker` → `refineByMotion`
-(adaptive densify) → `samplesToCropPath` (one-euro smoothing → deadzone → velocity
+`CropPathKeyframe[]`: `planSampleTimes` → injected `VisionTracker` →
+`samplesToCropPath` (one-euro smoothing → deadzone → velocity
 limit). Detection is **injected** via the `VisionTracker` interface
 (`providers/types.ts`) so the math stays pure and testable — `MockTracker`
 (deterministic, offline) backs tests; `GeminiTracker` is the reference provider.
