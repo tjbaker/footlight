@@ -487,6 +487,8 @@ export const en: Messages = {
       apiKeyHint: "Stored in the OS keychain, never in project files.",
       model: "AI model",
       recommended: "recommended",
+      perFrame: "/frame",
+      perRequest: "/req",
       costNote:
         "Tracking is the cost driver: Footlight sends sampled stills, not video, so cost scales with frames — set by your interval. A typical 20s shot at",
       costInterval: "Interval",
@@ -839,6 +841,7 @@ export const en: Messages = {
       modeTrack: "track",
       modePunchIn: "punch-in",
       modeKeyframes: "keyframes",
+      kfKey: "kf",
     },
     errors: {
       loadSourceFirst: "Load a source first.",

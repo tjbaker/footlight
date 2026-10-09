@@ -179,6 +179,27 @@ describe("openSettings — shell + nav", () => {
     expect(headingText()).toBe(messages.settings.about.title);
     expect(mainPanel()!.querySelector(".fl-link-row")).not.toBeNull();
   });
+
+  it("labels model-card cost units from the catalog, not literals (#272)", () => {
+    const ai = messages.settings.ai;
+    const original = { perFrame: ai.perFrame, perRequest: ai.perRequest };
+    ai.perFrame = "/FRAMEX";
+    ai.perRequest = "/REQX";
+    try {
+      openSettings("ai");
+      const costs = [...mainPanel()!.querySelectorAll(".fl-tag-cost")]
+        .map((c) => c.textContent ?? "")
+        .filter((t) => t !== "");
+      expect(costs.length).toBeGreaterThan(0);
+      for (const t of costs) {
+        expect(t).toContain("/FRAMEX");
+        expect(t).toContain("/REQX");
+        expect(t).not.toMatch(/\/frame\b|\/req\b/);
+      }
+    } finally {
+      Object.assign(ai, original);
+    }
+  });
 });
 
 describe("openSettings — dismissal paths", () => {

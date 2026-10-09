@@ -203,6 +203,19 @@ describe("editor render-history modal (jsdom)", () => {
     expect(fixedRead).not.toContain("kf");
   });
 
+  it("labels the keyframe count from the catalog, not a literal (#272)", async () => {
+    const original = m.history.kfKey;
+    m.history.kfKey = "KFX";
+    try {
+      const { modal } = await mountAndOpenHistory();
+      const keys = [...modal.querySelectorAll(".fl-hist .fl-readout .k")].map((k) => k.textContent);
+      expect(keys).toContain("KFX");
+      expect(keys).not.toContain("kf");
+    } finally {
+      m.history.kfKey = original;
+    }
+  });
+
   it("groups entries under Today / Yesterday day-dividers", async () => {
     const { modal } = await mountAndOpenHistory();
     const dividers = [...modal.querySelectorAll(".fl-hist-day")].map(
