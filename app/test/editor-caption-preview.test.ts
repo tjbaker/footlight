@@ -56,9 +56,7 @@ describe("isFontPath", () => {
 
 describe("previewCaptionFont (per-line CSS font string)", () => {
   it("default style → semibold system stack", () => {
-    expect(previewCaptionFont(defaultCaptionStyle(), 52)).toBe(
-      "600 52px system-ui, sans-serif",
-    );
+    expect(previewCaptionFont(defaultCaptionStyle(), 52)).toBe("600 52px system-ui, sans-serif");
   });
 
   it("bold bumps the weight; italic prefixes the style", () => {
@@ -80,9 +78,9 @@ describe("previewCaptionFont (per-line CSS font string)", () => {
   });
 
   it("a font file path can't be canvas-rendered → falls back to the system face", () => {
-    expect(
-      previewCaptionFont({ ...defaultCaptionStyle(), font: "/Library/Fonts/X.ttf" }, 52),
-    ).toBe("600 52px system-ui, sans-serif");
+    expect(previewCaptionFont({ ...defaultCaptionStyle(), font: "/Library/Fonts/X.ttf" }, 52)).toBe(
+      "600 52px system-ui, sans-serif",
+    );
   });
 });
 

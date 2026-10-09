@@ -66,14 +66,12 @@ const { messages } = await import("../src/i18n/index.js");
 const NAV = messages.settings.nav;
 const NAV_LABELS = [NAV.general, NAV.rendering, NAV.ai, NAV.shortcuts, NAV.about];
 
-const backdrop = (): HTMLElement | null =>
-  document.querySelector(".fl-modal-backdrop");
+const backdrop = (): HTMLElement | null => document.querySelector(".fl-modal-backdrop");
 const navItems = (): HTMLElement[] =>
   Array.from(document.querySelectorAll<HTMLElement>(".fl-set-navitem"));
 const mainPanel = (): HTMLElement | null => document.querySelector(".fl-set-main");
 /** The active panel's heading text (panelHeader → `.fl-set-secth`). */
-const headingText = (): string =>
-  mainPanel()?.querySelector(".fl-set-secth")?.textContent ?? "";
+const headingText = (): string => mainPanel()?.querySelector(".fl-set-secth")?.textContent ?? "";
 
 beforeEach(() => {
   store.clear();
@@ -218,22 +216,17 @@ describe("openSettings — dismissal paths", () => {
 
   it("closes via the footer Cancel and Save buttons", () => {
     openSettings();
-    const foot = () =>
-      backdrop()!.querySelector<HTMLElement>(".fl-modal-foot")!;
+    const foot = () => backdrop()!.querySelector<HTMLElement>(".fl-modal-foot")!;
     const btnByText = (text: string): HTMLButtonElement =>
       Array.from(foot().querySelectorAll("button")).find(
         (b) => b.textContent === text,
       ) as HTMLButtonElement;
 
-    btnByText(messages.settings.cancel).dispatchEvent(
-      new MouseEvent("click", { bubbles: true }),
-    );
+    btnByText(messages.settings.cancel).dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(backdrop()).toBeNull();
 
     openSettings();
-    btnByText(messages.settings.save).dispatchEvent(
-      new MouseEvent("click", { bubbles: true }),
-    );
+    btnByText(messages.settings.save).dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(backdrop()).toBeNull();
   });
 });

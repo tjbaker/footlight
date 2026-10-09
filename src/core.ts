@@ -810,9 +810,7 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
   const forcedAudioReencode = hasFade && opts.audioBitrate === "copy";
   const audioBitrate = forcedAudioReencode ? FADE_AUDIO_BITRATE : opts.audioBitrate;
   const audioArgs =
-    audioBitrate === "copy"
-      ? ["-c:a", "copy"]
-      : ["-c:a", "aac", "-b:a", audioBitrate];
+    audioBitrate === "copy" ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", audioBitrate];
 
   // Matching audio fades (same lengths/times as the video's).
   const afades: string[] = [];
@@ -1136,25 +1134,23 @@ export function buildCaptionAss(row: ClipRow, opts: RenderOptions): string | nul
     `${fill},&H000000FF,${borderColor},&H00000000,` +
     `${bold},${italic},${underline},0,100,100,0,${angle},${borderStyle},${borderW},${shadow},${align},60,60,${CAPTION_STYLE.margin},1`;
 
-  return (
-    [
-      "[Script Info]",
-      "ScriptType: v4.00+",
-      `PlayResX: ${TARGET_W}`,
-      `PlayResY: ${TARGET_H}`,
-      "ScaledBorderAndShadow: yes",
-      "WrapStyle: 2",
-      "",
-      "[V4+ Styles]",
-      "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-      style,
-      "",
-      "[Events]",
-      "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
-      `Dialogue: 0,0:00:00.00,9:59:59.99,Caption,,0,0,0,,${text}`,
-      "",
-    ].join("\n")
-  );
+  return [
+    "[Script Info]",
+    "ScriptType: v4.00+",
+    `PlayResX: ${TARGET_W}`,
+    `PlayResY: ${TARGET_H}`,
+    "ScaledBorderAndShadow: yes",
+    "WrapStyle: 2",
+    "",
+    "[V4+ Styles]",
+    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+    style,
+    "",
+    "[Events]",
+    "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    `Dialogue: 0,0:00:00.00,9:59:59.99,Caption,,0,0,0,,${text}`,
+    "",
+  ].join("\n");
 }
 
 /**
@@ -1527,7 +1523,10 @@ export function loudnessArgs(source: string): string[] {
  * Pure: pass a `Float32Array` (e.g. from the f32le stdout of `loudnessArgs`) and
  * a bucket count (default `LOUDNESS_BUCKETS`). Empty input yields all zeros.
  */
-export function bucketLoudness(samples: Float32Array, buckets: number = LOUDNESS_BUCKETS): number[] {
+export function bucketLoudness(
+  samples: Float32Array,
+  buckets: number = LOUDNESS_BUCKETS,
+): number[] {
   const out = new Array<number>(buckets).fill(0);
   const n = samples.length;
   if (buckets <= 0) return [];
@@ -1621,8 +1620,7 @@ export function detectSwells(
   }
 
   // Map a bucket index to a source-seconds timestamp (bucket center).
-  const toSec = (idx: number): number =>
-    Number((((idx + 0.5) / n) * durationSec).toFixed(3));
+  const toSec = (idx: number): number => Number((((idx + 0.5) / n) * durationSec).toFixed(3));
   // Max bucket span allowed for a rise, derived from the time budget.
   const maxSpanBuckets = Math.max(1, Math.ceil((SWELL_MAX_SPAN_SEC / durationSec) * n));
 

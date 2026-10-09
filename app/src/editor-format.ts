@@ -64,6 +64,7 @@ export function offsetMode(spec: ClipSpec): { label: string; ghost: boolean } {
   if (spec.cropPath?.length) return { label: m.history.modeTrack, ghost: false };
   if (spec.cropWindow) return { label: m.history.modePunchIn, ghost: false };
   const off = spec.crop_offset ?? m.framing.defaultOffset;
-  if (off.includes(";") || off.includes("=")) return { label: m.history.modeKeyframes, ghost: false };
+  if (off.includes(";") || off.includes("="))
+    return { label: m.history.modeKeyframes, ghost: false };
   return { label: off, ghost: true };
 }

@@ -32,22 +32,17 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/platform/index.js", async () =>
-  (await import("./helpers/platform-mock.js")).platformModule);
+vi.mock(
+  "../src/platform/index.js",
+  async () => (await import("./helpers/platform-mock.js")).platformModule,
+);
 
 import { platformMocks } from "./helpers/platform-mock.js";
-import {
-  installDomShims,
-  resetHarness,
-  flush,
-  pressKey,
-} from "./helpers/editor-harness.js";
+import { installDomShims, resetHarness, flush, pressKey } from "./helpers/editor-harness.js";
 
 installDomShims();
 // Import AFTER the mocks/shims above are installed.
 const { mountEditor } = await import("../src/editor.js");
-
-
 
 describe("editor source-load + In/Out flow (jsdom)", () => {
   beforeEach(() => {

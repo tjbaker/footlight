@@ -13,11 +13,7 @@
  * authoritative render.
  */
 
-import {
-  parseTextPosition,
-  type CaptionStyleState,
-  type TextPosH,
-} from "./editor-util.js";
+import { parseTextPosition, type CaptionStyleState, type TextPosH } from "./editor-util.js";
 
 /** One preview caption line: its text, px size, and resolved CSS font string. */
 export interface PreviewCaptionLine {

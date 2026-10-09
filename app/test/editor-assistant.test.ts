@@ -41,8 +41,10 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/platform/index.js", async () =>
-  (await import("./helpers/platform-mock.js")).platformModule);
+vi.mock(
+  "../src/platform/index.js",
+  async () => (await import("./helpers/platform-mock.js")).platformModule,
+);
 
 import { platformMocks } from "./helpers/platform-mock.js";
 import { installDomShims, resetHarness, flush } from "./helpers/editor-harness.js";
@@ -67,7 +69,6 @@ vi.mock("../src/assistant/index.js", () => ({
 // Import AFTER the mocks/shims above are installed.
 const { mountEditor } = await import("../src/editor.js");
 
-
 describe("editor assistant dock: propose → accept / discard (jsdom)", () => {
   beforeEach(() => {
     resetHarness();
@@ -75,7 +76,10 @@ describe("editor assistant dock: propose → accept / discard (jsdom)", () => {
     platformMocks.getSecret.mockResolvedValue("fake-gemini-key");
     // Budget 0 → sampleChatStills() samples no frames, keeping the turn off
     // jsdom's data-URL `fetch` (unsupported) and off `extractFrame` entirely.
-    localStorage.setItem("footlight.ai", JSON.stringify({ provider: "gemini", model: "gemini-3.5-flash", chatStills: 0 }));
+    localStorage.setItem(
+      "footlight.ai",
+      JSON.stringify({ provider: "gemini", model: "gemini-3.5-flash", chatStills: 0 }),
+    );
     turnMock.mockClear();
   });
 
@@ -127,9 +131,7 @@ describe("editor assistant dock: propose → accept / discard (jsdom)", () => {
     textarea!.dispatchEvent(new Event("input", { bubbles: true })); // syncSend enables Send
 
     // Enter (no Shift) sends, mirroring the composer's keydown handler.
-    textarea!.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
-    );
+    textarea!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     await flush();
   }
 

@@ -27,7 +27,10 @@ describe("currentRegion", () => {
     expect(currentRegion(false, null, dims)).toEqual({ width: 1920, height: 1080 });
   });
   it("is the content box dims when content mode is on and the box is usable", () => {
-    expect(currentRegion(true, box(200, 50, 1000, 800), dims)).toEqual({ width: 1000, height: 800 });
+    expect(currentRegion(true, box(200, 50, 1000, 800), dims)).toEqual({
+      width: 1000,
+      height: 800,
+    });
   });
   it("falls back to the full frame for a zero-width content box", () => {
     expect(currentRegion(true, box(0, 0, 0, 0), dims)).toEqual({ width: 1920, height: 1080 });

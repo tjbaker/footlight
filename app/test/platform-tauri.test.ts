@@ -24,15 +24,13 @@ import type {
   SessionData,
 } from "../src/platform/types.js";
 
-const { invokeMock, convertFileSrcMock, saveMock, openMock, openUrlMock } = vi.hoisted(
-  () => ({
-    invokeMock: vi.fn(),
-    convertFileSrcMock: vi.fn((p: string) => `asset://localhost${p}`),
-    saveMock: vi.fn(),
-    openMock: vi.fn(),
-    openUrlMock: vi.fn(),
-  }),
-);
+const { invokeMock, convertFileSrcMock, saveMock, openMock, openUrlMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+  convertFileSrcMock: vi.fn((p: string) => `asset://localhost${p}`),
+  saveMock: vi.fn(),
+  openMock: vi.fn(),
+  openUrlMock: vi.fn(),
+}));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: invokeMock,
@@ -74,9 +72,7 @@ describe("extractFrame", () => {
 
   it("propagates an invoke rejection", async () => {
     invokeMock.mockRejectedValue(new Error("ffmpeg missing"));
-    await expect(tauriPlatform.extractFrame("/v.mp4", 1)).rejects.toThrow(
-      "ffmpeg missing",
-    );
+    await expect(tauriPlatform.extractFrame("/v.mp4", 1)).rejects.toThrow("ffmpeg missing");
   });
 });
 
@@ -309,9 +305,7 @@ describe("dialogs (export / pickers)", () => {
       multiple: false,
       directory: false,
       title: "Choose a source video",
-      filters: [
-        { name: "Video", extensions: ["mp4", "mov", "mkv", "webm", "m4v", "avi"] },
-      ],
+      filters: [{ name: "Video", extensions: ["mp4", "mov", "mkv", "webm", "m4v", "avi"] }],
     });
   });
 

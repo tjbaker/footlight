@@ -28,13 +28,12 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/platform/index.js", async () =>
-  (await import("./helpers/platform-mock.js")).platformModule);
+vi.mock(
+  "../src/platform/index.js",
+  async () => (await import("./helpers/platform-mock.js")).platformModule,
+);
 
-import {
-  installDomShims,
-  resetHarness,
-} from "./helpers/editor-harness.js";
+import { installDomShims, resetHarness } from "./helpers/editor-harness.js";
 
 installDomShims();
 // Import AFTER the mocks/shims above are installed.

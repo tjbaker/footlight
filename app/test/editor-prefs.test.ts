@@ -170,7 +170,7 @@ describe("outdir round-trip (footlight.outdir)", () => {
 });
 
 describe("preview pref round-trip (footlight.preview)", () => {
-  it("defaults ON; only an explicit \"off\" disables it", () => {
+  it('defaults ON; only an explicit "off" disables it', () => {
     expect(loadPreviewPref()).toBe(true);
     store.set("footlight.preview", "off");
     expect(loadPreviewPref()).toBe(false);
@@ -194,7 +194,7 @@ describe("preview pref round-trip (footlight.preview)", () => {
 });
 
 describe("onset-snap pref round-trip (footlight.snap)", () => {
-  it("defaults OFF (snapping is opt-in); only an explicit \"on\" enables it", () => {
+  it('defaults OFF (snapping is opt-in); only an explicit "on" enables it', () => {
     expect(loadSnapPref()).toBe(false);
     store.set("footlight.snap", "on");
     expect(loadSnapPref()).toBe(true);

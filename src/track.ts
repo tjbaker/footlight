@@ -247,9 +247,7 @@ export function samplesToCropPath(
   const maxVel = opts?.maxVelPxPerSec ?? DEFAULT_MAX_VEL_PX_PER_SEC;
 
   // 1. Sort and drop misses.
-  const located = samples
-    .filter((s): s is TrackSample => !!s && !!s.box)
-    .sort((a, b) => a.t - b.t);
+  const located = samples.filter((s): s is TrackSample => !!s && !!s.box).sort((a, b) => a.t - b.t);
   if (located.length === 0) {
     return [];
   }
@@ -281,8 +279,7 @@ export function samplesToCropPath(
       const dt = Math.max(1e-6, s.t - lastEmittedT);
       const maxStep = maxVel * dt;
       const delta = target - lastEmittedX;
-      const clamped =
-        Math.abs(delta) > maxStep ? Math.sign(delta) * maxStep : delta;
+      const clamped = Math.abs(delta) > maxStep ? Math.sign(delta) * maxStep : delta;
       x = Math.round(lastEmittedX + clamped);
     }
 

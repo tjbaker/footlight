@@ -15,8 +15,7 @@ import { messages } from "../src/i18n/index.js";
 
 const g = messages.help;
 
-const backdrop = (): HTMLElement | null =>
-  document.querySelector<HTMLElement>(".modal-backdrop");
+const backdrop = (): HTMLElement | null => document.querySelector<HTMLElement>(".modal-backdrop");
 
 beforeEach(() => {
   document.body.innerHTML = "";
@@ -51,9 +50,7 @@ describe("openGuide", () => {
     openGuide();
 
     expect(backdrop()!.querySelector("button.close")?.textContent).toBe(g.close);
-    expect(backdrop()!.querySelector(".guide-toc-label")?.textContent).toBe(
-      g.tocLabel,
-    );
+    expect(backdrop()!.querySelector(".guide-toc-label")?.textContent).toBe(g.tocLabel);
   });
 
   it("renders one section + one TOC link per messages.help.sections entry", () => {
@@ -83,30 +80,22 @@ describe("openGuide", () => {
       for (const block of section.blocks) {
         switch (block.kind) {
           case "p":
-            expect(
-              [...el.querySelectorAll("p")].some(
-                (p) => p.textContent === block.text,
-              ),
-            ).toBe(true);
+            expect([...el.querySelectorAll("p")].some((p) => p.textContent === block.text)).toBe(
+              true,
+            );
             break;
           case "tip":
             expect(
-              [...el.querySelectorAll(".guide-tip")].some(
-                (d) => d.textContent === block.text,
-              ),
+              [...el.querySelectorAll(".guide-tip")].some((d) => d.textContent === block.text),
             ).toBe(true);
             break;
           case "steps":
           case "list": {
             const tag = block.kind === "steps" ? "ol" : "ul";
             const lists = [...el.querySelectorAll(tag)];
-            const match = lists.find(
-              (l) => l.querySelectorAll("li").length === block.items.length,
-            );
+            const match = lists.find((l) => l.querySelectorAll("li").length === block.items.length);
             expect(match).toBeDefined();
-            const texts = [...match!.querySelectorAll("li")].map(
-              (li) => li.textContent,
-            );
+            const texts = [...match!.querySelectorAll("li")].map((li) => li.textContent);
             expect(texts).toEqual(block.items);
             break;
           }
@@ -118,9 +107,7 @@ describe("openGuide", () => {
   it("anchors a TOC link to its section via scrollIntoView", () => {
     openGuide();
     const links = backdrop()!.querySelectorAll<HTMLAnchorElement>(".guide-toc a");
-    const sections = backdrop()!.querySelectorAll<HTMLElement>(
-      "section.guide-section",
-    );
+    const sections = backdrop()!.querySelectorAll<HTMLElement>("section.guide-section");
 
     // jsdom has no layout, so scrollIntoView is a no-op stub — spy on the target
     // section to prove the click is wired to the right one.

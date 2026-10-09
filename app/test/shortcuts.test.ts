@@ -65,6 +65,8 @@ describe("openShortcuts (jsdom)", () => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     expect(backdrop()).toBeNull();
     // A second Escape after dismissal is a no-op (listener was removed; no throw).
-    expect(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))).not.toThrow();
+    expect(() =>
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })),
+    ).not.toThrow();
   });
 });

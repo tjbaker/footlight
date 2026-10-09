@@ -51,11 +51,15 @@ describe("captionStyleToSpec (editor state → sparse manifest spec)", () => {
 
   it("only emits boxColor when the box is on AND the color is non-default", () => {
     // box off → boxColor ignored entirely
-    expect(captionStyleToSpec({ ...defaultCaptionStyle(), box: false, boxColor: "#123456" })).toBeNull();
+    expect(
+      captionStyleToSpec({ ...defaultCaptionStyle(), box: false, boxColor: "#123456" }),
+    ).toBeNull();
     // box on, default boxColor → just { box: true }
     expect(captionStyleToSpec({ ...defaultCaptionStyle(), box: true })).toEqual({ box: true });
     // box on, custom boxColor → both
-    expect(captionStyleToSpec({ ...defaultCaptionStyle(), box: true, boxColor: "#123456" })).toEqual({
+    expect(
+      captionStyleToSpec({ ...defaultCaptionStyle(), box: true, boxColor: "#123456" }),
+    ).toEqual({
       box: true,
       boxColor: "#123456",
     });
@@ -189,7 +193,15 @@ describe("kfCount (clip keyframe/switch-point count)", () => {
   const base = { source_file: "s.mp4", in_point: "0", out_point: "1" } as const;
 
   it("counts crop-path points when a track path is present", () => {
-    expect(kfCount({ ...base, cropPath: [{ t: 0, x: 0 }, { t: 1, x: 10 }] })).toBe(2);
+    expect(
+      kfCount({
+        ...base,
+        cropPath: [
+          { t: 0, x: 0 },
+          { t: 1, x: 10 },
+        ],
+      }),
+    ).toBe(2);
   });
 
   it("counts schedule switch points in a keyed crop_offset", () => {

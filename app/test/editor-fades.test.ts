@@ -38,9 +38,10 @@ describe("fadesToSpec / fadesFromSpec", () => {
     const f = { fadeIn: 0.3, fadeOut: 0.7 };
     expect(fadesFromSpec(fadesToSpec(f))).toEqual(f);
     expect(fadesFromSpec({})).toEqual({ fadeIn: 0, fadeOut: 0 });
-    expect(
-      fadesFromSpec({ fade_in: Number.NaN as unknown as number, fade_out: -2 }),
-    ).toEqual({ fadeIn: 0, fadeOut: 0 });
+    expect(fadesFromSpec({ fade_in: Number.NaN as unknown as number, fade_out: -2 })).toEqual({
+      fadeIn: 0,
+      fadeOut: 0,
+    });
   });
 });
 

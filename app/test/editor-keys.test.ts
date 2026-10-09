@@ -37,14 +37,12 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/platform/index.js", async () =>
-  (await import("./helpers/platform-mock.js")).platformModule);
+vi.mock(
+  "../src/platform/index.js",
+  async () => (await import("./helpers/platform-mock.js")).platformModule,
+);
 
-import {
-  installDomShims,
-  resetHarness,
-  flush,
-} from "./helpers/editor-harness.js";
+import { installDomShims, resetHarness, flush } from "./helpers/editor-harness.js";
 
 installDomShims();
 // Import AFTER the mocks/shims above are installed.
@@ -81,9 +79,7 @@ async function loadSource(root: Element): Promise<void> {
   );
   expect(srcInput).not.toBeNull();
   srcInput!.value = "/tmp/source.mp4";
-  const loadBtn = [...root.querySelectorAll("button")].find(
-    (b) => b.textContent === "Load",
-  );
+  const loadBtn = [...root.querySelectorAll("button")].find((b) => b.textContent === "Load");
   expect(loadBtn).toBeTruthy();
   loadBtn!.click();
   await flush();
@@ -190,9 +186,7 @@ describe("editor keyboard shortcuts (jsdom integration)", () => {
       )!;
       expect(readoutValue(root, "in")).toBe("—");
       // Dispatch from the <input> as target → handler returns early, no In set.
-      srcInput.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "i", bubbles: true }),
-      );
+      srcInput.dispatchEvent(new KeyboardEvent("keydown", { key: "i", bubbles: true }));
       expect(readoutValue(root, "in")).toBe("—");
     });
 

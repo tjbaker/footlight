@@ -16,11 +16,7 @@
  */
 
 import { detectSwells, detectOnsets, coverOutName } from "@core";
-import {
-  serializeManifestJSON,
-  specToEditorState,
-  type ClipSpec,
-} from "@manifest";
+import { serializeManifestJSON, specToEditorState, type ClipSpec } from "@manifest";
 import type { GhostPreview, CommitOp } from "@assistant-types";
 import { messages } from "./i18n/index.js";
 import type { FootlightPlatform, HistoryEntry, SessionData } from "./platform/types.js";

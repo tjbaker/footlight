@@ -65,7 +65,12 @@ describe("cropRegionRect", () => {
     });
   });
   it("falls back to the full frame for a degenerate content box", () => {
-    expect(cropRegionRect(true, box(0, 0, 1, 1), dims)).toEqual({ x0: 0, y0: 0, x1: 1920, y1: 1080 });
+    expect(cropRegionRect(true, box(0, 0, 1, 1), dims)).toEqual({
+      x0: 0,
+      y0: 0,
+      x1: 1920,
+      y1: 1080,
+    });
   });
 });
 
@@ -135,7 +140,9 @@ describe("fullHeightCropBox", () => {
 describe("cropWindowSpec", () => {
   const region: Dims = { width: 1920, height: 1080 };
   it("returns null for a full-height box (engine gets a plain offset instead)", () => {
-    expect(cropWindowSpec(fullHeightCropBox({ x0: 0, y0: 0, x1: 1920, y1: 1080 }), region)).toBeNull();
+    expect(
+      cropWindowSpec(fullHeightCropBox({ x0: 0, y0: 0, x1: 1920, y1: 1080 }), region),
+    ).toBeNull();
   });
   it("returns a window for a punch-in (shorter-than-frame) box", () => {
     expect(cropWindowSpec(box(700, 200, 304, 540), region)).not.toBeNull();

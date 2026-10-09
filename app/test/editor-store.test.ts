@@ -64,7 +64,12 @@ describe("hasActiveTrack / isCropInteractive", () => {
   });
 
   it("is true (and NOT crop interactive) with a non-empty crop path", () => {
-    const s = withState({ cropPath: [{ t: 0, x: 10 }, { t: 1, x: 20 }] });
+    const s = withState({
+      cropPath: [
+        { t: 0, x: 10 },
+        { t: 1, x: 20 },
+      ],
+    });
     expect(hasActiveTrack(s)).toBe(true);
     expect(isCropInteractive(s)).toBe(false);
   });
