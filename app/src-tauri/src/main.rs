@@ -384,7 +384,9 @@ fn parse_content_crop(value: Option<&str>) -> Result<Option<[i64; 4]>, String> {
 /// time. HAND MIRROR of core.ts `parseCropSchedule`.
 fn parse_crop_schedule(value: Option<&str>) -> Result<Vec<(f64, String)>, String> {
     let raw = value.unwrap_or("");
-    let v = if raw.is_empty() { "center" } else { raw }.trim().to_string();
+    let v = if raw.is_empty() { "center" } else { raw }
+        .trim()
+        .to_string();
     if !v.contains('=') {
         return Ok(vec![(0.0, v)]);
     }
@@ -617,7 +619,9 @@ async fn export_cover(
         .args(&args)
         .output()
         .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
-    let wrote = std::fs::metadata(&out_path).map(|m| m.len() > 0).unwrap_or(false);
+    let wrote = std::fs::metadata(&out_path)
+        .map(|m| m.len() > 0)
+        .unwrap_or(false);
     if !out.status.success() || !wrote {
         return Err(format!(
             "cover export failed: {}",
@@ -673,7 +677,11 @@ fn parse_ebur128_momentary(log: &str) -> Vec<f64> {
     let mut momentary: Vec<f64> = Vec::new();
     for line in log.lines() {
         if let Some(idx) = line.find("M:") {
-            let tok = line[idx + 2..].trim_start().split_whitespace().next().unwrap_or("");
+            let tok = line[idx + 2..]
+                .trim_start()
+                .split_whitespace()
+                .next()
+                .unwrap_or("");
             momentary.push(tok.parse::<f64>().unwrap_or(f64::NEG_INFINITY));
         }
     }
@@ -742,7 +750,11 @@ fn bucket_loudness(samples: &[f32], buckets: usize) -> Vec<f64> {
                 let v = *s as f64;
                 sum_sq += v * v;
             }
-            *slot = if count > 0 { (sum_sq / count as f64).sqrt() } else { 0.0 };
+            *slot = if count > 0 {
+                (sum_sq / count as f64).sqrt()
+            } else {
+                0.0
+            };
         }
         let max = detect.iter().cloned().fold(0.0f64, f64::max);
         if max > 0.0 {
@@ -813,7 +825,11 @@ async fn loudness(source: String) -> Result<LoudnessResult, String> {
     let detect = bucket_loudness(&samples, LOUDNESS_BUCKETS);
     let onset_env = onset_envelope(&samples, 8000.0);
 
-    Ok(LoudnessResult { display, detect, onset_envelope: onset_env })
+    Ok(LoudnessResult {
+        display,
+        detect,
+        onset_envelope: onset_env,
+    })
 }
 
 /// Locate a subject across sample times (AI subject tracking, SPEC §6.9). Writes
@@ -1582,7 +1598,10 @@ mod tests {
     #[test]
     fn last_crop_suggestion_returns_last_match() {
         let stderr = "crop=100:100:0:0\nnoise\ncrop=1080:1920:420:0\n";
-        assert_eq!(last_crop_suggestion(stderr).as_deref(), Some("1080:1920:420:0"));
+        assert_eq!(
+            last_crop_suggestion(stderr).as_deref(),
+            Some("1080:1920:420:0")
+        );
     }
 
     /// Mirrors test/commands.test.ts "returns null when no crop= suggestion".
@@ -1602,7 +1621,10 @@ mod tests {
         let i = a.iter().position(|s| *s == "-i").unwrap();
         assert!(ss < i, "-ss must be an INPUT option (before -i)");
         assert_eq!(a[ss + 1], "3.5");
-        assert!(a.contains(&"-y"), "must overwrite the pre-created temp file");
+        assert!(
+            a.contains(&"-y"),
+            "must overwrite the pre-created temp file"
+        );
         assert_eq!(*a.last().unwrap(), "/tmp/f.jpg");
     }
 
@@ -1629,10 +1651,17 @@ mod tests {
             let hb = s.spawn(|| unique_temp_path("footlight_test_", ".json").unwrap());
             (ha.join().unwrap(), hb.join().unwrap())
         });
-        assert_ne!(a.to_path_buf(), b.to_path_buf(), "concurrent calls must not share a path");
+        assert_ne!(
+            a.to_path_buf(),
+            b.to_path_buf(),
+            "concurrent calls must not share a path"
+        );
         for p in [&a, &b] {
             let name = p.file_name().unwrap().to_string_lossy().to_string();
-            assert!(name.starts_with("footlight_test_") && name.ends_with(".json"), "{name}");
+            assert!(
+                name.starts_with("footlight_test_") && name.ends_with(".json"),
+                "{name}"
+            );
             assert!(p.exists());
         }
         let (pa, pb) = (a.to_path_buf(), b.to_path_buf());
@@ -1657,7 +1686,12 @@ mod tests {
         let src_s = src.to_string_lossy().to_string();
         let ok = Command::new("ffmpeg")
             .args(["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi"])
-            .args(["-i", "testsrc=duration=2:size=160x120:rate=25", "-pix_fmt", "yuv420p"])
+            .args([
+                "-i",
+                "testsrc=duration=2:size=160x120:rate=25",
+                "-pix_fmt",
+                "yuv420p",
+            ])
             .arg(&src_s)
             .status()
             .unwrap()
@@ -1672,9 +1706,18 @@ mod tests {
         let solo_early = extract_frame_bytes(&src_s, 0.2).unwrap();
         let solo_late = extract_frame_bytes(&src_s, 1.6).unwrap();
         assert!(early.starts_with(&[0xFF, 0xD8]), "not a JPEG");
-        assert_ne!(early, late, "concurrent grabs must not share one output file");
-        assert_eq!(early, solo_early, "the early grab returned someone else's frame");
-        assert_eq!(late, solo_late, "the late grab returned someone else's frame");
+        assert_ne!(
+            early, late,
+            "concurrent grabs must not share one output file"
+        );
+        assert_eq!(
+            early, solo_early,
+            "the early grab returned someone else's frame"
+        );
+        assert_eq!(
+            late, solo_late,
+            "the late grab returned someone else's frame"
+        );
     }
 
     // --- scenes -----------------------------------------------------------
@@ -1786,7 +1829,12 @@ mod tests {
     /// window is 0".
     #[test]
     fn bucket_lufs_skips_non_finite_readings() {
-        let lufs = [f64::NEG_INFINITY, LUFS_CEIL, f64::NEG_INFINITY, f64::NEG_INFINITY];
+        let lufs = [
+            f64::NEG_INFINITY,
+            LUFS_CEIL,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
+        ];
         assert_eq!(bucket_lufs(&lufs, 2), vec![1.0, 0.0]);
     }
 
@@ -1999,7 +2047,10 @@ mod tests {
     /// located `<root>/bin/footlight.js`), defaulting to `clips`.
     #[test]
     fn resolve_outdir_resolves_relative_against_repo_root() {
-        assert_eq!(resolve_outdir("/repo/bin/footlight.js", None), "/repo/clips");
+        assert_eq!(
+            resolve_outdir("/repo/bin/footlight.js", None),
+            "/repo/clips"
+        );
         assert_eq!(
             resolve_outdir("/repo/bin/footlight.js", Some("out".into())),
             "/repo/out"
@@ -2137,7 +2188,10 @@ mod tests {
         assert!((eased_crop_x_at(&path, 1.5) - 656.0).abs() < 1e-9);
         assert_eq!(eased_crop_x_at(&path, -1.0), 0.0);
         assert_eq!(eased_crop_x_at(&path, 99.0), 1312.0);
-        assert_eq!(eased_crop_x_at(&[CoverKeyframe { t: 2.0, x: 444.0 }], 0.0), 444.0);
+        assert_eq!(
+            eased_crop_x_at(&[CoverKeyframe { t: 2.0, x: 444.0 }], 0.0),
+            444.0
+        );
         assert_eq!(eased_crop_x_at(&[], 5.0), 0.0);
     }
 
@@ -2147,13 +2201,24 @@ mod tests {
     fn cover_frame_args_fixed_center() {
         let spec = cover_spec(None, Some("center"));
         let a = cover_frame_args("in.mp4", 5.0, &spec, (1920.0, 1080.0), "/tmp/c.png").unwrap();
-        assert_eq!(cover_vf(&a), "crop=608:1080:656:0,scale=1080:1920:flags=lanczos");
+        assert_eq!(
+            cover_vf(&a),
+            "crop=608:1080:656:0,scale=1080:1920:flags=lanczos"
+        );
         let ss = a.iter().position(|s| s == "-ss").unwrap();
         assert_eq!(a[ss + 1], "5");
         assert!(ss < a.iter().position(|s| s == "-i").unwrap());
         assert_eq!(
             &a[a.iter().position(|s| s == "-frames:v").unwrap()..],
-            &["-frames:v", "1", "-f", "image2", "-c:v", "png", "/tmp/c.png"]
+            &[
+                "-frames:v",
+                "1",
+                "-f",
+                "image2",
+                "-c:v",
+                "png",
+                "/tmp/c.png"
+            ]
         );
     }
 
@@ -2163,7 +2228,10 @@ mod tests {
     fn cover_frame_args_schedule_at_t() {
         let spec = cover_spec(Some("10"), Some("0=left; 4=right; 8=640"));
         let a = cover_frame_args("in.mp4", 15.0, &spec, (1920.0, 1080.0), "-").unwrap();
-        assert_eq!(cover_vf(&a), "crop=608:1080:1312:0,scale=1080:1920:flags=lanczos");
+        assert_eq!(
+            cover_vf(&a),
+            "crop=608:1080:1312:0,scale=1080:1920:flags=lanczos"
+        );
         // t before the In point clamps the relative time to 0 → first segment.
         let b = cover_frame_args("in.mp4", 3.0, &spec, (1920.0, 1080.0), "-").unwrap();
         assert!(cover_vf(&b).starts_with("crop=608:1080:0:0"));
@@ -2179,7 +2247,10 @@ mod tests {
             CoverKeyframe { t: 3.0, x: 1312.0 },
         ]);
         let a = cover_frame_args("in.mp4", 11.5, &spec, (1920.0, 1080.0), "-").unwrap();
-        assert_eq!(cover_vf(&a), "crop=608:1080:656:0,scale=1080:1920:flags=lanczos");
+        assert_eq!(
+            cover_vf(&a),
+            "crop=608:1080:656:0,scale=1080:1920:flags=lanczos"
+        );
     }
 
     /// Mirrors test/cover.test.ts "uses the even-rounded, clamped fixed window"
@@ -2187,18 +2258,38 @@ mod tests {
     #[test]
     fn cover_frame_args_punch_in_window() {
         let mut spec = cover_spec(None, None);
-        spec.crop_window = Some(CoverWindow { x: 800.0, y: 120.0, w: 405.0, h: 720.0 });
+        spec.crop_window = Some(CoverWindow {
+            x: 800.0,
+            y: 120.0,
+            w: 405.0,
+            h: 720.0,
+        });
         let a = cover_frame_args("in.mp4", 2.0, &spec, (1920.0, 1080.0), "-").unwrap();
-        assert_eq!(cover_vf(&a), "crop=404:720:800:120,scale=1080:1920:flags=lanczos");
+        assert_eq!(
+            cover_vf(&a),
+            "crop=404:720:800:120,scale=1080:1920:flags=lanczos"
+        );
 
-        spec.crop_window = Some(CoverWindow { x: 9999.0, y: -50.0, w: 405.0, h: 720.0 });
+        spec.crop_window = Some(CoverWindow {
+            x: 9999.0,
+            y: -50.0,
+            w: 405.0,
+            h: 720.0,
+        });
         let b = cover_frame_args("in.mp4", 2.0, &spec, (1920.0, 1080.0), "-").unwrap();
         assert!(cover_vf(&b).starts_with("crop=404:720:1516:0"));
 
-        spec.crop_window = Some(CoverWindow { x: 0.0, y: 0.0, w: 405.0, h: 2000.0 });
-        assert!(cover_frame_args("in.mp4", 0.0, &spec, (1920.0, 1080.0), "-")
-            .unwrap_err()
-            .contains("exceeds working region"));
+        spec.crop_window = Some(CoverWindow {
+            x: 0.0,
+            y: 0.0,
+            w: 405.0,
+            h: 2000.0,
+        });
+        assert!(
+            cover_frame_args("in.mp4", 0.0, &spec, (1920.0, 1080.0), "-")
+                .unwrap_err()
+                .contains("exceeds working region")
+        );
     }
 
     /// Mirrors test/cover.test.ts "pre-crops to the content region and resolves
