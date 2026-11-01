@@ -23,7 +23,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
-import { mkdtemp, writeFile, readFile, mkdir, stat, readdir } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, mkdir, stat, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, basename } from "node:path";
 
@@ -720,6 +720,27 @@ describe("history and session round-trips", () => {
     expect(await (await fetch(`${base}/history`)).json()).toEqual([]);
     expect(await readFile(`${historyPath}.corrupt`, "utf8")).toBe('[{"id":"a"');
     await expect(stat(historyPath)).rejects.toThrow();
+  });
+
+  it("keeps a file truncated mid-UTF-8 sequence as .corrupt, matching the native backend", async () => {
+    const full = Buffer.from('{"title":"caf\u00e9"}', "utf8");
+    const cut = full.subarray(0, full.length - 3); // ends inside the 2-byte 'é'
+    await writeFile(sessionPath, cut);
+    expect(await (await fetch(`${base}/session`)).json()).toBeNull();
+    expect(await readFile(`${sessionPath}.corrupt`)).toEqual(cut);
+  });
+
+  it("surfaces a non-ENOENT read error instead of defaulting (file left in place)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await rm(historyPath, { force: true });
+    await mkdir(historyPath); // reading a directory fails with EISDIR
+    try {
+      const res = await fetch(`${base}/history`);
+      expect(res.status).toBe(500);
+      expect((await stat(historyPath)).isDirectory()).toBe(true);
+    } finally {
+      await rm(historyPath, { recursive: true, force: true });
+    }
   });
 
   it("treats non-array history JSON as malformed, matching the native backend", async () => {

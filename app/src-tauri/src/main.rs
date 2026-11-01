@@ -1041,23 +1041,30 @@ fn history_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     Ok(dir.join("history.json"))
 }
 
-/// Read a persisted JSON file, falling back to `T::default()` when it is missing
-/// or unreadable. An UNPARSEABLE file (e.g. truncated by a crash mid-write from
-/// an older build) also yields the default, so one bad file can't wedge the
-/// feature for good (#263); it is first renamed aside to `<name>.corrupt` so the
-/// bytes aren't silently destroyed. Mirrors `readJsonOrDefault` in
-/// app/dev-server/server.mjs — keep the two in parity.
-fn read_json_or_default<T: serde::de::DeserializeOwned + Default>(path: &std::path::Path) -> T {
-    let Ok(body) = std::fs::read_to_string(path) else {
-        return T::default();
+/// Read a persisted JSON file, falling back to `T::default()` when it is missing.
+/// An UNPARSEABLE file (e.g. truncated by a crash mid-write from an older build,
+/// possibly mid-UTF-8 sequence) also yields the default, so one bad file can't
+/// wedge the feature for good (#263); it is first renamed aside to
+/// `<name>.corrupt` so the bytes aren't silently destroyed. Any OTHER read error
+/// (permissions, I/O) is returned, not defaulted — the file may be fine, and a
+/// default would let the next save clobber it. Bytes are parsed directly, so
+/// invalid UTF-8 counts as corrupt, not unreadable. Mirrors `readJsonOrDefault`
+/// in app/dev-server/server.mjs — keep the two in parity.
+fn read_json_or_default<T: serde::de::DeserializeOwned + Default>(
+    path: &std::path::Path,
+) -> Result<T, String> {
+    let bytes = match std::fs::read(path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(T::default()),
+        Err(e) => return Err(format!("read {}: {e}", path.display())),
     };
-    match serde_json::from_str(&body) {
-        Ok(value) => value,
+    match serde_json::from_slice(&bytes) {
+        Ok(value) => Ok(value),
         Err(_) => {
             // Best effort: if the rename fails the default is still returned and
             // the next atomic save replaces the bad file.
             let _ = std::fs::rename(path, corrupt_path(path));
-            T::default()
+            Ok(T::default())
         }
     }
 }
@@ -1098,7 +1105,7 @@ fn write_json_atomic<T: Serialize>(path: &std::path::Path, value: &T) -> Result<
 /// the type.
 #[tauri::command]
 async fn load_history(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
-    Ok(read_json_or_default(&history_path(&app)?))
+    read_json_or_default(&history_path(&app)?).map_err(|e| format!("load history: {e}"))
 }
 
 /// Persist the full render-history array to the app config dir (atomically).
@@ -1123,7 +1130,7 @@ fn session_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
 /// shape) so Rust does not mirror the type.
 #[tauri::command]
 async fn load_session(app: AppHandle) -> Result<Option<serde_json::Value>, String> {
-    Ok(read_json_or_default(&session_path(&app)?))
+    read_json_or_default(&session_path(&app)?).map_err(|e| format!("load session: {e}"))
 }
 
 /// Persist the working session to the app config dir (atomically).
@@ -1604,7 +1611,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("history.json");
         std::fs::write(&path, "[{\"id\":\"a\"").unwrap();
-        let entries: Vec<serde_json::Value> = read_json_or_default(&path);
+        let entries: Vec<serde_json::Value> = read_json_or_default(&path).unwrap();
         assert!(entries.is_empty());
         assert!(!path.exists());
         assert_eq!(
@@ -1614,9 +1621,39 @@ mod tests {
         // Same for the session: an empty (truncated) file -> None.
         let session = dir.path().join("session.json");
         std::fs::write(&session, "").unwrap();
-        let data: Option<serde_json::Value> = read_json_or_default(&session);
+        let data: Option<serde_json::Value> = read_json_or_default(&session).unwrap();
         assert!(data.is_none());
         assert!(dir.path().join("session.json.corrupt").exists());
+    }
+
+    /// A crash can truncate mid multi-byte character (accented caption text):
+    /// invalid UTF-8 is corrupt, not "unreadable" — the bytes are kept aside.
+    #[test]
+    fn read_json_or_default_keeps_a_file_truncated_mid_utf8() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.json");
+        let full = "{\"title\":\"caf\u{e9}\"}".as_bytes().to_vec();
+        let cut = &full[..full.len() - 3]; // ends inside the 2-byte 'é'
+        assert!(std::str::from_utf8(cut).is_err());
+        std::fs::write(&path, cut).unwrap();
+        let data: Option<serde_json::Value> = read_json_or_default(&path).unwrap();
+        assert!(data.is_none());
+        assert_eq!(
+            std::fs::read(dir.path().join("session.json.corrupt")).unwrap(),
+            cut
+        );
+    }
+
+    /// A read error other than NotFound is surfaced, not defaulted, and the
+    /// file is left in place (a default would let the next save clobber it).
+    #[test]
+    fn read_json_or_default_surfaces_other_read_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("history.json");
+        std::fs::create_dir(&path).unwrap(); // reading a directory fails
+        assert!(read_json_or_default::<Vec<serde_json::Value>>(&path).is_err());
+        assert!(path.is_dir());
+        assert!(!dir.path().join("history.json.corrupt").exists());
     }
 
     /// Valid JSON of the wrong shape (an object where history wants an array)
@@ -1626,7 +1663,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("history.json");
         std::fs::write(&path, "{}").unwrap();
-        let entries: Vec<serde_json::Value> = read_json_or_default(&path);
+        let entries: Vec<serde_json::Value> = read_json_or_default(&path).unwrap();
         assert!(entries.is_empty());
         assert!(dir.path().join("history.json.corrupt").exists());
     }
@@ -1635,7 +1672,7 @@ mod tests {
     fn read_json_or_default_missing_file_is_default_and_creates_nothing() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("session.json");
-        let data: Option<serde_json::Value> = read_json_or_default(&path);
+        let data: Option<serde_json::Value> = read_json_or_default(&path).unwrap();
         assert!(data.is_none());
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
     }
@@ -1649,7 +1686,7 @@ mod tests {
         std::fs::write(&path, "old").unwrap();
         let entries = vec![serde_json::json!({"id": "a", "ts": 1})];
         write_json_atomic(&path, &entries).unwrap();
-        let back: Vec<serde_json::Value> = read_json_or_default(&path);
+        let back: Vec<serde_json::Value> = read_json_or_default(&path).unwrap();
         assert_eq!(back, entries);
         let names: Vec<_> = std::fs::read_dir(dir.path())
             .unwrap()

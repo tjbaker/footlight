@@ -41,6 +41,7 @@ import {
   access,
   rename,
   rm,
+  open,
 } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -452,19 +453,21 @@ async function handleCheckOutdir(outdir, res, repoRoot) {
 }
 
 /**
- * Read a persisted JSON file, falling back to `fallback` when it is missing or
- * unreadable. An UNPARSEABLE file (or one `isValid` rejects) also yields the
- * fallback, so one bad file can't wedge the feature for good (#263); it is
- * first renamed aside to `<path>.corrupt` so the bytes aren't silently
- * destroyed. Mirrors `read_json_or_default` in app/src-tauri/src/main.rs —
- * keep the two in parity.
+ * Read a persisted JSON file, falling back to `fallback` when it is missing.
+ * An UNPARSEABLE file (or one `isValid` rejects) also yields the fallback, so
+ * one bad file can't wedge the feature for good (#263); it is first renamed
+ * aside to `<path>.corrupt` so the bytes aren't silently destroyed. Any OTHER
+ * read error (permissions, I/O) is thrown, not defaulted — the file may be
+ * fine, and a default would let the next save clobber it. Mirrors
+ * `read_json_or_default` in app/src-tauri/src/main.rs — keep the two in parity.
  */
 async function readJsonOrDefault(path, fallback, isValid = () => true) {
   let text;
   try {
     text = await readFile(path, "utf8");
-  } catch {
-    return fallback; // missing/unreadable — start fresh
+  } catch (err) {
+    if (err?.code === "ENOENT") return fallback; // missing — start fresh
+    throw err;
   }
   try {
     const value = JSON.parse(text);
@@ -480,14 +483,20 @@ async function readJsonOrDefault(path, fallback, isValid = () => true) {
 
 /**
  * Serialize `value` and replace `path` ATOMICALLY: write a uniquely named temp
- * file in the same directory, then rename it over `path`. A crash mid-write
+ * file in the same directory, flush it to disk, then rename it over `path`. A crash mid-write
  * leaves the previous file intact, never a truncated one (#263). Mirrors
  * `write_json_atomic` in app/src-tauri/src/main.rs.
  */
 async function writeJsonAtomic(path, value) {
   const tmp = `${path}.${randomUUID()}.tmp`;
   try {
-    await writeFile(tmp, JSON.stringify(value), "utf8");
+    const fh = await open(tmp, "wx");
+    try {
+      await fh.writeFile(JSON.stringify(value), "utf8");
+      await fh.sync();
+    } finally {
+      await fh.close();
+    }
     await rename(tmp, path);
   } catch (err) {
     await rm(tmp, { force: true });
