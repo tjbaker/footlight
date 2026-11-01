@@ -669,6 +669,22 @@ function joinPath(dir: string, name: string): string {
 }
 
 /**
+ * Reject an explicit `out_name` that would write OUTSIDE the output folder: an
+ * absolute path (`/x`, `\x`, `C:…`) or any `..` path segment (`../x`, `a/../../x`,
+ * Windows `..\x`). A plain name or a relative subpath (`sub/clip`) is fine and
+ * unchanged. Throws a per-clip error, so the CLI skips just that clip.
+ */
+function assertOutNameStaysInOutdir(outName: string): void {
+  const absolute = /^[/\\]/.test(outName) || /^[A-Za-z]:/.test(outName);
+  if (absolute || outName.split(/[/\\]/).includes("..")) {
+    throw new Error(
+      `out_name ${JSON.stringify(outName)} must stay inside the output folder ` +
+        `(no absolute path or ".." segments)`,
+    );
+  }
+}
+
+/**
  * Build the ffmpeg argument array and output path for a single clip row.
  *
  * The filter chain: optional content-crop first, then the 9:16 crop (with an
@@ -758,6 +774,7 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
   }
 
   let outName = (row.out_name || "").trim();
+  assertOutNameStaysInOutdir(outName);
   if (!outName) {
     const stem = sourceStem(source);
     outName = `${safeName(stem)}_${safeName(row.in_point)}-${safeName(row.out_point)}.mp4`;
@@ -765,7 +782,11 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
   if (!outName.toLowerCase().endsWith(".mp4")) {
     outName += ".mp4";
   }
-  const outPath = joinPath(opts.outdir, outName);
+  // The output path is ffmpeg's LAST argument, so one that starts with `-`
+  // (an `out_name` / source stem like `-live` under `--outdir ""`, or an outdir
+  // of its own like `-x`) would be parsed as an option. `./` names the same file.
+  const joined = joinPath(opts.outdir, outName);
+  const outPath = joined.startsWith("-") ? `./${joined}` : joined;
 
   const filters: string[] = [];
   if (content) {

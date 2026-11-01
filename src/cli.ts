@@ -156,6 +156,13 @@ const X264_PRESETS = new Set([
   "placebo",
 ]);
 
+/**
+ * A `--audio-bitrate` other than `copy`: a positive number with an explicit
+ * k/M suffix (`256k`, `1.5M`). A bare `256` is rejected — ffmpeg reads it as
+ * 256 bits/s, never what anyone means.
+ */
+const AUDIO_BITRATE_RE = /^(?:[1-9]\d*|\d+\.\d+)[kKmM]$/;
+
 /** `footlight render` — read a CSV or JSON manifest, build + run ffmpeg per row. */
 async function cmdRender(argv: string[]): Promise<number> {
   const { positionals, flags } = parseArgs(
@@ -195,6 +202,16 @@ async function cmdRender(argv: string[]): Promise<number> {
     return 1;
   }
   const audioBitrate = String(flags.get("audio-bitrate") ?? DEFAULT_RENDER_OPTIONS.audioBitrate);
+  if (
+    audioBitrate !== "copy" &&
+    !(AUDIO_BITRATE_RE.test(audioBitrate) && parseFloat(audioBitrate) > 0)
+  ) {
+    console.error(
+      `render: --audio-bitrate must be "copy" or a bitrate with a k/M suffix like 256k, ` +
+        `got ${JSON.stringify(audioBitrate)}`,
+    );
+    return 1;
+  }
   const dryRun = flags.get("dry-run") === true;
 
   // Captions (SPEC §6.5): off unless --burn-captions. --caption-font takes a

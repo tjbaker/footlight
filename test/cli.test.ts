@@ -327,6 +327,35 @@ describe("render JSON manifest (dry-run)", () => {
     expect(stdout).toContain("Done: 1/3 clips, 2 failed/skipped");
   });
 
+  // Issue #279: an out_name that escapes --outdir is a per-clip SKIP, not a write
+  // outside the folder; a relative subpath name is still fine.
+  it("skips a clip whose out_name escapes the outdir and renders the rest", () => {
+    const dir = tmp();
+    const src = join(dir, "src.mp4");
+    makeSource(src);
+    const manifestPath = join(dir, "m.json");
+    writeFileSync(
+      manifestPath,
+      JSON.stringify([
+        { source_file: src, in_point: "0", out_point: "1", out_name: "../escaped" },
+        { source_file: src, in_point: "0", out_point: "1", out_name: "sub/ok" },
+      ]),
+    );
+    const { stdout, stderr, code } = runCli([
+      "render",
+      manifestPath,
+      "--outdir",
+      join(dir, "out"),
+      "--dry-run",
+    ]);
+    expect(code).toBe(1);
+    expect(stderr).toContain(
+      '[1/2] SKIP — out_name "../escaped" must stay inside the output folder',
+    );
+    expect(stdout).toContain(`${join(dir, "out")}/sub/ok.mp4`);
+    expect(stdout).toContain("Done: 1/2 clips, 1 failed/skipped");
+  });
+
   it("names the clip and field for a mistyped boolean/number field", () => {
     const dir = tmp();
     const src = join(dir, "src.mp4");
@@ -521,6 +550,22 @@ describe("render flag validation (issue: fail fast, not per-clip at ffmpeg time)
     expect(stderr).toContain("--preset must be one of");
     expect(stderr).toContain("ultrafast");
     expect(stderr).toContain("placebo");
+  });
+
+  it("rejects a malformed --audio-bitrate (a bare 256 would mean 256 bit/s) (issue #279)", () => {
+    for (const bad of ["256", "abc", "0k", "0.0k", "-256k", "256kb", "", "COPY"]) {
+      const { code, stderr } = runCli(["render", manifest(), "--dry-run", "--audio-bitrate", bad]);
+      expect(code, `--audio-bitrate ${JSON.stringify(bad)}`).toBe(1);
+      expect(stderr).toContain('--audio-bitrate must be "copy" or a bitrate');
+    }
+  });
+
+  it("accepts copy and suffixed audio bitrates", () => {
+    for (const ok of ["copy", "256k", "320K", "1.5M"]) {
+      const { code, stderr } = runCli(["render", manifest(), "--dry-run", "--audio-bitrate", ok]);
+      expect(code, ok).toBe(0);
+      expect(stderr).toBe("");
+    }
   });
 
   it("accepts the boundary CRFs and every x264 preset name", () => {

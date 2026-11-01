@@ -279,6 +279,51 @@ describe("buildFfmpegArgs golden cases", () => {
     expect(outPath).toBe("clips/my_clip.mp4");
   });
 
+  describe("output path hardening (issue #279)", () => {
+    const ROW: ClipRow = { source_file: "in.mp4", in_point: "0", out_point: "10" };
+
+    it("rejects an out_name that escapes the outdir (.. segment or absolute path)", () => {
+      for (const out_name of [
+        "../escape",
+        "../../etc/x.mp4",
+        "sub/../../x",
+        "..\\win",
+        "..",
+        "/abs/x.mp4",
+        "\\\\server\\share\\x",
+        "C:\\x.mp4",
+      ]) {
+        expect(() => build({ ...ROW, out_name }, [1920, 1080]), out_name).toThrow(
+          /out_name .* must stay inside the output folder/,
+        );
+      }
+    });
+
+    it("keeps legitimate names unchanged — including relative subpaths and dotted names", () => {
+      const outOf = (out_name: string) => build({ ...ROW, out_name }, [1920, 1080]).outPath;
+      expect(outOf("my_clip")).toBe("clips/my_clip.mp4");
+      expect(outOf("sub/clip.mp4")).toBe("clips/sub/clip.mp4");
+      expect(outOf("a..b")).toBe("clips/a..b.mp4");
+      expect(outOf("..hidden")).toBe("clips/..hidden.mp4");
+      expect(outOf("-dash")).toBe("clips/-dash.mp4"); // not leading the final path
+    });
+
+    it("prefixes ./ when the output path would start with '-' (read as an ffmpeg option)", () => {
+      // Explicit out_name under --outdir "".
+      const a = build({ ...ROW, out_name: "-y" }, [1920, 1080], { outdir: "" });
+      expect(a.outPath).toBe("./-y.mp4");
+      expect(a.args.at(-1)).toBe("./-y.mp4");
+      // Auto-derived name from a dash-leading source stem.
+      const b = build({ ...ROW, source_file: "-live.mov" }, [1920, 1080], { outdir: "" });
+      expect(b.args.at(-1)).toBe("./-live_0-10.mp4");
+      // A dash-leading outdir.
+      const c = build({ ...ROW, out_name: "x" }, [1920, 1080], { outdir: "-out" });
+      expect(c.args.at(-1)).toBe("./-out/x.mp4");
+      // A normal relative name under --outdir "" is untouched.
+      expect(build({ ...ROW, out_name: "x" }, [1920, 1080], { outdir: "" }).outPath).toBe("x.mp4");
+    });
+  });
+
   it("emits correct -ss/-t and codec args", () => {
     const { args } = build(
       { source_file: "in.mp4", in_point: "10", out_point: "25.5", crop_offset: "center" },
