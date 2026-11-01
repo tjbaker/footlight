@@ -48,7 +48,14 @@ cargo tauri build    # or: npx tauri build
   `set_secret`, `delete_secret`;
 - **windows** — `toggle_activity_window`, `show_activity_window`.
 
-Subprocesses run via `std::process::Command`. The frontend selects this backend
+Subprocesses run through one async helper, `run_output` in `src/subprocess.rs`
+(`tokio::process`), so a long render never ties up the threads other commands
+need. Quitting stops every ffmpeg / node child the app started, including the
+CLI's own ffmpeg (each child runs in its own process group on Unix; Windows
+uses `taskkill /T`). If a render is running, Quit (Cmd-Q) and closing the main
+window ask first, so a render is never stopped silently. A quit macOS sends
+without asking (Dock > Quit, logout) leaves a running render to finish.
+The frontend selects this backend
 automatically when running inside the Tauri webview (`__TAURI__` present on
 `window`).
 

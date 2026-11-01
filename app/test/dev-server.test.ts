@@ -60,16 +60,34 @@ interface SpawnScript {
   stderr?: string;
   /** Emit a spawn-level error (binary not on PATH) instead of running. */
   error?: Error;
+  /** Keep running until killed (a long ffmpeg / render). */
+  hang?: boolean;
 }
 
-function fakeChild(script: SpawnScript): EventEmitter {
-  const child = new EventEmitter() as EventEmitter & {
-    stdout: EventEmitter;
-    stderr: EventEmitter;
-  };
+type FakeChild = EventEmitter & {
+  stdout: EventEmitter;
+  stderr: EventEmitter;
+  kill: ReturnType<typeof vi.fn>;
+  /** Settles on the child's first "close". */
+  closed: Promise<void>;
+};
+
+/** Every fake child spawned in the current test, in spawn order. */
+let children: FakeChild[] = [];
+
+function fakeChild(script: SpawnScript): FakeChild {
+  const child = new EventEmitter() as FakeChild;
   child.stdout = new EventEmitter();
   child.stderr = new EventEmitter();
+  // Like a real child: killing it ends it with a signal (code null).
+  child.kill = vi.fn(() => {
+    setImmediate(() => child.emit("close", null, "SIGTERM"));
+    return true;
+  });
+  child.closed = new Promise((r) => child.once("close", () => r()));
+  children.push(child);
   setImmediate(() => {
+    if (script.hang) return;
     if (script.error) {
       child.emit("error", script.error);
       return;
@@ -119,6 +137,7 @@ afterAll(async () => {
 
 beforeEach(() => {
   spawnMock.mockReset();
+  children = [];
 });
 
 afterEach(() => {
@@ -658,6 +677,83 @@ describe("POST /render", () => {
     expect(body.ok).toBe(false);
     expect(body.log).toContain("partial");
     expect(body.log).toContain("boom");
+  });
+});
+
+// --- abandoned requests (#262) ----------------------------------------------------
+
+describe("abandoned requests", () => {
+  /** Settles a tick after the server's response for the next request closes. */
+  function nextResponseClosed(): Promise<void> {
+    return new Promise((r) =>
+      server.once("request", (_req, res) => res.once("close", () => setImmediate(r))),
+    );
+  }
+
+  /** A tick after `child` closes: the handler has acted on its result. */
+  async function afterClose(child: FakeChild): Promise<void> {
+    await child.closed;
+    await new Promise((r) => setImmediate(r));
+  }
+
+  /** Start a request, wait for its first subprocess, then drop the connection. */
+  async function abandonAfterSpawn(
+    method: string,
+    path: string,
+    body = "",
+  ): Promise<{ child: FakeChild; responseClosed: Promise<void> }> {
+    const responseClosed = nextResponseClosed();
+    const { port } = server.address() as { port: number };
+    const req = httpRequest({ host: "127.0.0.1", port, method, path });
+    req.on("error", () => {}); // the socket is torn down on purpose
+    req.end(body);
+    await vi.waitFor(() => expect(children).toHaveLength(1));
+    req.destroy();
+    return { child: children[0]!, responseClosed };
+  }
+
+  it.each([
+    ["GET", "/frame?source=/v.mp4&t=1", ""],
+    ["GET", "/probe?source=/v.mp4", ""],
+    ["GET", "/scenes?source=/v.mp4", ""],
+    ["GET", "/loudness?source=/v.mp4", ""],
+    ["POST", "/cover?source=/v.mp4&t=1", "{}"],
+    ["POST", "/track", "{}"],
+  ])("%s %s kills its subprocess when the client goes away", async (method, path, body) => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    onSpawn(() => ({ hang: true }));
+
+    const { child } = await abandonAfterSpawn(method, path, body);
+
+    // The hung child only closes if it is killed.
+    await afterClose(child);
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    // The handler starts nothing further (no /frame tail grab, no /probe
+    // cropdetect) and writing to the closed response doesn't throw.
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    expect(errors).not.toHaveBeenCalled();
+  });
+
+  it("never kills a render because its request closed", async () => {
+    onSpawn(() => ({ hang: true }));
+
+    const { child, responseClosed } = await abandonAfterSpawn("POST", "/render", "[]");
+
+    await responseClosed; // the server has seen the client go
+    expect(child.kill).not.toHaveBeenCalled();
+    child.emit("close", 0); // let the render finish so the handler settles
+  });
+
+  it("doesn't abort once the response has finished", async () => {
+    // The response's "close" also fires after a normal finish; the
+    // `writableFinished` guard keeps that from counting as abandonment. The
+    // abort listener outlives the child, so a missing guard would call kill.
+    onSpawn(() => ({ stderr: "" }));
+    const responseClosed = nextResponseClosed();
+    const res = await fetch(`${base}/scenes?source=/v.mp4`);
+    expect(await res.json()).toEqual([]);
+    await responseClosed;
+    expect(children[0]!.kill).not.toHaveBeenCalled();
   });
 });
 

@@ -4,7 +4,8 @@
 //!
 //! Mirrors the Node dev backend (app/dev-server/server.mjs): each
 //! `#[tauri::command]` shells out to ffmpeg / ffprobe / the footlight CLI via
-//! `std::process::Command`, so the frontend's `tauriPlatform` adapter has the
+//! the async `subprocess::run_output` (see subprocess.rs for who may stop a
+//! child, and when), so the frontend's `tauriPlatform` adapter has the
 //! exact same capabilities as `webPlatform`. The native Help menu mirrors the
 //! in-app Help dropdown (About / Report a Bug / View on GitHub).
 //!
@@ -19,12 +20,17 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::process::Command;
+mod subprocess;
+
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_opener::OpenerExt;
+use tokio::process::Command;
+
+use crate::subprocess::{run_output, Kind};
 
 const REPO_URL: &str = "https://github.com/tjbaker/footlight";
 const ISSUES_NEW_URL: &str = "https://github.com/tjbaker/footlight/issues/new";
@@ -80,12 +86,16 @@ fn unique_temp_path(prefix: &str, suffix: &str) -> Result<tempfile::TempPath, St
 // them `async` makes Tauri run them off the main thread so the window stays live.
 #[tauri::command]
 async fn extract_frame(source: String, t: f64) -> Result<tauri::ipc::Response, String> {
-    extract_frame_bytes(&source, t).map(tauri::ipc::Response::new)
+    extract_frame_bytes(&source, t)
+        .await
+        .map(tauri::ipc::Response::new)
 }
 
 /// The body of `extract_frame`: ffmpeg writes the frame to a per-call temp JPEG,
 /// whose bytes are read back and returned; the temp file is deleted on return.
-fn extract_frame_bytes(source: &str, t: f64) -> Result<Vec<u8>, String> {
+async fn extract_frame_bytes(source: &str, t: f64) -> Result<Vec<u8>, String> {
+    // Declared before the temp file, so quitting waits for its deletion.
+    let _hold = subprocess::hold(Kind::Analysis);
     let path = unique_temp_path("footlight_frame_", ".jpg")?;
     let out = path.to_string_lossy().to_string();
 
@@ -95,8 +105,8 @@ fn extract_frame_bytes(source: &str, t: f64) -> Result<Vec<u8>, String> {
     // the last available frame by seeking relative to EOF, mirroring the shared
     // frameExtractArgs / frameExtractTailArgs pair the web backend uses.
     let t_str = t.to_string();
-    let wrote = run_frame_extract(&["-ss", &t_str], source, &out)?
-        || run_frame_extract(&["-sseof", "-0.2"], source, &out)?;
+    let wrote = run_frame_extract(&["-ss", &t_str], source, &out).await?
+        || run_frame_extract(&["-sseof", "-0.2"], source, &out).await?;
     if !wrote {
         return Err("ffmpeg frame extraction failed".into());
     }
@@ -118,11 +128,10 @@ fn frame_extract_args<'a>(seek: &[&'a str], source: &'a str, out: &'a str) -> Ve
 /// Run one single-frame ffmpeg extraction with the given seek args, writing a
 /// JPEG to `out`. Returns Ok(true) only when ffmpeg succeeded AND wrote a
 /// non-empty file (a seek past EOF exits non-zero / writes nothing).
-fn run_frame_extract(seek: &[&str], source: &str, out: &str) -> Result<bool, String> {
-    let status = Command::new("ffmpeg")
-        .args(frame_extract_args(seek, source, out))
-        .status()
-        .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
+async fn run_frame_extract(seek: &[&str], source: &str, out: &str) -> Result<bool, String> {
+    let mut cmd = Command::new("ffmpeg");
+    cmd.args(frame_extract_args(seek, source, out));
+    let status = run_output(cmd, "ffmpeg", Kind::Analysis).await?.status;
     let wrote = std::fs::metadata(out).map(|m| m.len() > 0).unwrap_or(false);
     Ok(status.success() && wrote)
 }
@@ -189,10 +198,9 @@ fn cropdetect_args(source: &str) -> Vec<&str> {
 /// Probe width, height, duration via ffprobe + a cropdetect (black-bar) hint.
 #[tauri::command]
 async fn probe(source: String) -> Result<ProbeResult, String> {
-    let probe_out = Command::new("ffprobe")
-        .args(ffprobe_stream_args(&source))
-        .output()
-        .map_err(|e| format!("failed to spawn ffprobe: {e}"))?;
+    let mut cmd = Command::new("ffprobe");
+    cmd.args(ffprobe_stream_args(&source));
+    let probe_out = run_output(cmd, "ffprobe", Kind::Analysis).await?;
 
     if !probe_out.status.success() {
         return Err(format!(
@@ -204,10 +212,9 @@ async fn probe(source: String) -> Result<ProbeResult, String> {
     let (width, height, duration) = parse_probe(&probe_out.stdout)?;
 
     // cropdetect — black bars only (mirrors the dev server / CLI).
-    let cd = Command::new("ffmpeg")
-        .args(cropdetect_args(&source))
-        .output()
-        .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
+    let mut cmd = Command::new("ffmpeg");
+    cmd.args(cropdetect_args(&source));
+    let cd = run_output(cmd, "ffmpeg", Kind::Analysis).await?;
     let stderr = String::from_utf8_lossy(&cd.stderr);
     let cropdetect = last_crop_suggestion(&stderr);
 
@@ -253,10 +260,9 @@ fn parse_scenes(stderr: &str) -> Vec<f64> {
 /// Detect scene-cut timestamps (seconds), mirroring the CLI's scenes command.
 #[tauri::command]
 async fn scenes(source: String) -> Result<Vec<f64>, String> {
-    let out = Command::new("ffmpeg")
-        .args(scenes_args(&source))
-        .output()
-        .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
+    let mut cmd = Command::new("ffmpeg");
+    cmd.args(scenes_args(&source));
+    let out = run_output(cmd, "ffmpeg", Kind::Analysis).await?;
 
     let stderr = String::from_utf8_lossy(&out.stderr);
     Ok(parse_scenes(&stderr))
@@ -621,10 +627,9 @@ async fn export_cover(
     spec: CoverSpec,
     out_path: String,
 ) -> Result<(), String> {
-    let probe_out = Command::new("ffprobe")
-        .args(ffprobe_stream_args(&source))
-        .output()
-        .map_err(|e| format!("failed to spawn ffprobe: {e}"))?;
+    let mut cmd = Command::new("ffprobe");
+    cmd.args(ffprobe_stream_args(&source));
+    let probe_out = run_output(cmd, "ffprobe", Kind::Analysis).await?;
     if !probe_out.status.success() {
         return Err(format!(
             "ffprobe failed: {}",
@@ -634,10 +639,9 @@ async fn export_cover(
     let (width, height, _) = parse_probe(&probe_out.stdout)?;
 
     let args = cover_frame_args(&source, t, &spec, (width as f64, height as f64), &out_path)?;
-    let out = Command::new("ffmpeg")
-        .args(&args)
-        .output()
-        .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
+    let mut cmd = Command::new("ffmpeg");
+    cmd.args(&args);
+    let out = run_output(cmd, "ffmpeg", Kind::Analysis).await?;
     let wrote = std::fs::metadata(&out_path)
         .map(|m| m.len() > 0)
         .unwrap_or(false);
@@ -819,10 +823,9 @@ fn onset_envelope(samples: &[f32], sample_rate: f64) -> Vec<f64> {
 /// the LUFS floor/ceiling, and ONSET_FRAME_SEC in sync with core.ts.
 #[tauri::command]
 async fn loudness(source: String) -> Result<LoudnessResult, String> {
-    let out = Command::new("ffmpeg")
-        .args(loudness_combined_args(&source))
-        .output()
-        .map_err(|e| format!("failed to spawn ffmpeg: {e}"))?;
+    let mut cmd = Command::new("ffmpeg");
+    cmd.args(loudness_combined_args(&source));
+    let out = run_output(cmd, "ffmpeg", Kind::Analysis).await?;
 
     // --- display: per-frame momentary `M:` LUFS from stderr (mirrors bucketLufs).
     let log = String::from_utf8_lossy(&out.stderr);
@@ -854,17 +857,15 @@ async fn loudness(source: String) -> Result<LoudnessResult, String> {
 #[tauri::command]
 async fn track(app: AppHandle, req: serde_json::Value) -> Result<serde_json::Value, String> {
     // Per-call temp file, deleted when `req_path` drops at the end of the call.
+    let _hold = subprocess::hold(Kind::Analysis); // outlives `req_path`
     let req_path = unique_temp_path("footlight_track_", ".json")?;
     let body = serde_json::to_string(&req).map_err(|e| format!("serialize track request: {e}"))?;
     std::fs::write(&req_path, body).map_err(|e| format!("write temp track request: {e}"))?;
 
     let cli = locate_cli(&app);
-    let output = Command::new("node")
-        .arg(&cli)
-        .arg("track")
-        .arg(&req_path)
-        .output()
-        .map_err(|e| format!("failed to spawn node CLI: {e}"))?;
+    let mut cmd = Command::new("node");
+    cmd.arg(&cli).arg("track").arg(&req_path);
+    let output = run_output(cmd, "node CLI", Kind::Analysis).await?;
 
     if !output.status.success() {
         return Err(format!(
@@ -981,6 +982,7 @@ async fn render(
 ) -> Result<RenderResult, String> {
     // Per-call temp file (the `.json` suffix makes the CLI take the JSON
     // manifest path), deleted when `manifest_path` drops at the end of the call.
+    let _hold = subprocess::hold(Kind::Render); // outlives `manifest_path`
     let manifest_path = unique_temp_path("footlight_manifest_", ".json")?;
     std::fs::write(&manifest_path, manifest_json)
         .map_err(|e| format!("write temp manifest: {e}"))?;
@@ -1009,11 +1011,10 @@ async fn render(
         caption_angle,
     });
 
-    let output = Command::new("node")
-        .arg(&cli)
-        .args(&args)
-        .output()
-        .map_err(|e| format!("failed to spawn node CLI: {e}"))?;
+    // Kind::Render: quitting while this runs asks first (see `main`).
+    let mut cmd = Command::new("node");
+    cmd.arg(&cli).args(&args);
+    let output = run_output(cmd, "node CLI", Kind::Render).await?;
 
     let log = format!(
         "$ node {} {}\n\n{}{}",
@@ -1472,6 +1473,67 @@ fn last_crop_suggestion(stderr: &str) -> Option<String> {
     last
 }
 
+/// Set once the user has confirmed quitting during a render, so the quit that
+/// follows isn't asked about again.
+static QUIT_CONFIRMED: AtomicBool = AtomicBool::new(false);
+/// Set while the quit dialog is up, so a second close / Cmd-Q doesn't stack a
+/// second dialog.
+static QUIT_PROMPT_OPEN: AtomicBool = AtomicBool::new(false);
+
+/// Whether a quit (or a main-window close) must ask first: a render is running
+/// and the user hasn't already said to stop it. Renders are never stopped
+/// silently (#262); everything else stops on quit without asking.
+fn quit_needs_confirmation() -> bool {
+    subprocess::render_running() && !QUIT_CONFIRMED.load(Ordering::SeqCst)
+}
+
+/// Quit from the app's own Quit item: ask first while a render runs, else
+/// exit now. Footlight's menu uses a custom Quit item rather than the
+/// predefined one because the predefined item sends macOS `terminate:`, which
+/// tao turns straight into `RunEvent::Exit` with no `ExitRequested` to
+/// intercept (#262).
+fn request_quit(app: &AppHandle) {
+    if quit_needs_confirmation() {
+        confirm_quit_during_render(app);
+    } else {
+        app.exit(0);
+    }
+}
+
+/// Ask whether to quit while a render is running. "Quit" exits (which stops the
+/// render via `RunEvent::Exit`); "Keep Rendering" leaves everything as it was.
+fn confirm_quit_during_render(app: &AppHandle) {
+    use tauri_plugin_dialog::{
+        DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult,
+    };
+    // "Keep Rendering" is the first (default, Return) button so a reflexive
+    // Enter never stops a render; only an explicit "Quit" does. Closing the
+    // dialog any other way keeps rendering too.
+    const KEEP: &str = "Keep Rendering";
+    const QUIT: &str = "Quit";
+    if QUIT_PROMPT_OPEN.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let handle = app.clone();
+    app.dialog()
+        .message(
+            "A render is still running. Quitting now stops it and leaves that clip unfinished.",
+        )
+        .title("Quit Footlight?")
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            KEEP.into(),
+            QUIT.into(),
+        ))
+        .show_with_result(move |result| {
+            QUIT_PROMPT_OPEN.store(false, Ordering::SeqCst);
+            if result == MessageDialogResult::Custom(QUIT.into()) {
+                QUIT_CONFIRMED.store(true, Ordering::SeqCst);
+                handle.exit(0);
+            }
+        });
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -1508,6 +1570,11 @@ fn main() {
 
             // App menu (macOS shows it titled with the app name). Holds Quit/Cmd-Q
             // and the standard Settings… (Cmd-,) item, which opens the in-app modal.
+            // Quit is a custom item (see `request_quit`) so quitting during a
+            // render asks first.
+            let quit = MenuItemBuilder::with_id("app_quit", "Quit Footlight")
+                .accelerator("CmdOrCtrl+Q")
+                .build(app)?;
             let settings = MenuItemBuilder::with_id("app_settings", "Settings…")
                 .accelerator("CmdOrCtrl+,")
                 .build(app)?;
@@ -1526,7 +1593,7 @@ fn main() {
                 .hide_others()
                 .show_all()
                 .separator()
-                .quit()
+                .item(&quit)
                 .build()?;
 
             let file_menu = SubmenuBuilder::new(app, "File").close_window().build()?;
@@ -1570,6 +1637,7 @@ fn main() {
                 "app_settings" => {
                     let _ = app.emit("show-settings", ());
                 }
+                "app_quit" => request_quit(app),
                 "help_guide" => {
                     let _ = app.emit("show-guide", ());
                 }
@@ -1587,8 +1655,34 @@ fn main() {
             });
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Footlight");
+        // Closing the main window while a render runs asks first, rather than
+        // closing the window and leaving the render running unseen.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" && quit_needs_confirmation() {
+                    api.prevent_close();
+                    confirm_quit_during_render(window.app_handle());
+                }
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building Footlight")
+        .run(|app, event| match event {
+            // An exit request (last window closed, `app.exit`) while a render
+            // runs: ask first (#262).
+            tauri::RunEvent::ExitRequested { api, .. } if quit_needs_confirmation() => {
+                api.prevent_exit();
+                confirm_quit_during_render(app);
+            }
+            // Leave no ffmpeg / node behind once the app is going. A render is
+            // stopped only if the user confirmed; an OS-initiated terminate
+            // (Dock > Quit, logout) arrives here without asking, and then a
+            // running render is left to finish rather than killed silently.
+            tauri::RunEvent::Exit => {
+                subprocess::stop_all(QUIT_CONFIRMED.load(Ordering::SeqCst));
+            }
+            _ => {}
+        });
 }
 
 // Unit tests for the pure pieces of the shell: the hand-mirrored ffmpeg/ffprobe
@@ -1822,14 +1916,18 @@ mod tests {
     /// Needs ffmpeg on PATH; skipped (with a note) when it is absent.
     #[test]
     fn concurrent_extract_frame_calls_return_their_own_frames() {
-        if Command::new("ffmpeg").arg("-version").output().is_err() {
+        if std::process::Command::new("ffmpeg")
+            .arg("-version")
+            .output()
+            .is_err()
+        {
             eprintln!("skipping: ffmpeg not on PATH");
             return;
         }
         // testsrc burns a running frame counter, so every frame differs.
         let src = unique_temp_path("footlight_test_src_", ".mp4").unwrap();
         let src_s = src.to_string_lossy().to_string();
-        let ok = Command::new("ffmpeg")
+        let ok = std::process::Command::new("ffmpeg")
             .args(["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi"])
             .args([
                 "-i",
@@ -1843,13 +1941,16 @@ mod tests {
             .success();
         assert!(ok, "failed to synthesize the test source");
 
-        let (early, late) = std::thread::scope(|s| {
-            let he = s.spawn(|| extract_frame_bytes(&src_s, 0.2).unwrap());
-            let hl = s.spawn(|| extract_frame_bytes(&src_s, 1.6).unwrap());
-            (he.join().unwrap(), hl.join().unwrap())
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (early, late) = rt.block_on(async {
+            tokio::join!(
+                extract_frame_bytes(&src_s, 0.2),
+                extract_frame_bytes(&src_s, 1.6)
+            )
         });
-        let solo_early = extract_frame_bytes(&src_s, 0.2).unwrap();
-        let solo_late = extract_frame_bytes(&src_s, 1.6).unwrap();
+        let (early, late) = (early.unwrap(), late.unwrap());
+        let solo_early = rt.block_on(extract_frame_bytes(&src_s, 0.2)).unwrap();
+        let solo_late = rt.block_on(extract_frame_bytes(&src_s, 1.6)).unwrap();
         assert!(early.starts_with(&[0xFF, 0xD8]), "not a JPEG");
         assert_ne!(
             early, late,
