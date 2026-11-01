@@ -31,6 +31,14 @@ function boxCenterX(box: Box): number {
 }
 
 /**
+ * Upper bound on the uniform samples `planSampleTimes` will plan for one shot.
+ * Each sample is a tracker (vision API) call, so this is far beyond any useful
+ * plan — 10,000 samples is ~2 h of footage at the 0.75 s default interval — and
+ * exists only so a degenerate interval (e.g. `1e-6`) fails fast.
+ */
+export const MAX_SAMPLE_TIMES = 10_000;
+
+/**
  * Plan the timestamps at which to ask the tracker to locate the subject.
  *
  * Uniform samples across [shotStart, shotEnd] every `intervalSec`, ALWAYS
@@ -59,11 +67,18 @@ export function planSampleTimes(opts: {
   }
   const eps = opts.cutEpsilon ?? 0.05;
 
-  const times: number[] = [shotStart, shotEnd];
   // Uniform interior samples. Guard the loop count so a tiny interval over a
-  // long shot cannot wedge; the eased renderer tolerates dense keyframes.
+  // long shot cannot wedge (or allocate hundreds of millions of times) — fail
+  // with an actionable message instead of silently thinning the plan.
   const span = shotEnd - shotStart;
   const n = Math.floor(span / interval);
+  if (!(n <= MAX_SAMPLE_TIMES)) {
+    throw new Error(
+      `planSampleTimes: intervalSec ${interval} over a ${span}s shot would plan ${n} samples ` +
+        `(max ${MAX_SAMPLE_TIMES}) — use a larger interval`,
+    );
+  }
+  const times: number[] = [shotStart, shotEnd];
   for (let i = 1; i <= n; i++) {
     times.push(shotStart + i * interval);
   }
