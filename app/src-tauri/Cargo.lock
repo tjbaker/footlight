@@ -1125,6 +1125,7 @@ version = "0.8.1"
 dependencies = [
  "font-kit",
  "keyring",
+ "libc",
  "serde",
  "serde_json",
  "tauri",

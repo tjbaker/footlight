@@ -96,6 +96,8 @@ async fn extract_frame(source: String, t: f64) -> Result<tauri::ipc::Response, S
 /// The body of `extract_frame`: ffmpeg writes the frame to a per-call temp JPEG,
 /// whose bytes are read back and returned; the temp file is deleted on return.
 async fn extract_frame_bytes(source: &str, t: f64) -> Result<Vec<u8>, String> {
+    // Declared before the temp file, so quitting waits for its deletion.
+    let _hold = subprocess::hold(Kind::Analysis);
     let path = unique_temp_path("footlight_frame_", ".jpg")?;
     let out = path.to_string_lossy().to_string();
 
@@ -775,6 +777,7 @@ async fn loudness(source: String) -> Result<LoudnessResult, String> {
 #[tauri::command]
 async fn track(app: AppHandle, req: serde_json::Value) -> Result<serde_json::Value, String> {
     // Per-call temp file, deleted when `req_path` drops at the end of the call.
+    let _hold = subprocess::hold(Kind::Analysis); // outlives `req_path`
     let req_path = unique_temp_path("footlight_track_", ".json")?;
     let body = serde_json::to_string(&req).map_err(|e| format!("serialize track request: {e}"))?;
     std::fs::write(&req_path, body).map_err(|e| format!("write temp track request: {e}"))?;
@@ -920,6 +923,7 @@ async fn render(
 ) -> Result<RenderResult, String> {
     // Per-call temp file (the `.json` suffix makes the CLI take the JSON
     // manifest path), deleted when `manifest_path` drops at the end of the call.
+    let _hold = subprocess::hold(Kind::Render); // outlives `manifest_path`
     let manifest_path = unique_temp_path("footlight_manifest_", ".json")?;
     std::fs::write(&manifest_path, manifest_json)
         .map_err(|e| format!("write temp manifest: {e}"))?;
@@ -1381,6 +1385,19 @@ fn quit_needs_confirmation() -> bool {
     subprocess::render_running() && !QUIT_CONFIRMED.load(Ordering::SeqCst)
 }
 
+/// Quit from the app's own Quit item: ask first while a render runs, else
+/// exit now. Footlight's menu uses a custom Quit item rather than the
+/// predefined one because the predefined item sends macOS `terminate:`, which
+/// tao turns straight into `RunEvent::Exit` with no `ExitRequested` to
+/// intercept (#262).
+fn request_quit(app: &AppHandle) {
+    if quit_needs_confirmation() {
+        confirm_quit_during_render(app);
+    } else {
+        app.exit(0);
+    }
+}
+
 /// Ask whether to quit while a render is running. "Quit" exits (which stops the
 /// render via `RunEvent::Exit`); "Keep Rendering" leaves everything as it was.
 fn confirm_quit_during_render(app: &AppHandle) {
@@ -1444,6 +1461,11 @@ fn main() {
 
             // App menu (macOS shows it titled with the app name). Holds Quit/Cmd-Q
             // and the standard Settings… (Cmd-,) item, which opens the in-app modal.
+            // Quit is a custom item (see `request_quit`) so quitting during a
+            // render asks first.
+            let quit = MenuItemBuilder::with_id("app_quit", "Quit Footlight")
+                .accelerator("CmdOrCtrl+Q")
+                .build(app)?;
             let settings = MenuItemBuilder::with_id("app_settings", "Settings…")
                 .accelerator("CmdOrCtrl+,")
                 .build(app)?;
@@ -1462,7 +1484,7 @@ fn main() {
                 .hide_others()
                 .show_all()
                 .separator()
-                .quit()
+                .item(&quit)
                 .build()?;
 
             let file_menu = SubmenuBuilder::new(app, "File").close_window().build()?;
@@ -1506,6 +1528,7 @@ fn main() {
                 "app_settings" => {
                     let _ = app.emit("show-settings", ());
                 }
+                "app_quit" => request_quit(app),
                 "help_guide" => {
                     let _ = app.emit("show-guide", ());
                 }
@@ -1536,14 +1559,18 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error while building Footlight")
         .run(|app, event| match event {
-            // Cmd-Q / Quit while a render runs: ask first (#262).
+            // An exit request (last window closed, `app.exit`) while a render
+            // runs: ask first (#262).
             tauri::RunEvent::ExitRequested { api, .. } if quit_needs_confirmation() => {
                 api.prevent_exit();
                 confirm_quit_during_render(app);
             }
-            // Leave no ffmpeg / node behind once the app is going.
+            // Leave no ffmpeg / node behind once the app is going. A render is
+            // stopped only if the user confirmed; an OS-initiated terminate
+            // (Dock > Quit, logout) arrives here without asking, and then a
+            // running render is left to finish rather than killed silently.
             tauri::RunEvent::Exit => {
-                subprocess::stop_all();
+                subprocess::stop_all(QUIT_CONFIRMED.load(Ordering::SeqCst));
             }
             _ => {}
         });

@@ -1033,11 +1033,44 @@ function hexToAssColor(hex: string | undefined, fallback: string): string {
  * The ASS Style `Fontname`: the configured family name, else a best-effort name
  * derived from a font FILE's stem (the GUI font picker supplies real family
  * names; libass also gets the file's dir via `fontsdir`), else the system Sans.
+ * Always passed through `assFontName`, since it lands in a comma-separated Style line.
  */
 function captionFontFamily(opts: RenderOptions): string {
-  if (opts.captionFontName && opts.captionFontName.trim()) return opts.captionFontName.trim();
-  if (opts.captionFontFile && opts.captionFontFile.trim()) return sourceStem(opts.captionFontFile);
-  return DEFAULT_CAPTION_FONT;
+  const raw =
+    opts.captionFontName && opts.captionFontName.trim()
+      ? opts.captionFontName
+      : opts.captionFontFile && opts.captionFontFile.trim()
+        ? sourceStem(opts.captionFontFile)
+        : "";
+  return assFontName(raw) || DEFAULT_CAPTION_FONT;
+}
+
+/**
+ * Make a family name safe for the ASS `Style:` line's `Fontname` field. The line
+ * is comma-separated with no quoting, and one line per style, so a `,` would
+ * shift every later field and a newline would end the line early. Each run of
+ * commas / control characters (CR, LF, tab, NUL, …) — together with any spaces
+ * around it — becomes one space; the result is trimmed. A name with none of
+ * those is returned unchanged (trimmed). A linear scan, not a regex, so the
+ * spaces-around-a-run rule can't backtrack.
+ */
+function assFontName(name: string): string {
+  const isBad = (c: string) => c === "," || c <= "\u001F" || c === "\u007F";
+  let out = "";
+  let pendingBreak = false;
+  for (const c of name) {
+    if (isBad(c)) {
+      pendingBreak = true;
+      out = out.trimEnd();
+    } else if (pendingBreak && c === " ") {
+      // swallow spaces after a bad run
+    } else {
+      if (pendingBreak && out) out += " ";
+      pendingBreak = false;
+      out += c;
+    }
+  }
+  return out.trim();
 }
 
 /**

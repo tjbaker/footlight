@@ -17,6 +17,10 @@
 import { vi, type Mock } from "vitest";
 import type { FootlightPlatform } from "../../src/platform/types.js";
 
+/** Every capability's default, checked against the REAL interface: `satisfies`
+ *  rejects a missing, misnamed, or mistyped field in a default's result (e.g.
+ *  `onsets` for `onsetEnvelope`), which the `vi.fn` cast in `platformMocks`
+ *  would otherwise hide. */
 function defaults() {
   return {
     extractFrame: async () => "data:image/png;base64,AAAA",
@@ -30,7 +34,7 @@ function defaults() {
     loudness: async () => ({
       display: [] as number[],
       detect: [] as number[],
-      onsets: [] as number[],
+      onsetEnvelope: [] as number[],
     }),
     track: async () => [],
     listFonts: async () => [],
@@ -51,7 +55,7 @@ function defaults() {
     getSecret: async () => null,
     setSecret: async () => undefined,
     deleteSecret: async () => undefined,
-  };
+  } satisfies Omit<FootlightPlatform, "supportsFilePicker">;
 }
 
 type Defaults = ReturnType<typeof defaults>;

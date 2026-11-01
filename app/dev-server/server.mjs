@@ -72,9 +72,10 @@ const REPO_ROOT = resolve(__dirname, "..", "..");
  * Spawn a command, collecting stdout/stderr. Resolves even on non-zero exit.
  *
  * `signal` ties the child to the HTTP request that started it: when the client
- * goes away before the response is sent (a superseded hover thumbnail, a closed
- * tab), the request's signal aborts and the child is killed instead of running
- * to completion for nobody (#262). Renders are NOT passed a signal: a render is
+ * goes away before the response is sent (the tab is closed or reloaded), the
+ * request's signal aborts and the child is killed instead of running to
+ * completion for nobody (#262). The frontend doesn't abort its own fetches, so
+ * a superseded hover thumbnail still runs to completion. Renders are NOT passed a signal: a render is
  * never stopped because a request closed, only by the user (the native shell
  * applies the same policy; see app/src-tauri/src/subprocess.rs).
  *
@@ -94,11 +95,9 @@ function run(command, args, { collectStdoutBinary = false, signal, onStdout } = 
   }
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
-    if (signal) {
-      const kill = () => child.kill();
-      signal.addEventListener("abort", kill, { once: true });
-      child.on("close", () => signal.removeEventListener("abort", kill));
-    }
+    // The listener lives as long as the request; killing a child that already
+    // exited is a no-op.
+    signal?.addEventListener("abort", () => child.kill(), { once: true });
     const stdoutChunks = [];
     let stderr = "";
     child.stdout.on("data", (d) => (onStdout ? onStdout(d) : stdoutChunks.push(d)));
@@ -629,7 +628,8 @@ export function createRequestListener({
 
     const url = new URL(req.url, `http://localhost:${PORT}`);
 
-    // Aborts when the client goes away before the response finished (#262).
+    // Aborts when the client goes away (tab closed or reloaded) before the
+    // response finished (#262).
     // `res` "close", not `req` "close": the latter fires as soon as the request
     // body has been read, not when the connection drops.
     const abandoned = new AbortController();
