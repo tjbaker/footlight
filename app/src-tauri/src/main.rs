@@ -1041,26 +1041,70 @@ fn history_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     Ok(dir.join("history.json"))
 }
 
-/// Load the persisted render history. A missing file yields an empty list; the
-/// frontend owns capping/ordering. Entries are opaque JSON (the TS HistoryEntry
-/// shape) so Rust does not mirror the type.
-#[tauri::command]
-async fn load_history(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
-    let path = history_path(&app)?;
-    let body = match std::fs::read_to_string(&path) {
-        Ok(b) => b,
-        Err(_) => return Ok(vec![]),
+/// Read a persisted JSON file, falling back to `T::default()` when it is missing
+/// or unreadable. An UNPARSEABLE file (e.g. truncated by a crash mid-write from
+/// an older build) also yields the default, so one bad file can't wedge the
+/// feature for good (#263); it is first renamed aside to `<name>.corrupt` so the
+/// bytes aren't silently destroyed. Mirrors `readJsonOrDefault` in
+/// app/dev-server/server.mjs — keep the two in parity.
+fn read_json_or_default<T: serde::de::DeserializeOwned + Default>(path: &std::path::Path) -> T {
+    let Ok(body) = std::fs::read_to_string(path) else {
+        return T::default();
     };
-    serde_json::from_str(&body).map_err(|e| format!("parse history: {e}"))
+    match serde_json::from_str(&body) {
+        Ok(value) => value,
+        Err(_) => {
+            // Best effort: if the rename fails the default is still returned and
+            // the next atomic save replaces the bad file.
+            let _ = std::fs::rename(path, corrupt_path(path));
+            T::default()
+        }
+    }
 }
 
-/// Persist the full render-history array to the app config dir.
+/// `<path>.corrupt` — where `read_json_or_default` moves an unparseable file.
+fn corrupt_path(path: &std::path::Path) -> std::path::PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(".corrupt");
+    std::path::PathBuf::from(name)
+}
+
+/// Serialize `value` and replace `path` ATOMICALLY: write a uniquely named temp
+/// file in the same directory, flush it to disk, then rename it over `path`. A
+/// crash mid-write leaves the previous file intact, never a truncated one (#263).
+/// Mirrors `writeJsonAtomic` in app/dev-server/server.mjs.
+fn write_json_atomic<T: Serialize>(path: &std::path::Path, value: &T) -> Result<(), String> {
+    use std::io::Write;
+    let body = serde_json::to_string(value).map_err(|e| format!("serialize: {e}"))?;
+    let dir = path
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty())
+        .unwrap_or_else(|| std::path::Path::new("."));
+    // Dropped (and deleted) on any early return, so no partial temp file lingers.
+    let mut tmp = tempfile::NamedTempFile::new_in(dir).map_err(|e| format!("create temp: {e}"))?;
+    tmp.write_all(body.as_bytes())
+        .map_err(|e| format!("write temp: {e}"))?;
+    tmp.as_file()
+        .sync_all()
+        .map_err(|e| format!("sync temp: {e}"))?;
+    tmp.persist(path)
+        .map_err(|e| format!("replace {}: {}", path.display(), e.error))?;
+    Ok(())
+}
+
+/// Load the persisted render history. A missing or corrupt file yields an empty
+/// list (see `read_json_or_default`); the frontend owns capping/ordering.
+/// Entries are opaque JSON (the TS HistoryEntry shape) so Rust does not mirror
+/// the type.
+#[tauri::command]
+async fn load_history(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    Ok(read_json_or_default(&history_path(&app)?))
+}
+
+/// Persist the full render-history array to the app config dir (atomically).
 #[tauri::command]
 async fn save_history(app: AppHandle, entries: Vec<serde_json::Value>) -> Result<(), String> {
-    let path = history_path(&app)?;
-    let body = serde_json::to_string(&entries).map_err(|e| format!("serialize history: {e}"))?;
-    std::fs::write(&path, body).map_err(|e| format!("write history: {e}"))?;
-    Ok(())
+    write_json_atomic(&history_path(&app)?, &entries).map_err(|e| format!("save history: {e}"))
 }
 
 /// Path to the persisted working-session file inside the app config dir, creating
@@ -1074,26 +1118,18 @@ fn session_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     Ok(dir.join("session.json"))
 }
 
-/// Load the persisted working session. A missing file yields `None`; the session
-/// is opaque JSON (the TS SessionData shape) so Rust does not mirror the type.
+/// Load the persisted working session. A missing or corrupt file yields `None`
+/// (see `read_json_or_default`); the session is opaque JSON (the TS SessionData
+/// shape) so Rust does not mirror the type.
 #[tauri::command]
 async fn load_session(app: AppHandle) -> Result<Option<serde_json::Value>, String> {
-    let path = session_path(&app)?;
-    let body = match std::fs::read_to_string(&path) {
-        Ok(b) => b,
-        Err(_) => return Ok(None),
-    };
-    let value = serde_json::from_str(&body).map_err(|e| format!("parse session: {e}"))?;
-    Ok(Some(value))
+    Ok(read_json_or_default(&session_path(&app)?))
 }
 
-/// Persist the working session to the app config dir.
+/// Persist the working session to the app config dir (atomically).
 #[tauri::command]
 async fn save_session(app: AppHandle, data: serde_json::Value) -> Result<(), String> {
-    let path = session_path(&app)?;
-    let body = serde_json::to_string(&data).map_err(|e| format!("serialize session: {e}"))?;
-    std::fs::write(&path, body).map_err(|e| format!("write session: {e}"))?;
-    Ok(())
+    write_json_atomic(&session_path(&app)?, &data).map_err(|e| format!("save session: {e}"))
 }
 
 /// One installed font family for the caption picker. Family-only is enough —
@@ -1558,6 +1594,78 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- history / session persistence (#263) ----------------------------
+
+    /// A truncated/corrupt history file loads as the default instead of an
+    /// error, and is preserved as `<name>.corrupt` rather than destroyed.
+    #[test]
+    fn read_json_or_default_recovers_from_a_corrupt_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("history.json");
+        std::fs::write(&path, "[{\"id\":\"a\"").unwrap();
+        let entries: Vec<serde_json::Value> = read_json_or_default(&path);
+        assert!(entries.is_empty());
+        assert!(!path.exists());
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("history.json.corrupt")).unwrap(),
+            "[{\"id\":\"a\""
+        );
+        // Same for the session: an empty (truncated) file -> None.
+        let session = dir.path().join("session.json");
+        std::fs::write(&session, "").unwrap();
+        let data: Option<serde_json::Value> = read_json_or_default(&session);
+        assert!(data.is_none());
+        assert!(dir.path().join("session.json.corrupt").exists());
+    }
+
+    /// Valid JSON of the wrong shape (an object where history wants an array)
+    /// is treated as corrupt too, matching the web backend.
+    #[test]
+    fn read_json_or_default_treats_a_wrong_shape_as_corrupt() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("history.json");
+        std::fs::write(&path, "{}").unwrap();
+        let entries: Vec<serde_json::Value> = read_json_or_default(&path);
+        assert!(entries.is_empty());
+        assert!(dir.path().join("history.json.corrupt").exists());
+    }
+
+    #[test]
+    fn read_json_or_default_missing_file_is_default_and_creates_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.json");
+        let data: Option<serde_json::Value> = read_json_or_default(&path);
+        assert!(data.is_none());
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    /// An atomic write replaces the old contents, round-trips through
+    /// `read_json_or_default`, and leaves no temp file behind.
+    #[test]
+    fn write_json_atomic_replaces_and_leaves_no_partial_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("history.json");
+        std::fs::write(&path, "old").unwrap();
+        let entries = vec![serde_json::json!({"id": "a", "ts": 1})];
+        write_json_atomic(&path, &entries).unwrap();
+        let back: Vec<serde_json::Value> = read_json_or_default(&path);
+        assert_eq!(back, entries);
+        let names: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(names, vec![std::ffi::OsString::from("history.json")]);
+    }
+
+    /// A failed write (target dir gone) errors and leaves nothing behind.
+    #[test]
+    fn write_json_atomic_failure_leaves_no_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing").join("session.json");
+        assert!(write_json_atomic(&path, &serde_json::json!({"a": 1})).is_err());
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
 
     // --- probe (ffprobe + cropdetect) ------------------------------------
 

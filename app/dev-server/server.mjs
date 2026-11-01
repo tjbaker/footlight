@@ -31,7 +31,18 @@
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { createReadStream, constants as fsConstants } from "node:fs";
-import { writeFile, readFile, mkdtemp, stat, readdir, mkdir, access } from "node:fs/promises";
+import {
+  writeFile,
+  readFile,
+  mkdtemp,
+  stat,
+  readdir,
+  mkdir,
+  access,
+  rename,
+  rm,
+} from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve, isAbsolute, extname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -440,41 +451,72 @@ async function handleCheckOutdir(outdir, res, repoRoot) {
   }
 }
 
+/**
+ * Read a persisted JSON file, falling back to `fallback` when it is missing or
+ * unreadable. An UNPARSEABLE file (or one `isValid` rejects) also yields the
+ * fallback, so one bad file can't wedge the feature for good (#263); it is
+ * first renamed aside to `<path>.corrupt` so the bytes aren't silently
+ * destroyed. Mirrors `read_json_or_default` in app/src-tauri/src/main.rs —
+ * keep the two in parity.
+ */
+async function readJsonOrDefault(path, fallback, isValid = () => true) {
+  let text;
+  try {
+    text = await readFile(path, "utf8");
+  } catch {
+    return fallback; // missing/unreadable — start fresh
+  }
+  try {
+    const value = JSON.parse(text);
+    if (isValid(value)) return value;
+  } catch {
+    // fall through: unparseable
+  }
+  // Best effort: if the rename fails the fallback is still returned and the
+  // next atomic save replaces the bad file.
+  await rename(path, `${path}.corrupt`).catch(() => {});
+  return fallback;
+}
+
+/**
+ * Serialize `value` and replace `path` ATOMICALLY: write a uniquely named temp
+ * file in the same directory, then rename it over `path`. A crash mid-write
+ * leaves the previous file intact, never a truncated one (#263). Mirrors
+ * `write_json_atomic` in app/src-tauri/src/main.rs.
+ */
+async function writeJsonAtomic(path, value) {
+  const tmp = `${path}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(tmp, JSON.stringify(value), "utf8");
+    await rename(tmp, path);
+  } catch (err) {
+    await rm(tmp, { force: true });
+    throw err;
+  }
+}
+
 /** GET /history — the persisted render history; [] if missing or malformed. */
 async function handleLoadHistory(res, historyPath) {
-  let entries;
-  try {
-    entries = JSON.parse(await readFile(historyPath, "utf8"));
-  } catch {
-    // Missing file or unparseable JSON — start fresh.
-    entries = [];
-  }
-  sendJson(res, 200, entries);
+  // Non-array JSON is malformed too (the native side fails to deserialize it).
+  sendJson(res, 200, await readJsonOrDefault(historyPath, [], Array.isArray));
 }
 
 /** POST /history — persist the full history array from the body's `entries`. */
 async function handleSaveHistory(body, res, historyPath) {
   const entries = JSON.parse(body).entries;
-  await writeFile(historyPath, JSON.stringify(entries), "utf8");
+  await writeJsonAtomic(historyPath, entries);
   sendJson(res, 200, { ok: true });
 }
 
 /** GET /session — the persisted working session; null if missing or malformed. */
 async function handleLoadSession(res, sessionPath) {
-  let data;
-  try {
-    data = JSON.parse(await readFile(sessionPath, "utf8"));
-  } catch {
-    // Missing file or unparseable JSON — no session to restore.
-    data = null;
-  }
-  sendJson(res, 200, data);
+  sendJson(res, 200, await readJsonOrDefault(sessionPath, null));
 }
 
 /** POST /session — persist the working session from the body's `data`. */
 async function handleSaveSession(body, res, sessionPath) {
   const data = JSON.parse(body).data;
-  await writeFile(sessionPath, JSON.stringify(data), "utf8");
+  await writeJsonAtomic(sessionPath, data);
   sendJson(res, 200, { ok: true });
 }
 

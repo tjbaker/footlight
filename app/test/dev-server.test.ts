@@ -23,7 +23,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
-import { mkdtemp, writeFile, readFile, mkdir, stat } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, mkdir, stat, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, basename } from "node:path";
 
@@ -713,6 +713,29 @@ describe("history and session round-trips", () => {
     await writeFile(sessionPath, "{corrupt", "utf8");
     expect(await (await fetch(`${base}/history`)).json()).toEqual([]);
     expect(await (await fetch(`${base}/session`)).json()).toBeNull();
+  });
+
+  it("preserves a malformed file as <name>.corrupt instead of destroying it (#263)", async () => {
+    await writeFile(historyPath, '[{"id":"a"', "utf8");
+    expect(await (await fetch(`${base}/history`)).json()).toEqual([]);
+    expect(await readFile(`${historyPath}.corrupt`, "utf8")).toBe('[{"id":"a"');
+    await expect(stat(historyPath)).rejects.toThrow();
+  });
+
+  it("treats non-array history JSON as malformed, matching the native backend", async () => {
+    await writeFile(historyPath, "{}", "utf8");
+    expect(await (await fetch(`${base}/history`)).json()).toEqual([]);
+    expect(await readFile(`${historyPath}.corrupt`, "utf8")).toBe("{}");
+  });
+
+  it("records history again after a corrupt file (atomic save, no temp left behind)", async () => {
+    await writeFile(historyPath, "", "utf8"); // truncated by a crash mid-write
+    expect(await (await fetch(`${base}/history`)).json()).toEqual([]);
+    const entries = [{ id: "b", ts: 2, spec: { source: "/v.mp4" }, outdir: "clips" }];
+    await fetch(`${base}/history`, { method: "POST", body: JSON.stringify({ entries }) });
+    expect(await (await fetch(`${base}/history`)).json()).toEqual(entries);
+    const leftovers = (await readdir(root)).filter((n) => n.endsWith(".tmp"));
+    expect(leftovers).toEqual([]);
   });
 
   it("POST /history persists entries that GET /history returns", async () => {
