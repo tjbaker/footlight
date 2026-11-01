@@ -123,7 +123,27 @@ impl Registry {
     /// program in error messages ("ffmpeg", "node CLI"). A non-zero exit is
     /// NOT an error here (callers inspect `status`), only a failed spawn or a
     /// quit.
-    pub async fn run(&self, mut cmd: Command, what: &str, kind: Kind) -> Result<Output, String> {
+    pub async fn run(&self, cmd: Command, what: &str, kind: Kind) -> Result<Output, String> {
+        let mut stdout = Vec::new();
+        let mut out = self
+            .run_streaming(cmd, what, kind, |chunk| stdout.extend_from_slice(chunk))
+            .await?;
+        out.stdout = stdout;
+        Ok(out)
+    }
+
+    /// [`Registry::run`], but stdout is handed to `on_stdout` chunk by chunk
+    /// as the child writes it instead of being collected (the returned
+    /// `Output::stdout` is empty), for output too large to hold, like the
+    /// loudness pass's PCM (#277). stderr is still collected. Same spawn,
+    /// process group, stop and reap path as every other run.
+    pub async fn run_streaming(
+        &self,
+        mut cmd: Command,
+        what: &str,
+        kind: Kind,
+        mut on_stdout: impl FnMut(&[u8]),
+    ) -> Result<Output, String> {
         cmd.stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -149,11 +169,14 @@ impl Registry {
         let mut stderr = child.stderr.take().expect("stderr is piped");
         let outcome = {
             let finished = async {
-                let (status, stdout, stderr) =
-                    tokio::try_join!(child.wait(), read_all(&mut stdout), read_all(&mut stderr))?;
+                let (status, (), stderr) = tokio::try_join!(
+                    child.wait(),
+                    stream(&mut stdout, &mut on_stdout),
+                    read_all(&mut stderr)
+                )?;
                 Ok::<_, io::Error>(Output {
                     status,
-                    stdout,
+                    stdout: Vec::new(),
                     stderr,
                 })
             };
@@ -220,6 +243,21 @@ async fn read_all(pipe: &mut (impl AsyncRead + Unpin)) -> io::Result<Vec<u8>> {
     Ok(buf)
 }
 
+/// Hand everything read from `pipe` to `on_chunk`, 64 KiB at a time.
+async fn stream(
+    pipe: &mut (impl AsyncRead + Unpin),
+    on_chunk: &mut impl FnMut(&[u8]),
+) -> io::Result<()> {
+    let mut buf = vec![0u8; 64 * 1024];
+    loop {
+        let n = pipe.read(&mut buf).await?;
+        if n == 0 {
+            return Ok(());
+        }
+        on_chunk(&buf[..n]);
+    }
+}
+
 /// Kill `child` and everything it started. `pgid` is the child's pid as
 /// recorded at spawn.
 ///
@@ -267,6 +305,16 @@ fn registry() -> &'static Registry {
 /// subprocess goes through here.
 pub async fn run_output(cmd: Command, what: &str, kind: Kind) -> Result<Output, String> {
     registry().run(cmd, what, kind).await
+}
+
+/// [`Registry::run_streaming`] on the app-wide registry.
+pub async fn run_streaming(
+    cmd: Command,
+    what: &str,
+    kind: Kind,
+    on_stdout: impl FnMut(&[u8]),
+) -> Result<Output, String> {
+    registry().run_streaming(cmd, what, kind, on_stdout).await
 }
 
 /// [`Registry::hold`] on the app-wide registry. A command whose child uses a
@@ -330,6 +378,32 @@ mod tests {
         assert_eq!(out.stderr, b"err");
         assert_eq!(out.status.code(), Some(3)); // non-zero is the caller's call
         assert!(!reg.render_running());
+        assert!(reg.stop_all(true, Duration::from_millis(10))); // nothing left live
+    }
+
+    #[test]
+    fn run_streaming_hands_over_stdout_without_collecting_it() {
+        // ~1 MiB of stdout across many reads, plus stderr, without deadlock.
+        let reg = Registry::new();
+        let mut seen = 0usize;
+        let mut chunks = 0usize;
+        let out = rt()
+            .block_on(reg.run_streaming(
+                sh("head -c 1048576 /dev/zero; printf err >&2; exit 2"),
+                "sh",
+                Kind::Analysis,
+                |chunk| {
+                    assert!(chunk.iter().all(|&b| b == 0));
+                    seen += chunk.len();
+                    chunks += 1;
+                },
+            ))
+            .unwrap();
+        assert_eq!(seen, 1 << 20);
+        assert!(chunks > 1, "stdout arrived in one piece");
+        assert!(out.stdout.is_empty()); // handed over, not collected
+        assert_eq!(out.stderr, b"err");
+        assert_eq!(out.status.code(), Some(2));
         assert!(reg.stop_all(true, Duration::from_millis(10))); // nothing left live
     }
 

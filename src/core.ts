@@ -10,6 +10,8 @@
  * which re-exports everything here.
  */
 
+import { BucketRmsAccumulator, F32leDecoder, FrameRmsAccumulator } from "./pcm-envelope.js";
+
 export const TARGET_W = 1080;
 export const TARGET_H = 1920; // 9:16
 export const TARGET_AR = 9 / 16;
@@ -1566,58 +1568,23 @@ export function bucketLufs(lufs: number[], buckets: number = LOUDNESS_BUCKETS): 
 }
 
 /**
- * The ONE RMS-envelope builder behind `bucketLoudness` and `onsetEnvelope`:
- * the RMS of each of `windows` windows of `samples` (window k spans
- * [bound(k), bound(k+1)); an empty window → 0), then max-normalized to 0..1
- * (max=0 → all zeros, unnormalized). `decimals`, when given, rounds each
- * normalized value to that many places.
- */
-function rmsEnvelope(
-  samples: Float32Array,
-  windows: number,
-  bound: (k: number) => number,
-  decimals?: number,
-): number[] {
-  const out = new Array<number>(windows).fill(0);
-  for (let k = 0; k < windows; k++) {
-    const start = bound(k);
-    const end = bound(k + 1);
-    let sumSq = 0;
-    for (let i = start; i < end; i++) {
-      const s = samples[i]!;
-      sumSq += s * s;
-    }
-    const count = end - start;
-    out[k] = count > 0 ? Math.sqrt(sumSq / count) : 0;
-  }
-
-  let max = 0;
-  for (const v of out) if (v > max) max = v;
-  if (max <= 0) return out;
-  const scale = decimals === undefined ? undefined : 10 ** decimals;
-  for (let k = 0; k < windows; k++) {
-    const v = out[k]! / max;
-    out[k] = scale === undefined ? v : Math.round(v * scale) / scale;
-  }
-  return out;
-}
-
-/**
  * Bucket raw mono PCM float samples into `buckets` equal-width windows, compute
  * the RMS of each window, then normalize the whole array to 0..1 by dividing by
  * the max (guarding max=0 → all zeros). Returns an array of length `buckets`.
  *
  * Pure: pass a `Float32Array` (e.g. from the f32le stdout of
  * `loudnessCombinedArgs`) and a bucket count (default `LOUDNESS_BUCKETS`).
- * Empty input yields all zeros.
+ * Empty input yields all zeros. Runs on the bounded-memory
+ * `BucketRmsAccumulator` (shared with `PcmLoudnessStream`): exact per-sample
+ * windows below `RMS_CHUNK_CAP` samples, chunk-snapped edges beyond it.
  */
 export function bucketLoudness(
   samples: Float32Array,
   buckets: number = LOUDNESS_BUCKETS,
 ): number[] {
-  if (buckets <= 0) return [];
-  const n = samples.length;
-  return rmsEnvelope(samples, buckets, (b) => Math.floor((b * n) / buckets));
+  const acc = new BucketRmsAccumulator();
+  acc.push(samples);
+  return acc.finish(buckets);
 }
 
 // Tunable thresholds for the swell heuristic — kept named so they are easy to
@@ -1796,9 +1763,52 @@ export const ONSET_FRAME_SEC = 0.02;
  * platform boundary and the Rust mirror can pin identical fixtures.
  */
 export function onsetEnvelope(samples: Float32Array, sampleRate = 8000): number[] {
-  const frameLen = Math.max(1, Math.round(sampleRate * ONSET_FRAME_SEC));
-  const frames = Math.floor(samples.length / frameLen);
-  return rmsEnvelope(samples, frames, (f) => f * frameLen, 4);
+  const acc = new FrameRmsAccumulator(onsetFrameLen(sampleRate));
+  acc.push(samples);
+  return acc.finish(ONSET_DECIMALS);
+}
+
+/** Onset-envelope rounding (decimal places). */
+const ONSET_DECIMALS = 4;
+
+/** Samples per onset frame at `sampleRate` (at least 1). */
+function onsetFrameLen(sampleRate: number): number {
+  return Math.max(1, Math.round(sampleRate * ONSET_FRAME_SEC));
+}
+
+/**
+ * The loudness pass's PCM half, STREAMED (issue #277): feed the f32le stdout of
+ * `loudnessCombinedArgs` chunk by chunk as it arrives (any size, floats may
+ * split across chunks), then `finish()` for the `detect` envelope
+ * (`bucketLoudness`, `LOUDNESS_BUCKETS` windows) and the `onsetEnvelope`. Both
+ * come from the same accumulators the buffered functions use, so feeding all
+ * the bytes at once or in pieces gives identical results, and memory for the
+ * PCM stays bounded however long the source is (see pcm-envelope.ts).
+ */
+export class PcmLoudnessStream {
+  private readonly decoder = new F32leDecoder();
+  private readonly detect = new BucketRmsAccumulator();
+  private readonly onset: FrameRmsAccumulator;
+  /** Total stdout bytes seen (the handler's "no PCM at all" check). */
+  bytes = 0;
+
+  constructor(sampleRate = 8000) {
+    this.onset = new FrameRmsAccumulator(onsetFrameLen(sampleRate));
+  }
+
+  push(chunk: Uint8Array): void {
+    this.bytes += chunk.length;
+    const samples = this.decoder.push(chunk);
+    this.detect.push(samples);
+    this.onset.push(samples);
+  }
+
+  finish(): { detect: number[]; onsetEnvelope: number[] } {
+    return {
+      detect: this.detect.finish(LOUDNESS_BUCKETS),
+      onsetEnvelope: this.onset.finish(ONSET_DECIMALS),
+    };
+  }
 }
 
 // Tunable thresholds for the onset detector — named so they are easy to adjust.

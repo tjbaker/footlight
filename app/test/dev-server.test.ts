@@ -48,6 +48,8 @@ import {
   frameExtractTailArgs,
   scenesArgs,
   loudnessCombinedArgs,
+  bucketLoudness,
+  onsetEnvelope,
   coverFrameArgs,
   LOUDNESS_BUCKETS,
 } from "../../dist/core.js";
@@ -56,7 +58,8 @@ import {
 
 interface SpawnScript {
   code?: number;
-  stdout?: string | Buffer;
+  /** Emitted as one chunk, or as each of several chunks in order. */
+  stdout?: string | Buffer | Buffer[];
   stderr?: string;
   /** Emit a spawn-level error (binary not on PATH) instead of running. */
   error?: Error;
@@ -93,8 +96,10 @@ function fakeChild(script: SpawnScript): FakeChild {
       return;
     }
     const out = script.stdout ?? "";
-    if (out.length > 0) {
-      child.stdout.emit("data", Buffer.isBuffer(out) ? out : Buffer.from(out));
+    for (const chunk of Array.isArray(out) ? out : [out]) {
+      if (chunk.length > 0) {
+        child.stdout.emit("data", Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
     }
     if (script.stderr) child.stderr.emit("data", Buffer.from(script.stderr));
     child.emit("close", script.code ?? 0);
@@ -455,6 +460,25 @@ describe("GET /loudness", () => {
     // max-normalized (computed by the same core.ts onsetEnvelope the CLI uses).
     expect(body.onsetEnvelope).toEqual([0.1, 1, 0.1]);
     expect(spawnCall(0)).toEqual({ cmd: "ffmpeg", args: loudnessCombinedArgs("/v.mp4") });
+  });
+
+  it("streams the PCM: odd chunk splits give the same envelopes as one buffer (#277)", async () => {
+    // 1000 samples, cut into 1..7-byte pieces so floats split across chunks
+    // and most chunks start off a 4-byte boundary.
+    const samples = new Float32Array(1000).map((_, i) => (i % 50) / 50 + i / 1000);
+    const pcm = Buffer.from(samples.buffer);
+    const chunks: Buffer[] = [];
+    for (let i = 0, len = 1; i < pcm.length; i += len, len = (len % 7) + 1) {
+      chunks.push(Buffer.from(pcm.subarray(i, i + len)));
+    }
+    onSpawn(() => ({ stdout: chunks }));
+
+    const res = await fetch(`${base}/loudness?source=/v.mp4`);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { detect: number[]; onsetEnvelope: number[] };
+    expect(body.detect).toEqual(bucketLoudness(samples, LOUDNESS_BUCKETS));
+    expect(body.onsetEnvelope).toEqual(onsetEnvelope(samples));
   });
 
   it("500s only when the pass fails AND yields neither stderr readings nor PCM", async () => {
