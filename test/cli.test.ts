@@ -13,7 +13,7 @@
 
 import { describe, it, expect, beforeAll } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -553,15 +553,29 @@ describe("render flag validation (issue: fail fast, not per-clip at ffmpeg time)
   });
 
   it("rejects a malformed --audio-bitrate (a bare 256 would mean 256 bit/s) (issue #279)", () => {
-    for (const bad of ["256", "abc", "0k", "0.0k", "-256k", "256kb", "", "COPY"]) {
+    for (const bad of [
+      "256",
+      "999",
+      "abc",
+      "0k",
+      "0.0k",
+      "-256k",
+      "256kb",
+      "",
+      "COPY",
+      "0192000",
+    ]) {
       const { code, stderr } = runCli(["render", manifest(), "--dry-run", "--audio-bitrate", bad]);
       expect(code, `--audio-bitrate ${JSON.stringify(bad)}`).toBe(1);
-      expect(stderr).toContain('--audio-bitrate must be "copy" or a bitrate');
+      expect(stderr).toContain('--audio-bitrate must be "copy", a bitrate with a k/M suffix');
     }
+    // A small bare number gets the k-suffix hint.
+    const { stderr } = runCli(["render", manifest(), "--dry-run", "--audio-bitrate", "256"]);
+    expect(stderr).toContain("(did you mean 256k?)");
   });
 
-  it("accepts copy and suffixed audio bitrates", () => {
-    for (const ok of ["copy", "256k", "320K", "1.5M"]) {
+  it("accepts copy, suffixed audio bitrates, and bare bits/s >= 1000", () => {
+    for (const ok of ["copy", "256k", "320K", "1.5M", "1000", "192000"]) {
       const { code, stderr } = runCli(["render", manifest(), "--dry-run", "--audio-bitrate", ok]);
       expect(code, ok).toBe(0);
       expect(stderr).toBe("");
@@ -655,5 +669,43 @@ describe.skipIf(process.platform === "win32")("render when ffmpeg dies by signal
     expect(code).toBe(1);
     expect(stderr).toContain("FAILED — ffmpeg killed by SIGKILL");
     expect(stdout).toContain("Done: 0/1 clips, 1 failed/skipped");
+  });
+});
+
+describe.skipIf(process.platform === "win32")("render a subpath out_name (issue #279)", () => {
+  it("creates the output's parent folder before ffmpeg runs (a real render, not --dry-run)", () => {
+    // Fake ffprobe, and an ffmpeg that — like the real one — fails unless its
+    // output's parent folder already exists, then writes the file.
+    const dir = tmp();
+    const bin = join(dir, "bin");
+    mkdirSync(bin);
+    const probe = JSON.stringify({
+      streams: [{ width: 1920, height: 1080 }],
+      format: { duration: "10" },
+    });
+    writeFileSync(join(bin, "ffprobe"), `#!/bin/sh\necho '${probe}'\n`, { mode: 0o755 });
+    writeFileSync(
+      join(bin, "ffmpeg"),
+      '#!/bin/sh\nfor a; do out=$a; done\n[ -d "$(dirname "$out")" ] || exit 7\n: > "$out"\n',
+      { mode: 0o755 },
+    );
+    const src = join(dir, "src.mp4");
+    writeFileSync(src, "");
+    const manifest = join(dir, "m.csv");
+    writeFileSync(
+      manifest,
+      `source_file,in_point,out_point,out_name\n${src},0,1,sub/deeper/clip\n`,
+      "utf8",
+    );
+
+    const out = join(dir, "out");
+    const { code, stdout, stderr } = runCli(["render", manifest, "--outdir", out], {
+      env: { PATH: `${bin}${delimiter}${process.env.PATH ?? ""}` },
+    });
+
+    expect(stderr).toBe("");
+    expect(code).toBe(0);
+    expect(stdout).toContain("Done: 1/1 clips");
+    expect(existsSync(join(out, "sub", "deeper", "clip.mp4"))).toBe(true);
   });
 });

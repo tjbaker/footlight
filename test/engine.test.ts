@@ -282,21 +282,45 @@ describe("buildFfmpegArgs golden cases", () => {
   describe("output path hardening (issue #279)", () => {
     const ROW: ClipRow = { source_file: "in.mp4", in_point: "0", out_point: "10" };
 
-    it("rejects an out_name that escapes the outdir (.. segment or absolute path)", () => {
-      for (const out_name of [
-        "../escape",
-        "../../etc/x.mp4",
-        "sub/../../x",
-        "..\\win",
-        "..",
-        "/abs/x.mp4",
-        "\\\\server\\share\\x",
-        "C:\\x.mp4",
-      ]) {
+    const ESCAPES_EVERYWHERE = ["../escape", "../../etc/x.mp4", "sub/../../x", "..", "/abs/x.mp4"];
+    // Escapes only under Windows path rules; ordinary filenames on POSIX.
+    const WINDOWS_ONLY = [
+      "..\\win",
+      "sub\\..\\..\\x",
+      "\\\\server\\share\\x",
+      "\\x",
+      "C:\\x.mp4",
+      "x:clip",
+      "A:Side",
+    ];
+
+    it("rejects an out_name that escapes the outdir (POSIX rules, the default)", () => {
+      for (const out_name of ESCAPES_EVERYWHERE) {
         expect(() => build({ ...ROW, out_name }, [1920, 1080]), out_name).toThrow(
           /out_name .* must stay inside the output folder/,
         );
       }
+    });
+
+    it("POSIX: drive-letter and backslash names are ordinary filenames", () => {
+      for (const out_name of WINDOWS_ONLY) {
+        const { outPath } = build({ ...ROW, out_name }, [1920, 1080], { windowsPaths: false });
+        const file = out_name.endsWith(".mp4") ? out_name : `${out_name}.mp4`;
+        expect(outPath, out_name).toBe(`clips/${file}`);
+      }
+    });
+
+    it("Windows: also rejects backslash .. segments, drives and leading backslashes", () => {
+      for (const out_name of [...ESCAPES_EVERYWHERE, ...WINDOWS_ONLY]) {
+        expect(
+          () => build({ ...ROW, out_name }, [1920, 1080], { windowsPaths: true }),
+          out_name,
+        ).toThrow(/out_name .* must stay inside the output folder/);
+      }
+      // Relative subpaths with either separator are still fine.
+      expect(
+        build({ ...ROW, out_name: "sub\\clip" }, [1920, 1080], { windowsPaths: true }).outPath,
+      ).toBe("clips/sub\\clip.mp4");
     });
 
     it("keeps legitimate names unchanged — including relative subpaths and dotted names", () => {

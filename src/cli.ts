@@ -14,7 +14,7 @@
 import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { parseCsv } from "./csv.js";
 import {
@@ -157,11 +157,18 @@ const X264_PRESETS = new Set([
 ]);
 
 /**
- * A `--audio-bitrate` other than `copy`: a positive number with an explicit
- * k/M suffix (`256k`, `1.5M`). A bare `256` is rejected — ffmpeg reads it as
- * 256 bits/s, never what anyone means.
+ * Whether a `--audio-bitrate` other than `copy` is acceptable: a positive
+ * number with a k/M suffix (`256k`, `1.5M`), or a bare integer of at least
+ * 1000 bits/s (`192000`; ffmpeg's own unit). A small bare number like `256` is
+ * rejected as the likely typo for `256k` — ffmpeg would read it as 256 bits/s.
  */
-const AUDIO_BITRATE_RE = /^(?:[1-9]\d*|\d+\.\d+)[kKmM]$/;
+function isValidAudioBitrate(value: string): boolean {
+  if (/^(?:[1-9]\d*|\d+\.\d+)[kKmM]$/.test(value)) return parseFloat(value) > 0;
+  return /^[1-9]\d*$/.test(value) && Number(value) >= MIN_BARE_AUDIO_BITRATE;
+}
+
+/** Smallest bare (suffix-less, bits/s) `--audio-bitrate` accepted. */
+const MIN_BARE_AUDIO_BITRATE = 1000;
 
 /** `footlight render` — read a CSV or JSON manifest, build + run ffmpeg per row. */
 async function cmdRender(argv: string[]): Promise<number> {
@@ -202,13 +209,12 @@ async function cmdRender(argv: string[]): Promise<number> {
     return 1;
   }
   const audioBitrate = String(flags.get("audio-bitrate") ?? DEFAULT_RENDER_OPTIONS.audioBitrate);
-  if (
-    audioBitrate !== "copy" &&
-    !(AUDIO_BITRATE_RE.test(audioBitrate) && parseFloat(audioBitrate) > 0)
-  ) {
+  if (audioBitrate !== "copy" && !isValidAudioBitrate(audioBitrate)) {
     console.error(
-      `render: --audio-bitrate must be "copy" or a bitrate with a k/M suffix like 256k, ` +
-        `got ${JSON.stringify(audioBitrate)}`,
+      `render: --audio-bitrate must be "copy", a bitrate with a k/M suffix like 256k, ` +
+        `or bits/s of at least ${MIN_BARE_AUDIO_BITRATE} like 192000 — ` +
+        `got ${JSON.stringify(audioBitrate)}` +
+        (/^\d+$/.test(audioBitrate) ? ` (did you mean ${audioBitrate}k?)` : ""),
     );
     return 1;
   }
@@ -380,6 +386,7 @@ async function cmdRender(argv: string[]): Promise<number> {
           cropWindow: item.cropWindow,
           cropWindowPath: item.cropWindowPath,
           burnCaptions,
+          windowsPaths: process.platform === "win32",
           ...(captionAssPath ? { captionAssPath } : {}),
           ...(clipFontFile ? { captionFontFile: clipFontFile } : {}),
           ...(clipFontName ? { captionFontName: clipFontName } : {}),
@@ -405,6 +412,15 @@ async function cmdRender(argv: string[]): Promise<number> {
       }
 
       console.log(`${label} ${built.outPath}`);
+      // ffmpeg won't create a missing parent, so a subpath `out_name` like
+      // `sub/clip` needs its folder made first (outdir itself exists already).
+      try {
+        mkdirSync(dirname(built.outPath), { recursive: true });
+      } catch (err) {
+        console.error(`${label} FAILED — cannot create output folder: ${errMsg(err)}`);
+        failures++;
+        continue;
+      }
       const result = await run("ffmpeg", built.args, { inheritStdio: true });
       if (result.code !== 0) {
         console.error(`${label} FAILED — ffmpeg ${describeExit(result)}`);
