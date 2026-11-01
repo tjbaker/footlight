@@ -57,6 +57,24 @@ describe("run", () => {
     });
   });
 
+  it("decodes a multi-byte UTF-8 character split across chunks (issue #279)", async () => {
+    const child = makeFakeChild();
+    vi.mocked(spawn).mockReturnValue(child as never);
+
+    // "é" is 0xC3 0xA9 and "🎸" is 4 bytes; split both mid-character, on both pipes.
+    const out = Buffer.from("café 🎸", "utf8");
+    const err = Buffer.from("Beyoncé", "utf8");
+    const p = run("ffprobe", []);
+    child.stdout.emit("data", out.subarray(0, 4)); // "caf" + first byte of é
+    child.stdout.emit("data", out.subarray(4, 8)); // rest of é, space, 2 bytes of 🎸
+    child.stdout.emit("data", out.subarray(8));
+    child.stderr.emit("data", err.subarray(0, 7));
+    child.stderr.emit("data", err.subarray(7));
+    child.emit("close", 0);
+
+    await expect(p).resolves.toEqual({ code: 0, stdout: "café 🎸", stderr: "Beyoncé" });
+  });
+
   it("passes inheritStdio through to spawn's stdio option", async () => {
     const child = makeFakeChild();
     vi.mocked(spawn).mockReturnValue(child as never);

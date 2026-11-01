@@ -105,6 +105,32 @@ describe("buildCaptionAss (pure, libass — SPEC §6.5)", () => {
     );
   });
 
+  it("sanitizes a font name that would corrupt the comma-separated Style line (issue #279)", () => {
+    const FORMAT_FIELDS = 23; // Name … Encoding in the [V4+ Styles] Format line
+    for (const captionFontName of ["Evil, Font", "Bad\nFont", "Tab\tFont\r\n", "A,,\u0000B"]) {
+      const ass = buildCaptionAss({ ...ROW, hook: "H" }, opts({ captionFontName }))!;
+      const s = styleLine(ass);
+      expect(s.split(",").length, JSON.stringify(captionFontName)).toBe(FORMAT_FIELDS);
+      // No stray line was injected after the Style line.
+      expect(ass.split("\n")[ass.split("\n").indexOf(s) + 1]).toBe("");
+    }
+    const name = (n: string) =>
+      styleLine(buildCaptionAss({ ...ROW, hook: "H" }, opts({ captionFontName: n }))!).split(
+        ",",
+      )[1];
+    expect(name("Evil, Font")).toBe("Evil Font");
+    expect(name("Bad\nFont")).toBe("Bad Font");
+    expect(name("A,,\u0000B")).toBe("A B");
+    // A file stem goes through the same sanitizer.
+    expect(
+      styleLine(
+        buildCaptionAss({ ...ROW, hook: "H" }, opts({ captionFontFile: "/f/Odd,Name.ttf" }))!,
+      ),
+    ).toContain("Style: Caption,Odd Name,");
+    // A name that is nothing but separators falls back to the default family.
+    expect(name(",\n,")).toBe("Sans");
+  });
+
   it("neutralizes ASS override braces and strips backslashes from text", () => {
     const d = dialogueLine(buildCaptionAss({ ...ROW, hook: "a{\\b1}b" }, opts())!);
     // the inline \fs tag we add is intact, but the user's braces/backslash are gone
