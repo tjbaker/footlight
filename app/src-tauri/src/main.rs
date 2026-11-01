@@ -1462,7 +1462,14 @@ fn request_quit(app: &AppHandle) {
 /// Ask whether to quit while a render is running. "Quit" exits (which stops the
 /// render via `RunEvent::Exit`); "Keep Rendering" leaves everything as it was.
 fn confirm_quit_during_render(app: &AppHandle) {
-    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+    use tauri_plugin_dialog::{
+        DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult,
+    };
+    // "Keep Rendering" is the first (default, Return) button so a reflexive
+    // Enter never stops a render; only an explicit "Quit" does. Closing the
+    // dialog any other way keeps rendering too.
+    const KEEP: &str = "Keep Rendering";
+    const QUIT: &str = "Quit";
     if QUIT_PROMPT_OPEN.swap(true, Ordering::SeqCst) {
         return;
     }
@@ -1474,12 +1481,12 @@ fn confirm_quit_during_render(app: &AppHandle) {
         .title("Quit Footlight?")
         .kind(MessageDialogKind::Warning)
         .buttons(MessageDialogButtons::OkCancelCustom(
-            "Quit".into(),
-            "Keep Rendering".into(),
+            KEEP.into(),
+            QUIT.into(),
         ))
-        .show(move |quit| {
+        .show_with_result(move |result| {
             QUIT_PROMPT_OPEN.store(false, Ordering::SeqCst);
-            if quit {
+            if result == MessageDialogResult::Custom(QUIT.into()) {
                 QUIT_CONFIRMED.store(true, Ordering::SeqCst);
                 handle.exit(0);
             }
