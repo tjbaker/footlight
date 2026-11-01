@@ -18,7 +18,7 @@
 //!   alone would leave that ffmpeg encoding to its output file. On Windows the
 //!   tree is killed with `taskkill /T /F`.
 //! - A render is never stopped silently. [`Kind::Render`] work is counted, and
-//!   main.rs asks before quitting while a render runs ("Quit" / "Keep
+//!   menu.rs asks before quitting while a render runs ("Quit" / "Keep
 //!   Rendering"). `stop_all(true)` (a confirmed quit) stops renders too;
 //!   `stop_all(false)` (an OS-initiated terminate nobody confirmed, e.g. Dock >
 //!   Quit or logout) leaves a running render alone, as before #262. Analysis
