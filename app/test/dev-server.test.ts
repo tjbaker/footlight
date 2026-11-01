@@ -23,7 +23,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
-import { mkdtemp, writeFile, readFile, mkdir, stat } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, mkdir, stat, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, basename } from "node:path";
 
@@ -713,6 +713,50 @@ describe("history and session round-trips", () => {
     await writeFile(sessionPath, "{corrupt", "utf8");
     expect(await (await fetch(`${base}/history`)).json()).toEqual([]);
     expect(await (await fetch(`${base}/session`)).json()).toBeNull();
+  });
+
+  it("preserves a malformed file as <name>.corrupt instead of destroying it (#263)", async () => {
+    await writeFile(historyPath, '[{"id":"a"', "utf8");
+    expect(await (await fetch(`${base}/history`)).json()).toEqual([]);
+    expect(await readFile(`${historyPath}.corrupt`, "utf8")).toBe('[{"id":"a"');
+    await expect(stat(historyPath)).rejects.toThrow();
+  });
+
+  it("keeps a file truncated mid-UTF-8 sequence as .corrupt, matching the native backend", async () => {
+    const full = Buffer.from('{"title":"caf\u00e9"}', "utf8");
+    const cut = full.subarray(0, full.length - 3); // ends inside the 2-byte 'é'
+    await writeFile(sessionPath, cut);
+    expect(await (await fetch(`${base}/session`)).json()).toBeNull();
+    expect(await readFile(`${sessionPath}.corrupt`)).toEqual(cut);
+  });
+
+  it("surfaces a non-ENOENT read error instead of defaulting (file left in place)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await rm(historyPath, { force: true });
+    await mkdir(historyPath); // reading a directory fails with EISDIR
+    try {
+      const res = await fetch(`${base}/history`);
+      expect(res.status).toBe(500);
+      expect((await stat(historyPath)).isDirectory()).toBe(true);
+    } finally {
+      await rm(historyPath, { recursive: true, force: true });
+    }
+  });
+
+  it("treats non-array history JSON as malformed, matching the native backend", async () => {
+    await writeFile(historyPath, "{}", "utf8");
+    expect(await (await fetch(`${base}/history`)).json()).toEqual([]);
+    expect(await readFile(`${historyPath}.corrupt`, "utf8")).toBe("{}");
+  });
+
+  it("records history again after a corrupt file (atomic save, no temp left behind)", async () => {
+    await writeFile(historyPath, "", "utf8"); // truncated by a crash mid-write
+    expect(await (await fetch(`${base}/history`)).json()).toEqual([]);
+    const entries = [{ id: "b", ts: 2, spec: { source: "/v.mp4" }, outdir: "clips" }];
+    await fetch(`${base}/history`, { method: "POST", body: JSON.stringify({ entries }) });
+    expect(await (await fetch(`${base}/history`)).json()).toEqual(entries);
+    const leftovers = (await readdir(root)).filter((n) => n.endsWith(".tmp"));
+    expect(leftovers).toEqual([]);
   });
 
   it("POST /history persists entries that GET /history returns", async () => {
