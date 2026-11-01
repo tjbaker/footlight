@@ -648,6 +648,13 @@ export interface BuildOptions extends RenderOptions {
    * path here (not the content) lets `buildFfmpegArgs` stay pure.
    */
   captionAssPath?: string;
+  /**
+   * Interpret `out_name` with Windows path rules (`\` is a separator; `C:…` and
+   * a leading `\` are absolute) when checking it stays inside `outdir`. Default
+   * false (POSIX). Passed in rather than read from `process` so this stays pure;
+   * the CLI sets it from `process.platform`.
+   */
+  windowsPaths?: boolean;
 }
 
 /**
@@ -666,6 +673,28 @@ function joinPath(dir: string, name: string): string {
   if (dir === "") return name;
   const trimmed = trimTrailingSeparators(dir);
   return `${trimmed}/${name}`;
+}
+
+/**
+ * Reject an explicit `out_name` that would write OUTSIDE the output folder: an
+ * absolute path (`/x`) or any `..` path segment (`../x`, `a/../../x`). With
+ * `windowsPaths`, `\` is a separator too and a drive (`C:…`) or leading `\`
+ * is absolute; on POSIX those are ordinary filename characters (`A:Side`,
+ * `..\x`), so they are left alone. A plain name or a relative subpath
+ * (`sub/clip`) is fine and unchanged. Throws a per-clip error, so the CLI skips
+ * just that clip.
+ */
+function assertOutNameStaysInOutdir(outName: string, windowsPaths: boolean): void {
+  const absolute = windowsPaths
+    ? /^[/\\]/.test(outName) || /^[A-Za-z]:/.test(outName)
+    : outName.startsWith("/");
+  const segments = outName.split(windowsPaths ? /[/\\]/ : "/");
+  if (absolute || segments.includes("..")) {
+    throw new Error(
+      `out_name ${JSON.stringify(outName)} must stay inside the output folder ` +
+        `(no absolute path or ".." segments)`,
+    );
+  }
 }
 
 /**
@@ -758,6 +787,7 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
   }
 
   let outName = (row.out_name || "").trim();
+  assertOutNameStaysInOutdir(outName, opts.windowsPaths ?? false);
   if (!outName) {
     const stem = sourceStem(source);
     outName = `${safeName(stem)}_${safeName(row.in_point)}-${safeName(row.out_point)}.mp4`;
@@ -765,7 +795,11 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
   if (!outName.toLowerCase().endsWith(".mp4")) {
     outName += ".mp4";
   }
-  const outPath = joinPath(opts.outdir, outName);
+  // The output path is ffmpeg's LAST argument, so one that starts with `-`
+  // (an `out_name` / source stem like `-live` under `--outdir ""`, or an outdir
+  // of its own like `-x`) would be parsed as an option. `./` names the same file.
+  const joined = joinPath(opts.outdir, outName);
+  const outPath = joined.startsWith("-") ? `./${joined}` : joined;
 
   const filters: string[] = [];
   if (content) {
