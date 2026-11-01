@@ -201,6 +201,12 @@ describe("the composer", () => {
 
   it("a suggestion chip fills the composer, focuses it, and enables send", () => {
     const { view } = makeView();
+    // Chips are only reachable on an OPEN dock (closed = display:none, which
+    // is not focusable — jsdom 30 enforces this per spec). open() focuses the
+    // composer itself, so blur it first: the chip must do the focusing.
+    view.open();
+    composerTextarea(view.element).blur();
+    expect(document.activeElement).not.toBe(composerTextarea(view.element));
     const suggestion = m.assistant.suggestions[0]!;
     buttonByText(view.element, suggestion).click();
     expect(composerTextarea(view.element).value).toBe(suggestion);
