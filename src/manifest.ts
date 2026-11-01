@@ -82,7 +82,8 @@ export { roundEven };
  */
 export function cropBoxToOffset(box: Box, region: Dims): string {
   const at = (offset: string) => computeCrop(region.width, region.height, offset).x;
-  const x = at(String(box.x));
+  // A drawn box's x may be fractional; computeCrop takes integers only.
+  const x = at(String(Math.round(box.x)));
 
   if (Math.abs(x - at("left")) <= SNAP_TOLERANCE) return "left";
   if (Math.abs(x - at("center")) <= SNAP_TOLERANCE) return "center";

@@ -161,9 +161,13 @@ impl Registry {
         let mut child = cmd
             .spawn()
             .map_err(|e| format!("failed to spawn {what}: {e}"))?;
+        // The child's pid, which is also its process group id on Unix. Kept
+        // because `child.id()` turns None once the child is reaped, but its
+        // group (e.g. the CLI's ffmpeg) can outlive it.
+        let pgid = child.id();
         let mut stdout = child.stdout.take().expect("stdout is piped");
         let mut stderr = child.stderr.take().expect("stderr is piped");
-        {
+        let outcome = {
             let finished = async {
                 let (status, (), stderr) = tokio::try_join!(
                     child.wait(),
@@ -177,15 +181,21 @@ impl Registry {
                 })
             };
             tokio::select! {
-                out = finished => return out.map_err(|e| format!("{what} failed: {e}")),
-                _ = stop.wait_for(|s| *s >= stopped_at) => {}
+                out = finished => Some(out),
+                _ = stop.wait_for(|s| *s >= stopped_at) => None,
             }
-        }
-        // Stopped: kill the child's whole tree, then reap it before `_live`
-        // drops, so `stop_all` only returns once the child is really gone.
-        kill_tree(&mut child).await;
+        };
+        let err = match outcome {
+            Some(Ok(out)) => return Ok(out),
+            Some(Err(e)) => format!("{what} failed: {e}"),
+            None => format!("{what} stopped: Footlight is quitting"),
+        };
+        // Stopped, or a pipe read failed: kill the child's whole tree, then
+        // reap it before `_live` drops, so `stop_all` only returns once the
+        // child is really gone.
+        kill_tree(&mut child, pgid).await;
         let _ = child.wait().await;
-        Err(format!("{what} stopped: Footlight is quitting"))
+        Err(err)
     }
 
     /// Whether a render is running right now.
@@ -248,19 +258,29 @@ async fn stream(
     }
 }
 
-/// Kill `child` and everything it started. Unix: the child leads its own
-/// process group (`process_group(0)`), so SIGKILL the group. Windows:
-/// `taskkill /T /F` walks the tree from the child's pid.
-async fn kill_tree(child: &mut Child) {
-    if let Some(pid) = child.id() {
-        #[cfg(unix)]
-        // SAFETY: killpg only sends a signal; `pid` is our live, unreaped child,
-        // which leads its own group, so the group id can't have been reused.
+/// Kill `child` and everything it started. `pgid` is the child's pid as
+/// recorded at spawn.
+///
+/// Unix: the child leads its own process group (`process_group(0)`), so SIGKILL
+/// the group, even when the child itself has already been reaped (the CLI died
+/// but its ffmpeg still holds the pipes). A group id isn't reused while any
+/// member is alive; with none left, killpg just fails with ESRCH.
+///
+/// Windows: `taskkill /T /F` walks the tree from the child's pid, which is
+/// only safe while the child is unreaped (a reaped pid can be reused), so an
+/// orphaned grandchild of an already-exited child isn't reached there.
+async fn kill_tree(child: &mut Child, pgid: Option<u32>) {
+    #[cfg(unix)]
+    if let Some(pgid) = pgid {
+        // SAFETY: killpg only sends a signal to the child's own process group.
         unsafe {
-            libc::killpg(pid as libc::pid_t, libc::SIGKILL);
+            libc::killpg(pgid as libc::pid_t, libc::SIGKILL);
         }
-        #[cfg(windows)]
-        {
+    }
+    #[cfg(windows)]
+    {
+        let _ = pgid;
+        if let Some(pid) = child.id() {
             const CREATE_NO_WINDOW: u32 = 0x0800_0000;
             let _ = Command::new("taskkill")
                 .args(["/T", "/F", "/PID", &pid.to_string()])
@@ -503,12 +523,27 @@ mod tests {
     fn stop_kills_grandchildren_too() {
         // Like the CLI's render ffmpeg: a grandchild that outlives a killed
         // parent unless the whole process group is killed.
+        assert_stop_kills_grandchild("wait");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stop_kills_grandchildren_of_an_exited_child() {
+        // The CLI already died (and was reaped) but its ffmpeg still holds the
+        // inherited pipes, so the run is still waiting on them.
+        assert_stop_kills_grandchild("sleep 0.3; exit 0");
+    }
+
+    /// Start `sleep 30 &` as a grandchild, then run `tail` in the child; stop
+    /// the run and check the grandchild is gone.
+    #[cfg(unix)]
+    fn assert_stop_kills_grandchild(tail: &str) {
         fn alive(pid: libc::pid_t) -> bool {
             // SAFETY: signal 0 only checks that the process exists.
             unsafe { libc::kill(pid, 0) == 0 }
         }
         let pid_file = tempfile::NamedTempFile::new().unwrap().into_temp_path();
-        let script = format!("sleep 30 & echo $! > '{}'; wait", pid_file.display());
+        let script = format!("sleep 30 & echo $! > '{}'; {tail}", pid_file.display());
         let reg = Arc::new(Registry::new());
         let rt = rt();
         let render = {
@@ -523,6 +558,9 @@ mod tests {
             assert!(Instant::now() < deadline, "grandchild never started");
             std::thread::sleep(Duration::from_millis(10));
         };
+        assert!(alive(grandchild));
+        // Give a child that exits on its own (`sleep 0.3; exit 0`) time to.
+        std::thread::sleep(Duration::from_millis(600));
         assert!(alive(grandchild));
 
         assert!(reg.stop_all(true, Duration::from_secs(5)));

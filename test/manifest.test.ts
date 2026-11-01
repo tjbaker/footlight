@@ -34,6 +34,11 @@ describe("cropBoxToOffset", () => {
     expect(cropBoxToOffset(box(720), fhd)).toBe("720");
   });
 
+  it("rounds a fractional drawn x (computeCrop takes decimal integers only)", () => {
+    expect(cropBoxToOffset(box(720.6), fhd)).toBe("720"); // 721 -> even 720
+    expect(cropBoxToOffset(box(-0.4), fhd)).toBe("left");
+  });
+
   it("snaps within the +-2px tolerance", () => {
     expect(cropBoxToOffset(box(655), fhd)).toBe("center"); // even-rounds to 654, |654-656|=2
     expect(cropBoxToOffset(box(2), fhd)).toBe("left");

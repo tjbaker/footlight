@@ -252,6 +252,16 @@ describe("crop-box corner RESIZE (punch-in)", () => {
     overlay.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
     expect(store.state.cropBox).toEqual(FULL);
   });
+
+  it("dblclick reset and initCropBox agree on an odd-height source (#302)", () => {
+    const { store, view, overlay } = makeViewer({ dims: { width: 1920, height: 1081 } });
+    view.initCropBox();
+    const seeded = store.state.cropBox!;
+    dragOverlay(overlay, [seeded.x, seeded.y], [seeded.x + 300, seeded.y + 533]);
+    expect(store.state.cropBox!.h).toBeLessThan(1080);
+    overlay.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    expect(store.state.cropBox).toEqual(seeded);
+  });
 });
 
 describe("track ownership freezes the crop box", () => {
