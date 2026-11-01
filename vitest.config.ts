@@ -22,14 +22,14 @@ export default defineConfig({
       reportsDirectory: "coverage",
       // Engine coverage floor: `npm run coverage` (CI's engine job and
       // `npm run verify`) fails if any metric drops below these. Set a couple of
-      // points under the measured levels (stmts 95.29 / branch 89.68 /
-      // funcs 97.2 / lines 95.85), rounded down so normal churn doesn't flake.
+      // points under the measured levels (stmts 95.53 / branch 90.53 /
+      // funcs 97.15 / lines 96.18), rounded down so normal churn doesn't flake.
       // Raise them as coverage grows; never lower them to land a PR.
       thresholds: {
         statements: 93,
-        branches: 87,
+        branches: 88,
         functions: 95,
-        lines: 93,
+        lines: 94,
       },
     },
   },

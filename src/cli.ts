@@ -240,7 +240,7 @@ async function cmdRender(argv: string[]): Promise<number> {
   try {
     items = manifestPath.toLowerCase().endsWith(".json")
       ? parseJsonManifest(text)
-      : (parseCsv(text) as ClipRow[]).map((row) => ({ row }));
+      : parseCsvManifest(text);
   } catch (err) {
     console.error(`render: ${errMsg(err)}`);
     return 1;
@@ -402,6 +402,30 @@ async function cmdRender(argv: string[]): Promise<number> {
   const tail = failures ? `, ${failures} failed/skipped` : "";
   console.log(`\nDone: ${done}/${items.length} clips${tail}`);
   return failures ? 1 : 0;
+}
+
+/** CSV columns every manifest must have; the rest are optional. */
+const REQUIRED_CSV_COLUMNS = ["source_file", "in_point", "out_point"] as const;
+
+/**
+ * Parse a CSV manifest into render items. Every record from `parseCsv` carries
+ * every header column as a key, so a missing required column is detected once,
+ * up front, with one error naming all of them — instead of every row being
+ * skipped with a confusing per-row message.
+ */
+function parseCsvManifest(text: string): RenderItem[] {
+  const records = parseCsv(text);
+  const first = records[0];
+  if (first) {
+    const missing = REQUIRED_CSV_COLUMNS.filter((col) => !(col in first));
+    if (missing.length > 0) {
+      throw new Error(
+        `manifest is missing required column(s): ${missing.join(", ")} ` +
+          `(header has: ${Object.keys(first).join(", ")})`,
+      );
+    }
+  }
+  return (records as ClipRow[]).map((row) => ({ row }));
 }
 
 /**

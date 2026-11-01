@@ -10,11 +10,9 @@ import { buildEasedCropX, TARGET_AR, type CropPathKeyframe } from "../src/core.j
 import type { Dims } from "../src/manifest.js";
 import {
   planSampleTimes,
-  refineByMotion,
   OneEuroFilter,
   boxCenterToCropX,
   samplesToCropPath,
-  trackToCropPath,
 } from "../src/track.js";
 import type { TrackSample } from "../src/providers/types.js";
 import { MockTracker } from "../src/providers/mock.js";
@@ -73,31 +71,6 @@ describe("planSampleTimes", () => {
   it("throws on non-positive span or interval", () => {
     expect(() => planSampleTimes({ shotStart: 5, shotEnd: 5, intervalSec: 1 })).toThrow();
     expect(() => planSampleTimes({ shotStart: 0, shotEnd: 5, intervalSec: 0 })).toThrow();
-  });
-});
-
-describe("refineByMotion", () => {
-  const mk = (t: number, cx: number): TrackSample => ({
-    t,
-    box: { x: cx - 50, y: 0, w: 100, h: 100 },
-  });
-
-  it("adds a midpoint where motion exceeds the threshold", () => {
-    const samples = [mk(0, 100), mk(2, 400)]; // moved 300px
-    const extra = refineByMotion(samples, { motionThresholdPx: 80, minGapSec: 0.5 });
-    expect(extra).toEqual([1]);
-  });
-
-  it("adds nothing when motion is below threshold", () => {
-    const samples = [mk(0, 100), mk(2, 120)]; // moved 20px
-    const extra = refineByMotion(samples, { motionThresholdPx: 80, minGapSec: 0.5 });
-    expect(extra).toEqual([]);
-  });
-
-  it("respects minGapSec: never splits a gap below 2*minGap", () => {
-    const samples = [mk(0, 100), mk(0.6, 900)]; // big move but gap 0.6 < 2*0.5
-    const extra = refineByMotion(samples, { motionThresholdPx: 80, minGapSec: 0.5 });
-    expect(extra).toEqual([]);
   });
 });
 
@@ -207,17 +180,21 @@ describe("samplesToCropPath", () => {
 });
 
 describe("end-to-end: MockTracker -> path -> eased expr -> ffmpeg", () => {
-  it("plan -> mock -> samplesToCropPath yields a smooth, monotonic-ish path", async () => {
+  // The same plan -> track -> smooth composition the editor's Auto-track runs.
+  async function mockPath(): Promise<CropPathKeyframe[]> {
     const tracker = new MockTracker({ region: REGION, shotStart: 0, shotEnd: 3 });
-    const path = await trackToCropPath(tracker, {
+    const samples = await tracker.track({
       sourcePath: "mock.mp4",
       region: REGION,
-      shotStart: 0,
-      shotEnd: 3,
-      intervalSec: 0.25,
+      sampleTimes: planSampleTimes({ shotStart: 0, shotEnd: 3, intervalSec: 0.25 }),
       apiKey: "unused-by-mock",
       subjectHint: "the performer",
     });
+    return samplesToCropPath(samples, REGION);
+  }
+
+  it("plan -> mock -> samplesToCropPath yields a smooth, monotonic-ish path", async () => {
+    const path = await mockPath();
 
     expect(path.length).toBeGreaterThan(3);
 
@@ -247,15 +224,7 @@ describe("end-to-end: MockTracker -> path -> eased expr -> ffmpeg", () => {
   });
 
   it("feeds the path to buildEasedCropX and ffmpeg renders 1080x1920", async () => {
-    const tracker = new MockTracker({ region: REGION, shotStart: 0, shotEnd: 3 });
-    const path: CropPathKeyframe[] = await trackToCropPath(tracker, {
-      sourcePath: "mock.mp4",
-      region: REGION,
-      shotStart: 0,
-      shotEnd: 3,
-      intervalSec: 0.25,
-      apiKey: "unused-by-mock",
-    });
+    const path = await mockPath();
 
     const expr = buildEasedCropX(path);
     expect(expr.length).toBeGreaterThan(0);

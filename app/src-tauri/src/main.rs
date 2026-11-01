@@ -56,8 +56,22 @@ struct OutdirCheck {
     error: Option<String>,
 }
 
-/// Extract a single accurate frame at `t` seconds; write a temp JPEG and return
-/// its absolute path (the frontend wraps it with the Tauri asset protocol).
+/// A fresh, uniquely named temp file (`<prefix><random><suffix>`) that is
+/// deleted when the returned guard drops. Every call gets its own path, so
+/// concurrent commands (e.g. the loop-seam panel's paired In/Out frame grabs)
+/// never write the same file (#249). The file is created empty (O_EXCL, so the
+/// name is ours) and its handle closed, so a child process can overwrite it.
+fn unique_temp_path(prefix: &str, suffix: &str) -> Result<tempfile::TempPath, String> {
+    tempfile::Builder::new()
+        .prefix(prefix)
+        .suffix(suffix)
+        .tempfile()
+        .map(|f| f.into_temp_path())
+        .map_err(|e| format!("create temp file: {e}"))
+}
+
+/// Extract a single accurate frame at `t` seconds and return the JPEG bytes
+/// (the frontend wraps them in a `blob:` object URL, like the web backend).
 /// Accuracy comes from ffmpeg INPUT-seek (`-ss` before `-i`) per displayed frame.
 // NOTE: these commands shell out to ffmpeg/ffprobe/node and can run for many
 // seconds (cropdetect, scene decode, a full render, or an Auto-track pass). They
@@ -65,9 +79,14 @@ struct OutdirCheck {
 // freezes the entire UI (the spinning-beachball hang) until it returns. Marking
 // them `async` makes Tauri run them off the main thread so the window stays live.
 #[tauri::command]
-async fn extract_frame(source: String, t: f64) -> Result<String, String> {
-    let mut path = std::env::temp_dir();
-    path.push(format!("footlight_frame_{}.jpg", std::process::id()));
+async fn extract_frame(source: String, t: f64) -> Result<tauri::ipc::Response, String> {
+    extract_frame_bytes(&source, t).map(tauri::ipc::Response::new)
+}
+
+/// The body of `extract_frame`: ffmpeg writes the frame to a per-call temp JPEG,
+/// whose bytes are read back and returned; the temp file is deleted on return.
+fn extract_frame_bytes(source: &str, t: f64) -> Result<Vec<u8>, String> {
+    let path = unique_temp_path("footlight_frame_", ".jpg")?;
     let out = path.to_string_lossy().to_string();
 
     // Primary: accurate INPUT-seek to t. If t lands at/after the source's end
@@ -76,13 +95,13 @@ async fn extract_frame(source: String, t: f64) -> Result<String, String> {
     // the last available frame by seeking relative to EOF, mirroring the shared
     // frameExtractArgs / frameExtractTailArgs pair the web backend uses.
     let t_str = t.to_string();
-    if run_frame_extract(&["-ss", &t_str], &source, &out)? {
-        return Ok(out);
+    let wrote = run_frame_extract(&["-ss", &t_str], source, &out)?
+        || run_frame_extract(&["-sseof", "-0.2"], source, &out)?;
+    if !wrote {
+        return Err("ffmpeg frame extraction failed".into());
     }
-    if run_frame_extract(&["-sseof", "-0.2"], &source, &out)? {
-        return Ok(out);
-    }
-    Err("ffmpeg frame extraction failed".into())
+    std::fs::read(&path).map_err(|e| format!("read extracted frame: {e}"))
+    // `path` drops here, deleting the temp JPEG.
 }
 
 /// Args for one single-frame ffmpeg extraction with the given seek args, writing
@@ -294,31 +313,45 @@ fn even_f(n: f64) -> i64 {
     (n - (n % 2.0)) as i64
 }
 
-/// Parse `HH:MM:SS`, `MM:SS`, or plain seconds into float seconds.
-/// HAND MIRROR of core.ts `parseTimestamp`.
+/// One `:`-separated timestamp part: unsigned decimal digits with an optional
+/// `.fraction` (`^\d+(\.\d+)?$`). HAND MIRROR of core.ts `TIMESTAMP_PART`.
+fn is_timestamp_part(part: &str) -> bool {
+    let (int, frac) = match part.split_once('.') {
+        Some((i, f)) => (i, Some(f)),
+        None => (part, None),
+    };
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    digits(int) && frac.map_or(true, digits)
+}
+
+/// Parse `HH:MM:SS`, `MM:SS`, or plain seconds into float seconds. Each part
+/// must be unsigned decimal (no empty parts, signs, hex, exponents, inf/NaN) and
+/// the result finite and ≥ 0. HAND MIRROR of core.ts `parseTimestamp`; both are
+/// pinned to test/fixtures/timestamps.json.
 fn parse_timestamp(value: &str) -> Result<f64, String> {
     let value = value.trim();
     if value.is_empty() {
         return Err("empty timestamp".into());
     }
-    if value.contains(':') {
-        let parts: Vec<&str> = value.split(':').collect();
-        if parts.len() > 3 {
+    let parts: Vec<&str> = value.split(':').collect();
+    if parts.len() > 3 {
+        return Err(format!("bad timestamp: {value:?}"));
+    }
+    let mut secs = 0.0;
+    for part in parts {
+        let part = part.trim();
+        if !is_timestamp_part(part) {
             return Err(format!("bad timestamp: {value:?}"));
         }
-        let mut secs = 0.0;
-        for part in parts {
-            let n: f64 = part
-                .trim()
-                .parse()
-                .map_err(|_| format!("bad timestamp: {value:?}"))?;
-            secs = secs * 60.0 + n;
-        }
-        return Ok(secs);
+        let n: f64 = part
+            .parse()
+            .map_err(|_| format!("bad timestamp: {value:?}"))?;
+        secs = secs * 60.0 + n;
     }
-    value
-        .parse::<f64>()
-        .map_err(|_| format!("bad timestamp: {value:?}"))
+    if !secs.is_finite() {
+        return Err(format!("bad timestamp: {value:?}"));
+    }
+    Ok(secs)
 }
 
 /// Parse a `"W:H:X:Y"` content region (strip letterbox bars), or None.
@@ -789,8 +822,8 @@ async fn loudness(source: String) -> Result<LoudnessResult, String> {
 /// prints ONLY the samples on stdout; `mock:true` in the request runs offline.
 #[tauri::command]
 async fn track(app: AppHandle, req: serde_json::Value) -> Result<serde_json::Value, String> {
-    let mut req_path = std::env::temp_dir();
-    req_path.push(format!("footlight_track_{}.json", std::process::id()));
+    // Per-call temp file, deleted when `req_path` drops at the end of the call.
+    let req_path = unique_temp_path("footlight_track_", ".json")?;
     let body = serde_json::to_string(&req).map_err(|e| format!("serialize track request: {e}"))?;
     std::fs::write(&req_path, body).map_err(|e| format!("write temp track request: {e}"))?;
 
@@ -930,8 +963,9 @@ async fn render(
     caption_box_color: Option<String>,
     caption_angle: Option<f64>,
 ) -> Result<RenderResult, String> {
-    let mut manifest_path = std::env::temp_dir();
-    manifest_path.push(format!("footlight_manifest_{}.json", std::process::id()));
+    // Per-call temp file (the `.json` suffix makes the CLI take the JSON
+    // manifest path), deleted when `manifest_path` drops at the end of the call.
+    let manifest_path = unique_temp_path("footlight_manifest_", ".json")?;
     std::fs::write(&manifest_path, manifest_json)
         .map_err(|e| format!("write temp manifest: {e}"))?;
 
@@ -1568,7 +1602,7 @@ mod tests {
         let i = a.iter().position(|s| *s == "-i").unwrap();
         assert!(ss < i, "-ss must be an INPUT option (before -i)");
         assert_eq!(a[ss + 1], "3.5");
-        assert!(a.contains(&"-y"), "must overwrite the reused temp path");
+        assert!(a.contains(&"-y"), "must overwrite the pre-created temp file");
         assert_eq!(*a.last().unwrap(), "/tmp/f.jpg");
     }
 
@@ -1582,6 +1616,65 @@ mod tests {
         assert!(sseof < a.iter().position(|s| *s == "-i").unwrap());
         assert!(a[sseof + 1].parse::<f64>().unwrap() < 0.0);
         assert!(!a.contains(&"-ss"));
+    }
+
+    // --- per-call temp files (#249) ---------------------------------------
+
+    /// Two calls (even concurrent ones) get distinct paths, each guard's file
+    /// exists while held, and dropping the guard deletes it.
+    #[test]
+    fn unique_temp_path_is_distinct_per_call_and_deleted_on_drop() {
+        let (a, b) = std::thread::scope(|s| {
+            let ha = s.spawn(|| unique_temp_path("footlight_test_", ".json").unwrap());
+            let hb = s.spawn(|| unique_temp_path("footlight_test_", ".json").unwrap());
+            (ha.join().unwrap(), hb.join().unwrap())
+        });
+        assert_ne!(a.to_path_buf(), b.to_path_buf(), "concurrent calls must not share a path");
+        for p in [&a, &b] {
+            let name = p.file_name().unwrap().to_string_lossy().to_string();
+            assert!(name.starts_with("footlight_test_") && name.ends_with(".json"), "{name}");
+            assert!(p.exists());
+        }
+        let (pa, pb) = (a.to_path_buf(), b.to_path_buf());
+        drop(a);
+        drop(b);
+        assert!(!pa.exists(), "temp file must be deleted after use");
+        assert!(!pb.exists(), "temp file must be deleted after use");
+    }
+
+    /// Two concurrent frame grabs at different timestamps return different
+    /// frames (the loop-seam panel's paired In/Out fetch). Before #249 both
+    /// wrote one per-process JPEG, so one call returned the other's frame.
+    /// Needs ffmpeg on PATH; skipped (with a note) when it is absent.
+    #[test]
+    fn concurrent_extract_frame_calls_return_their_own_frames() {
+        if Command::new("ffmpeg").arg("-version").output().is_err() {
+            eprintln!("skipping: ffmpeg not on PATH");
+            return;
+        }
+        // testsrc burns a running frame counter, so every frame differs.
+        let src = unique_temp_path("footlight_test_src_", ".mp4").unwrap();
+        let src_s = src.to_string_lossy().to_string();
+        let ok = Command::new("ffmpeg")
+            .args(["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi"])
+            .args(["-i", "testsrc=duration=2:size=160x120:rate=25", "-pix_fmt", "yuv420p"])
+            .arg(&src_s)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "failed to synthesize the test source");
+
+        let (early, late) = std::thread::scope(|s| {
+            let he = s.spawn(|| extract_frame_bytes(&src_s, 0.2).unwrap());
+            let hl = s.spawn(|| extract_frame_bytes(&src_s, 1.6).unwrap());
+            (he.join().unwrap(), hl.join().unwrap())
+        });
+        let solo_early = extract_frame_bytes(&src_s, 0.2).unwrap();
+        let solo_late = extract_frame_bytes(&src_s, 1.6).unwrap();
+        assert!(early.starts_with(&[0xFF, 0xD8]), "not a JPEG");
+        assert_ne!(early, late, "concurrent grabs must not share one output file");
+        assert_eq!(early, solo_early, "the early grab returned someone else's frame");
+        assert_eq!(late, solo_late, "the late grab returned someone else's frame");
     }
 
     // --- scenes -----------------------------------------------------------
@@ -1960,6 +2053,47 @@ mod tests {
         assert_eq!(names, vec!["a.ttf", "b.OTF", "c.ttc"]);
 
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // --- parse_timestamp (issue #256) --------------------------------------
+
+    /// The SAME accept/reject fixtures test/engine.test.ts runs against
+    /// core.ts `parseTimestamp` — read from the shared JSON so drift fails here.
+    fn timestamp_fixtures() -> serde_json::Value {
+        serde_json::from_str(include_str!("../../../test/fixtures/timestamps.json")).unwrap()
+    }
+
+    #[test]
+    fn parse_timestamp_accepts_shared_fixtures() {
+        let fx = timestamp_fixtures();
+        let accept = fx["accept"].as_array().unwrap();
+        assert!(!accept.is_empty());
+        for case in accept {
+            let input = case[0].as_str().unwrap();
+            let want = case[1].as_f64().unwrap();
+            assert_eq!(parse_timestamp(input), Ok(want), "input {input:?}");
+        }
+    }
+
+    #[test]
+    fn parse_timestamp_rejects_shared_fixtures() {
+        let fx = timestamp_fixtures();
+        let reject = fx["reject"].as_array().unwrap();
+        assert!(!reject.is_empty());
+        for case in reject {
+            let input = case.as_str().unwrap();
+            let err = parse_timestamp(input).expect_err(input);
+            assert!(err.contains("timestamp"), "input {input:?} -> {err}");
+        }
+    }
+
+    /// Mirrors test/engine.test.ts "names the offending value in the error".
+    #[test]
+    fn parse_timestamp_names_offending_value() {
+        assert_eq!(
+            parse_timestamp("1::30"),
+            Err("bad timestamp: \"1::30\"".to_string())
+        );
     }
 
     // --- cover export (issue #166) -----------------------------------------
