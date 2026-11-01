@@ -354,8 +354,26 @@ fn parse_timestamp(value: &str) -> Result<f64, String> {
     Ok(secs)
 }
 
-/// Parse a `"W:H:X:Y"` content region (strip letterbox bars), or None.
-/// HAND MIRROR of core.ts `parseContentCrop`.
+/// Largest integer an f64 (a JS number) holds exactly: `Number.MAX_SAFE_INTEGER`.
+const MAX_SAFE_INTEGER: u64 = (1 << 53) - 1;
+
+/// Parse a whitespace-trimmed plain decimal integer with an optional sign
+/// (`^[+-]?\d+$`) that is a JS safe integer, or None — no hex, exponent,
+/// fraction or inf/NaN. HAND MIRROR of core.ts `parseDecimalInt`.
+fn parse_decimal_int(value: &str) -> Option<i64> {
+    let s = value.trim();
+    let digits = s.strip_prefix(['+', '-']).unwrap_or(s);
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    s.parse::<i64>()
+        .ok()
+        .filter(|n| n.unsigned_abs() <= MAX_SAFE_INTEGER)
+}
+
+/// Parse a `"W:H:X:Y"` content region (strip letterbox bars), or None. Each
+/// part must be a plain decimal integer (`parse_decimal_int`). HAND MIRROR of
+/// core.ts `parseContentCrop`; both are pinned to test/fixtures/crop.json.
 fn parse_content_crop(value: Option<&str>) -> Result<Option<[i64; 4]>, String> {
     let value = value.unwrap_or("").trim();
     if value.is_empty() {
@@ -367,10 +385,8 @@ fn parse_content_crop(value: Option<&str>) -> Result<Option<[i64; 4]>, String> {
     }
     let mut nums = [0i64; 4];
     for (i, p) in parts.iter().enumerate() {
-        nums[i] = p
-            .trim()
-            .parse::<i64>()
-            .map_err(|_| format!("content_crop must be W:H:X:Y integers, got {value:?}"))?;
+        nums[i] = parse_decimal_int(p)
+            .ok_or_else(|| format!("content_crop must be W:H:X:Y integers, got {value:?}"))?;
     }
     if nums[0] <= 0 || nums[1] <= 0 || nums[2] < 0 || nums[3] < 0 {
         return Err(format!(
@@ -430,7 +446,9 @@ fn schedule_offset_at(segments: &[(f64, String)], t: f64) -> Result<&str, String
 
 /// Compute (cw, ch, x, y) extracting a 9:16 region from iw×ih, with the
 /// horizontal framing chosen by `crop_offset` (left/center/right/integer).
-/// HAND MIRROR of core.ts `computeCrop`.
+/// An integer offset must be a plain decimal integer (`parse_decimal_int`).
+/// HAND MIRROR of core.ts `computeCrop`; both are pinned to
+/// test/fixtures/crop.json.
 fn compute_crop(iw: f64, ih: f64, crop_offset: &str) -> Result<(i64, i64, i64, i64), String> {
     let offset = crop_offset.trim().to_lowercase();
 
@@ -446,12 +464,12 @@ fn compute_crop(iw: f64, ih: f64, crop_offset: &str) -> Result<(i64, i64, i64, i
             "center" | "centre" | "" => (max_x / 2.0).floor(),
             "right" => max_x,
             _ => {
-                let f: f64 = offset.parse().map_err(|_| {
+                let n = parse_decimal_int(&offset).ok_or_else(|| {
                     format!(
                         "crop_offset must be left/center/right or an integer, got {crop_offset:?}"
                     )
                 })?;
-                f.round().min(max_x).max(0.0) // clamp into frame
+                (n as f64).min(max_x).max(0.0) // clamp into frame
             }
         };
     } else {
@@ -501,7 +519,8 @@ fn eased_crop_x_at(keyframes: &[CoverKeyframe], t: f64) -> f64 {
 }
 
 /// Even-round and clamp a punch-in window into the working region.
-/// HAND MIRROR of core.ts `clampCropWindow`.
+/// HAND MIRROR of core.ts `clampCropWindow`; both are pinned to
+/// test/fixtures/crop.json.
 fn clamp_crop_window(
     win: &CoverWindow,
     work_w: f64,
@@ -2150,6 +2169,112 @@ mod tests {
             parse_timestamp("1::30"),
             Err("bad timestamp: \"1::30\"".to_string())
         );
+    }
+
+    // --- compute_crop / parse_content_crop / clamp_crop_window (issue #261) --
+
+    /// The SAME fixtures test/engine.test.ts runs against core.ts `computeCrop`,
+    /// `parseContentCrop` and `clampCropWindow` — read from the shared JSON so
+    /// drift fails here.
+    fn crop_fixtures() -> serde_json::Value {
+        serde_json::from_str(include_str!("../../../test/fixtures/crop.json")).unwrap()
+    }
+
+    /// A fixture `[cw, ch, x, y]` / `[W, H, X, Y]` array as a tuple.
+    fn quad(v: &serde_json::Value) -> (i64, i64, i64, i64) {
+        let n = |i: usize| v[i].as_i64().unwrap();
+        (n(0), n(1), n(2), n(3))
+    }
+
+    fn cases<'a>(fx: &'a serde_json::Value, func: &str, kind: &str) -> &'a [serde_json::Value] {
+        let list = fx[func][kind].as_array().unwrap();
+        assert!(!list.is_empty(), "{func}.{kind} is empty");
+        list
+    }
+
+    #[test]
+    fn compute_crop_accepts_shared_fixtures() {
+        let fx = crop_fixtures();
+        for case in cases(&fx, "computeCrop", "accept") {
+            let (iw, ih) = (case[0].as_f64().unwrap(), case[1].as_f64().unwrap());
+            let offset = case[2].as_str().unwrap();
+            assert_eq!(
+                compute_crop(iw, ih, offset),
+                Ok(quad(&case[3])),
+                "{iw}x{ih} {offset:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn compute_crop_rejects_shared_fixtures() {
+        let fx = crop_fixtures();
+        for case in cases(&fx, "computeCrop", "reject") {
+            let (iw, ih) = (case[0].as_f64().unwrap(), case[1].as_f64().unwrap());
+            let offset = case[2].as_str().unwrap();
+            let err = compute_crop(iw, ih, offset).expect_err(offset);
+            assert!(err.contains("crop_offset must be"), "{offset:?} -> {err}");
+        }
+    }
+
+    #[test]
+    fn parse_content_crop_accepts_shared_fixtures() {
+        let fx = crop_fixtures();
+        for case in cases(&fx, "parseContentCrop", "accept") {
+            let input = case[0].as_str();
+            let want = (!case[1].is_null()).then(|| {
+                let (w, h, x, y) = quad(&case[1]);
+                [w, h, x, y]
+            });
+            assert_eq!(parse_content_crop(input), Ok(want), "input {input:?}");
+        }
+    }
+
+    #[test]
+    fn parse_content_crop_rejects_shared_fixtures() {
+        let fx = crop_fixtures();
+        for case in cases(&fx, "parseContentCrop", "reject") {
+            let input = case[0].as_str().unwrap();
+            let msg = case[1].as_str().unwrap();
+            let err = parse_content_crop(Some(input)).expect_err(input);
+            assert!(err.contains(msg), "input {input:?} -> {err} (want {msg:?})");
+        }
+    }
+
+    fn fixture_window(v: &serde_json::Value) -> CoverWindow {
+        let n = |k: &str| v[k].as_f64().unwrap();
+        CoverWindow {
+            x: n("x"),
+            y: n("y"),
+            w: n("w"),
+            h: n("h"),
+        }
+    }
+
+    #[test]
+    fn clamp_crop_window_accepts_shared_fixtures() {
+        let fx = crop_fixtures();
+        for case in cases(&fx, "clampCropWindow", "accept") {
+            let win = fixture_window(&case[0]);
+            let (work_w, work_h) = (case[1].as_f64().unwrap(), case[2].as_f64().unwrap());
+            assert_eq!(
+                clamp_crop_window(&win, work_w, work_h),
+                Ok(quad(&case[3])),
+                "{} in {work_w}x{work_h}",
+                case[0]
+            );
+        }
+    }
+
+    #[test]
+    fn clamp_crop_window_rejects_shared_fixtures() {
+        let fx = crop_fixtures();
+        for case in cases(&fx, "clampCropWindow", "reject") {
+            let win = fixture_window(&case[0]);
+            let (work_w, work_h) = (case[1].as_f64().unwrap(), case[2].as_f64().unwrap());
+            let err = clamp_crop_window(&win, work_w, work_h).expect_err("reject");
+            assert!(err.contains("cropWindow"), "{} -> {err}", case[0]);
+        }
     }
 
     // --- cover export (issue #166) -----------------------------------------
