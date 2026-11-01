@@ -13,11 +13,13 @@
  * exists. The source loads as a real-ish 1920×1080 / 30s clip so `state.duration`
  * is 30 and the time↔pixel mapping is exercised end to end.
  *
- * Two stubs are specific to *pointer* + *layout* work and live only here:
- *   - The timeline track's `getBoundingClientRect()` is overridden to a fixed
- *     1000×40 rect at the origin. jsdom has no layout engine, so every element's
- *     rect is all-zero by default; `tlTimeAt`/`edgeDist` early-return (`rect.width
- *     <= 0`) without it, making the whole interaction a no-op.
+ * Pointer + layout work leans on the shared helpers:
+ *   - The timeline track's `getBoundingClientRect()` is pinned to a fixed
+ *     1000×40 rect at the origin (`helpers/rect.ts` `stubRect`). jsdom has no
+ *     layout engine, so every element's rect is all-zero by default;
+ *     `tlTimeAt`/`edgeDist` early-return (`rect.width <= 0`) without it, making
+ *     the whole interaction a no-op.
+ *   - Events are dispatched with `helpers/pointer.ts` `firePointer`.
  *   - `Element.prototype.setPointerCapture` / `releasePointerCapture` are stubbed —
  *     the `pointerdown`/`pointerup` handlers call them and jsdom doesn't implement
  *     them (they'd throw). The handlers read `clientX` (not `offsetX`), confirmed in
@@ -42,40 +44,12 @@ vi.mock(
 );
 
 import { installDomShims, resetHarness, flush } from "./helpers/editor-harness.js";
+import { stubRect } from "./helpers/rect.js";
+import { firePointer } from "./helpers/pointer.js";
 
 installDomShims();
 // Import AFTER the mocks/shims above are installed.
 const { mountEditor } = await import("../src/editor.js");
-
-/** A fixed 1000×40 rect at the origin (jsdom has no layout, so rects are 0×0). */
-function fixedRect(width = 1000, height = 40): DOMRect {
-  return {
-    left: 0,
-    top: 0,
-    width,
-    height,
-    right: width,
-    bottom: height,
-    x: 0,
-    y: 0,
-    toJSON() {
-      return {};
-    },
-  } as DOMRect;
-}
-
-/** Dispatch a PointerEvent of `type` at `clientX` on `target` (pointerId 1).
- *  The handlers read `clientX`; we also mirror it onto `offsetX` defensively. */
-function pointer(target: Element, type: string, clientX: number): void {
-  const ev = new PointerEvent(type, {
-    bubbles: true,
-    cancelable: true,
-    clientX,
-    pointerId: 1,
-  });
-  Object.defineProperty(ev, "offsetX", { value: clientX, configurable: true });
-  target.dispatchEvent(ev);
-}
 
 describe("editor loudness-timeline drag (jsdom)", () => {
   beforeEach(() => {
@@ -97,10 +71,7 @@ describe("editor loudness-timeline drag (jsdom)", () => {
 
     const track = root.querySelector<HTMLElement>(".fl-tl-track");
     expect(track).not.toBeNull();
-    Object.defineProperty(track!, "getBoundingClientRect", {
-      value: () => fixedRect(),
-      configurable: true,
-    });
+    stubRect(track!, 1000, 40);
     return { root, track: track! };
   }
 
@@ -127,9 +98,9 @@ describe("editor loudness-timeline drag (jsdom)", () => {
     expect(outVal!.textContent).toBe("—");
 
     // Down at 200 (anchor=6s), move to 600 (>3px ⇒ a real drag, t=18s), up.
-    pointer(track, "pointerdown", 200);
-    pointer(track, "pointermove", 600);
-    pointer(track, "pointerup", 600);
+    firePointer(track, "pointerdown", { clientX: 200 });
+    firePointer(track, "pointermove", { clientX: 600 });
+    firePointer(track, "pointerup", { clientX: 600 });
     await flush();
 
     // inPoint = min(anchor, t) = 6, outPoint = max(anchor, t) = 18 (round3'd).
@@ -148,8 +119,8 @@ describe("editor loudness-timeline drag (jsdom)", () => {
     // No move between down and up ⇒ endTlDrag treats it as a click and seeks the
     // anchor (tlTimeAt(500) = 500/1000*30 = 15s). setT writes the time readout
     // synchronously before the (debounced) frame fetch, so it's observable now.
-    pointer(track, "pointerdown", 500);
-    pointer(track, "pointerup", 500);
+    firePointer(track, "pointerdown", { clientX: 500 });
+    firePointer(track, "pointerup", { clientX: 500 });
     await flush();
 
     // The transport timecode (`.fl-time`) and stage tag both mirror state.t.
@@ -171,9 +142,9 @@ describe("editor loudness-timeline drag (jsdom)", () => {
     const { root, track } = await mountLoadTrack();
 
     // First establish a region: drag 200→700 (anchor 6s → 21s) ⇒ In=6, Out=21.
-    pointer(track, "pointerdown", 200);
-    pointer(track, "pointermove", 700);
-    pointer(track, "pointerup", 700);
+    firePointer(track, "pointerdown", { clientX: 200 });
+    firePointer(track, "pointermove", { clientX: 700 });
+    firePointer(track, "pointerup", { clientX: 700 });
     await flush();
 
     const inVal = valForDot(root, "in");
@@ -183,9 +154,9 @@ describe("editor loudness-timeline drag (jsdom)", () => {
 
     // A pointerdown within TL_EDGE_PX (7px) of the In edge (In=6s → x=200px) grabs
     // the In marker; dragging to clientX 400 (=12s) moves only In, Out unchanged.
-    pointer(track, "pointerdown", 201);
-    pointer(track, "pointermove", 400);
-    pointer(track, "pointerup", 400);
+    firePointer(track, "pointerdown", { clientX: 201 });
+    firePointer(track, "pointermove", { clientX: 400 });
+    firePointer(track, "pointerup", { clientX: 400 });
     await flush();
 
     expect(sec(inVal)).toBeCloseTo(12, 2);
@@ -197,9 +168,9 @@ describe("editor loudness-timeline drag (jsdom)", () => {
     const { root, track } = await mountLoadTrack();
 
     // Region: 200→700 ⇒ In=6 (x=200), Out=21 (x=700).
-    pointer(track, "pointerdown", 200);
-    pointer(track, "pointermove", 700);
-    pointer(track, "pointerup", 700);
+    firePointer(track, "pointerdown", { clientX: 200 });
+    firePointer(track, "pointermove", { clientX: 700 });
+    firePointer(track, "pointerup", { clientX: 700 });
     await flush();
 
     const inVal = valForDot(root, "in");
@@ -208,9 +179,9 @@ describe("editor loudness-timeline drag (jsdom)", () => {
     expect(sec(outVal)).toBeCloseTo(21, 2);
 
     // Grab the Out edge (x≈700) and drag to clientX 900 (=27s); In stays at 6.
-    pointer(track, "pointerdown", 699);
-    pointer(track, "pointermove", 900);
-    pointer(track, "pointerup", 900);
+    firePointer(track, "pointerdown", { clientX: 699 });
+    firePointer(track, "pointermove", { clientX: 900 });
+    firePointer(track, "pointerup", { clientX: 900 });
     await flush();
 
     expect(sec(inVal)).toBeCloseTo(6, 2); // In untouched
