@@ -148,10 +148,11 @@ export const TOOL_BY_NAME: ReadonlyMap<ToolName, ToolSpec> = new Map(TOOLS.map((
 /**
  * Clamp a crop-window x into frame exactly as the render will: delegates the
  * crop width, the `[0, maxX]` clamp and the even-rounding to `computeCrop`, so
- * the result is the x the engine renders (even on an odd-maxX region).
+ * the result is the x the engine renders (even on an odd-maxX region). The
+ * model's x may be fractional; computeCrop takes decimal integers only.
  */
 export function clampCropX(x: number, region: Dims): number {
-  return computeCrop(region.width, region.height, String(x)).x;
+  return computeCrop(region.width, region.height, String(Math.round(x))).x;
 }
 
 // ---- helpers ----

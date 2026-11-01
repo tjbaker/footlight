@@ -158,7 +158,29 @@ export function parseTimestamp(value: string): number {
   return secs;
 }
 
-/** Parse a `"W:H:X:Y"` content region (for stripping letterbox bars), or null. */
+/** A plain decimal integer with an optional sign: no hex, exponent, fraction or inf/NaN. */
+const DECIMAL_INT = /^[+-]?\d+$/;
+
+/**
+ * Parse a whitespace-trimmed, plain decimal integer (`DECIMAL_INT`) that is
+ * exactly representable (`Number.isSafeInteger`), or null. Stricter than
+ * `Number()`, which also coerces `""` to 0, accepts hex (`"0x10"`), exponents
+ * and `"Infinity"`, and lets `"240.0"` pass an integer check.
+ */
+function parseDecimalInt(value: string): number | null {
+  const s = value.trim();
+  if (!DECIMAL_INT.test(s)) {
+    return null;
+  }
+  const n = Number(s);
+  return Number.isSafeInteger(n) ? n : null;
+}
+
+/**
+ * Parse a `"W:H:X:Y"` content region (for stripping letterbox bars), or null.
+ * Each part must be a plain decimal integer (`parseDecimalInt`); W/H must be
+ * positive and X/Y non-negative.
+ */
 export function parseContentCrop(value: string | undefined | null): ContentCrop | null {
   value = (value || "").trim();
   if (!value) {
@@ -169,8 +191,8 @@ export function parseContentCrop(value: string | undefined | null): ContentCrop 
     throw new Error(`content_crop must be W:H:X:Y, got ${JSON.stringify(value)}`);
   }
   const nums = parts.map((p) => {
-    const n = Number(p);
-    if (!Number.isInteger(n)) {
+    const n = parseDecimalInt(p);
+    if (n === null) {
       throw new Error(`content_crop must be W:H:X:Y integers, got ${JSON.stringify(value)}`);
     }
     return n;
@@ -236,7 +258,10 @@ export function roundEven(n: number): number {
  * Compute {cw, ch, x, y} to extract a 9:16 region from iw x ih.
  *
  * crop_offset selects horizontal framing for the normal (landscape) case:
- * 'left' / 'center' / 'right', or an integer x-pixel offset from the left.
+ * 'left' / 'center' / 'right', or a plain decimal integer x-pixel offset from
+ * the left (`parseDecimalInt`; clamped into frame). Hex, exponents, fractions
+ * and inf/NaN are rejected. Pinned, with the Rust mirror, to
+ * test/fixtures/crop.json.
  */
 export function computeCrop(iw: number, ih: number, cropOffset: string): Crop {
   const offset = cropOffset.trim().toLowerCase();
@@ -259,14 +284,13 @@ export function computeCrop(iw: number, ih: number, cropOffset: string): Crop {
     } else if (offset === "right") {
       x = maxX;
     } else {
-      const f = Number(offset);
-      if (Number.isNaN(f)) {
+      const n = parseDecimalInt(offset);
+      if (n === null) {
         throw new Error(
           `crop_offset must be left/center/right or an integer, got ${JSON.stringify(cropOffset)}`,
         );
       }
-      x = Math.round(f);
-      x = Math.max(0, Math.min(x, maxX)); // clamp into frame
+      x = Math.max(0, Math.min(n, maxX)); // clamp into frame
     }
   } else {
     // Taller than 9:16 — crop height, full width; horizontal offset is moot.
@@ -893,9 +917,10 @@ export function buildFfmpegArgs(row: ClipRow, opts: BuildOptions): BuiltCommand 
  * Even-round and clamp an explicit punch-in `CropWindowSpec` into the working
  * region (H.264 needs even dimensions; the still export keeps the same rule so
  * the cover matches the rendered clip pixel-for-pixel). Throws on a non-positive
- * or region-exceeding window. Shared by `buildFfmpegArgs` and `coverFrameArgs`.
+ * or region-exceeding window. Shared by `buildFfmpegArgs` and `coverFrameArgs`;
+ * exported so test/fixtures/crop.json can pin it alongside the Rust mirror.
  */
-function clampCropWindow(win: CropWindowSpec, workW: number, workH: number): Crop {
+export function clampCropWindow(win: CropWindowSpec, workW: number, workH: number): Crop {
   const cw = even(win.w);
   const ch = even(win.h);
   if (cw <= 0 || ch <= 0) {

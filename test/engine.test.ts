@@ -11,12 +11,28 @@ import {
   even,
   roundEven,
   computeCrop,
+  clampCropWindow,
   safeName,
   buildFfmpegArgs,
   FADE_AUDIO_BITRATE,
   type ClipRow,
   type BuildOptions,
+  type CropWindowSpec,
 } from "../src/engine.js";
+
+type Quad = [number, number, number, number];
+
+/** Shared with the Rust mirrors in app/src-tauri/src/main.rs (include_str!). */
+const cropFixtures = JSON.parse(
+  readFileSync(new URL("./fixtures/crop.json", import.meta.url), "utf8"),
+) as {
+  computeCrop: { accept: [number, number, string, Quad][]; reject: [number, number, string][] };
+  parseContentCrop: { accept: [string | null, Quad | null][]; reject: [string, string][] };
+  clampCropWindow: {
+    accept: [CropWindowSpec, number, number, Quad][];
+    reject: [CropWindowSpec, number, number][];
+  };
+};
 
 const DEFAULTS = { crf: 19, preset: "medium", audioBitrate: "copy", outdir: "clips" };
 
@@ -85,6 +101,15 @@ describe("parseContentCrop", () => {
     expect(() => parseContentCrop("-1800:1010:60:34")).toThrow(/positive/);
     expect(() => parseContentCrop("1800:0:60:34")).toThrow(/positive/);
   });
+
+  // Shared with the Rust `parse_content_crop` mirror (include_str! in main.rs).
+  it.each(cropFixtures.parseContentCrop.accept)("accepts %j as %j", (input, want) => {
+    expect(parseContentCrop(input)).toEqual(want);
+  });
+
+  it.each(cropFixtures.parseContentCrop.reject)("rejects %j (%s)", (input, msg) => {
+    expect(() => parseContentCrop(input)).toThrow(msg);
+  });
 });
 
 describe("even / roundEven", () => {
@@ -151,6 +176,29 @@ describe("computeCrop", () => {
   it("taller-than-9:16 source crops height, full width", () => {
     const c = computeCrop(1080, 1920, "center");
     expect(c).toEqual({ cw: 1080, ch: 1920, x: 0, y: 0 });
+  });
+
+  // Shared with the Rust `compute_crop` mirror (include_str! in main.rs).
+  it.each(cropFixtures.computeCrop.accept)("%dx%d %j -> %j", (iw, ih, offset, [cw, ch, x, y]) => {
+    expect(computeCrop(iw, ih, offset)).toEqual({ cw, ch, x, y });
+  });
+
+  it.each(cropFixtures.computeCrop.reject)("%dx%d rejects %j", (iw, ih, offset) => {
+    expect(() => computeCrop(iw, ih, offset)).toThrow(/crop_offset must be/);
+  });
+});
+
+describe("clampCropWindow", () => {
+  // Shared with the Rust `clamp_crop_window` mirror (include_str! in main.rs).
+  it.each(cropFixtures.clampCropWindow.accept)(
+    "%j in %dx%d -> %j",
+    (win, workW, workH, [cw, ch, x, y]) => {
+      expect(clampCropWindow(win, workW, workH)).toEqual({ cw, ch, x, y });
+    },
+  );
+
+  it.each(cropFixtures.clampCropWindow.reject)("rejects %j in %dx%d", (win, workW, workH) => {
+    expect(() => clampCropWindow(win, workW, workH)).toThrow(/cropWindow/);
   });
 });
 
