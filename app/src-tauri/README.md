@@ -33,20 +33,23 @@ cargo tauri build    # or: npx tauri build
 
 ## What the native side does
 
-`src/main.rs` exposes 22 `#[tauri::command]`s — the native half of the
+`src/main.rs` registers 21 `#[tauri::command]`s — the native half of the
 `FootlightPlatform` interface, mirroring the Node dev backend in
-`../dev-server/server.mjs`:
+`../dev-server/server.mjs`. They live in modules by area, each with its tests
+beside it:
 
-- **media** — `extract_frame`, `probe`, `scenes`, `loudness`, `export_cover`
+- **media** (`src/media.rs`) — `extract_frame`, `probe`, `scenes`, `loudness`
   (shell out to ffmpeg/ffprobe);
-- **engine** — `track`, `render` (run the footlight CLI under `node`);
-- **output folder** — `default_outdir`, `check_outdir`;
-- **persistence** — `load_history`, `save_history`, `load_session`,
-  `save_session`, `write_text_file`;
-- **fonts** — `list_fonts`, `list_fonts_in_dir`;
-- **secrets** (OS keychain, for BYOK provider keys) — `get_secret`,
-  `set_secret`, `delete_secret`;
-- **windows** — `toggle_activity_window`, `show_activity_window`.
+- **cover** (`src/cover.rs`) — `export_cover`, plus the crop mirrors pinned to
+  `test/fixtures/{timestamps,crop}.json`;
+- **engine** (`src/render.rs`) — `track`, `render` (run the footlight CLI under
+  `node`), `default_outdir`, `check_outdir`, `write_text_file`;
+- **persistence** (`src/store.rs`) — `load_history`, `save_history`,
+  `load_session`, `save_session`;
+- **fonts** (`src/fonts.rs`) — `list_fonts`, `list_fonts_in_dir`;
+- **secrets** (`src/store.rs`; OS keychain, for BYOK provider keys) —
+  `get_secret`, `set_secret`, `delete_secret`;
+- **windows** (`src/menu.rs`) — `toggle_activity_window`, `show_activity_window`.
 
 Subprocesses run through one async helper, `run_output` in `src/subprocess.rs`
 (`tokio::process`), so a long render never ties up the threads other commands
