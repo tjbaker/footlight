@@ -1,0 +1,139 @@
+[
+  {
+    "name": "no options: just the manifest and --outdir, LAST",
+    "opts": { "manifestPath": "/tmp/m.json", "outDir": "/out" },
+    "argv": ["render", "/tmp/m.json", "--outdir", "/out"]
+  },
+  {
+    "name": "every flag set, in src/cli.ts order",
+    "opts": {
+      "manifestPath": "/tmp/m.json",
+      "outDir": "/out",
+      "crf": 19,
+      "preset": "medium",
+      "audioBitrate": "256k",
+      "dryRun": true,
+      "burnCaptions": true,
+      "captionFont": "Avenir",
+      "captionColor": "#ffffff",
+      "captionOutlineColor": "#000000",
+      "captionBold": true,
+      "captionItalic": true,
+      "captionUnderline": true,
+      "captionShadow": true,
+      "captionBox": true,
+      "captionBoxColor": "#00000080",
+      "captionAngle": -4
+    },
+    "argv": [
+      "render",
+      "/tmp/m.json",
+      "--crf",
+      "19",
+      "--preset",
+      "medium",
+      "--audio-bitrate",
+      "256k",
+      "--dry-run",
+      "--burn-captions",
+      "--caption-font",
+      "Avenir",
+      "--caption-color",
+      "#ffffff",
+      "--caption-outline-color",
+      "#000000",
+      "--caption-bold",
+      "--caption-italic",
+      "--caption-underline",
+      "--caption-shadow",
+      "--caption-box",
+      "--caption-box-color",
+      "#00000080",
+      "--caption-angle",
+      "-4",
+      "--outdir",
+      "/out"
+    ]
+  },
+  {
+    "name": "empty strings and explicit-false toggles emit nothing",
+    "opts": {
+      "manifestPath": "/tmp/m.json",
+      "outDir": "/out",
+      "preset": "",
+      "audioBitrate": "",
+      "dryRun": false,
+      "burnCaptions": false,
+      "captionColor": "",
+      "captionOutlineColor": "",
+      "captionBold": false,
+      "captionItalic": false,
+      "captionUnderline": false,
+      "captionShadow": false,
+      "captionBox": false,
+      "captionBoxColor": ""
+    },
+    "argv": ["render", "/tmp/m.json", "--outdir", "/out"]
+  },
+  {
+    "name": "explicit nulls (what the Tauri backend sends for unset options) emit nothing",
+    "opts": {
+      "manifestPath": "/tmp/m.json",
+      "outDir": "/out",
+      "crf": null,
+      "preset": null,
+      "audioBitrate": null,
+      "dryRun": null,
+      "burnCaptions": null,
+      "captionFont": null,
+      "captionColor": null,
+      "captionOutlineColor": null,
+      "captionBold": null,
+      "captionItalic": null,
+      "captionUnderline": null,
+      "captionShadow": null,
+      "captionBox": null,
+      "captionBoxColor": null,
+      "captionAngle": null
+    },
+    "argv": ["render", "/tmp/m.json", "--outdir", "/out"]
+  },
+  {
+    "name": "drift fix: an empty caption font emits no --caption-font (Rust used to pass \"\")",
+    "opts": { "manifestPath": "/tmp/m.json", "outDir": "/out", "captionFont": "" },
+    "argv": ["render", "/tmp/m.json", "--outdir", "/out"]
+  },
+  {
+    "name": "drift fix: crf 0 (x264 lossless, valid for the CLI) is forwarded",
+    "opts": { "manifestPath": "/tmp/m.json", "outDir": "/out", "crf": 0 },
+    "argv": ["render", "/tmp/m.json", "--crf", "0", "--outdir", "/out"]
+  },
+  {
+    "name": "caption angle 0 is a real value and is forwarded",
+    "opts": { "manifestPath": "/tmp/m.json", "outDir": "/out", "captionAngle": 0 },
+    "argv": ["render", "/tmp/m.json", "--caption-angle", "0", "--outdir", "/out"]
+  },
+  {
+    "name": "a fractional caption angle keeps its decimals",
+    "opts": { "manifestPath": "/tmp/m.json", "outDir": "/out", "captionAngle": 7.5 },
+    "argv": ["render", "/tmp/m.json", "--caption-angle", "7.5", "--outdir", "/out"]
+  },
+  {
+    "name": "a font file path with spaces stays one argv element",
+    "opts": {
+      "manifestPath": "/tmp/m.json",
+      "outDir": "/out dir",
+      "burnCaptions": true,
+      "captionFont": "/Users/me/My Fonts/Inter.ttf"
+    },
+    "argv": [
+      "render",
+      "/tmp/m.json",
+      "--burn-captions",
+      "--caption-font",
+      "/Users/me/My Fonts/Inter.ttf",
+      "--outdir",
+      "/out dir"
+    ]
+  }
+]

@@ -360,8 +360,26 @@ fn parse_timestamp(value: &str) -> Result<f64, String> {
     Ok(secs)
 }
 
-/// Parse a `"W:H:X:Y"` content region (strip letterbox bars), or None.
-/// HAND MIRROR of core.ts `parseContentCrop`.
+/// Largest integer an f64 (a JS number) holds exactly: `Number.MAX_SAFE_INTEGER`.
+const MAX_SAFE_INTEGER: u64 = (1 << 53) - 1;
+
+/// Parse a whitespace-trimmed plain decimal integer with an optional sign
+/// (`^[+-]?\d+$`) that is a JS safe integer, or None — no hex, exponent,
+/// fraction or inf/NaN. HAND MIRROR of core.ts `parseDecimalInt`.
+fn parse_decimal_int(value: &str) -> Option<i64> {
+    let s = value.trim();
+    let digits = s.strip_prefix(['+', '-']).unwrap_or(s);
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    s.parse::<i64>()
+        .ok()
+        .filter(|n| n.unsigned_abs() <= MAX_SAFE_INTEGER)
+}
+
+/// Parse a `"W:H:X:Y"` content region (strip letterbox bars), or None. Each
+/// part must be a plain decimal integer (`parse_decimal_int`). HAND MIRROR of
+/// core.ts `parseContentCrop`; both are pinned to test/fixtures/crop.json.
 fn parse_content_crop(value: Option<&str>) -> Result<Option<[i64; 4]>, String> {
     let value = value.unwrap_or("").trim();
     if value.is_empty() {
@@ -373,10 +391,8 @@ fn parse_content_crop(value: Option<&str>) -> Result<Option<[i64; 4]>, String> {
     }
     let mut nums = [0i64; 4];
     for (i, p) in parts.iter().enumerate() {
-        nums[i] = p
-            .trim()
-            .parse::<i64>()
-            .map_err(|_| format!("content_crop must be W:H:X:Y integers, got {value:?}"))?;
+        nums[i] = parse_decimal_int(p)
+            .ok_or_else(|| format!("content_crop must be W:H:X:Y integers, got {value:?}"))?;
     }
     if nums[0] <= 0 || nums[1] <= 0 || nums[2] < 0 || nums[3] < 0 {
         return Err(format!(
@@ -436,7 +452,9 @@ fn schedule_offset_at(segments: &[(f64, String)], t: f64) -> Result<&str, String
 
 /// Compute (cw, ch, x, y) extracting a 9:16 region from iw×ih, with the
 /// horizontal framing chosen by `crop_offset` (left/center/right/integer).
-/// HAND MIRROR of core.ts `computeCrop`.
+/// An integer offset must be a plain decimal integer (`parse_decimal_int`).
+/// HAND MIRROR of core.ts `computeCrop`; both are pinned to
+/// test/fixtures/crop.json.
 fn compute_crop(iw: f64, ih: f64, crop_offset: &str) -> Result<(i64, i64, i64, i64), String> {
     let offset = crop_offset.trim().to_lowercase();
 
@@ -452,12 +470,12 @@ fn compute_crop(iw: f64, ih: f64, crop_offset: &str) -> Result<(i64, i64, i64, i
             "center" | "centre" | "" => (max_x / 2.0).floor(),
             "right" => max_x,
             _ => {
-                let f: f64 = offset.parse().map_err(|_| {
+                let n = parse_decimal_int(&offset).ok_or_else(|| {
                     format!(
                         "crop_offset must be left/center/right or an integer, got {crop_offset:?}"
                     )
                 })?;
-                f.round().min(max_x).max(0.0) // clamp into frame
+                (n as f64).min(max_x).max(0.0) // clamp into frame
             }
         };
     } else {
@@ -507,7 +525,8 @@ fn eased_crop_x_at(keyframes: &[CoverKeyframe], t: f64) -> f64 {
 }
 
 /// Even-round and clamp a punch-in window into the working region.
-/// HAND MIRROR of core.ts `clampCropWindow`.
+/// HAND MIRROR of core.ts `clampCropWindow`; both are pinned to
+/// test/fixtures/crop.json.
 fn clamp_crop_window(
     win: &CoverWindow,
     work_w: f64,
@@ -858,16 +877,14 @@ async fn track(app: AppHandle, req: serde_json::Value) -> Result<serde_json::Val
         .map_err(|e| format!("track returned unparseable output: {e}"))
 }
 
-/// Build the footlight CLI `render` argv (everything after `node <cli>`):
-/// manifest path, the Settings-derived flags, then `--outdir` LAST so the log's
-/// trailing `--outdir <dir>` parses cleanly on the client. Flag names mirror
-/// src/cli.ts; empty strings and false/None toggles emit nothing.
-// One parameter per render CLI flag, mirroring the `render` IPC command below;
-// folding the flags into one struct/helper is tracked in #260.
-#[allow(clippy::too_many_arguments)]
-fn render_cli_args(
-    manifest_path: &str,
-    out_dir: &str,
+/// The render CLI inputs: a hand mirror of `RenderCliOptions` in
+/// src/render-args.ts (the Tauri shell cannot import TS). `Deserialize` lets the
+/// tests read the shared `test/fixtures/render-cli-args.json` cases verbatim.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RenderCliOpts {
+    manifest_path: String,
+    out_dir: String,
     crf: Option<i64>,
     preset: Option<String>,
     audio_bitrate: Option<String>,
@@ -883,73 +900,53 @@ fn render_cli_args(
     caption_box: Option<bool>,
     caption_box_color: Option<String>,
     caption_angle: Option<f64>,
-) -> Vec<String> {
-    let mut args: Vec<String> = vec!["render".into(), manifest_path.into()];
-    if let Some(c) = crf {
-        args.push("--crf".into());
-        args.push(c.to_string());
-    }
-    if let Some(p) = preset {
-        if !p.is_empty() {
-            args.push("--preset".into());
-            args.push(p);
+}
+
+/// Build the footlight CLI `render` argv (everything after `node <cli>`):
+/// manifest path, the Settings-derived flags, then `--outdir` LAST so the log's
+/// trailing `--outdir <dir>` parses cleanly on the client. Documented mirror of
+/// `renderCliArgs` in src/render-args.ts, pinned to its fixtures: numbers are
+/// emitted whenever present (0 included), strings only when non-empty, toggles
+/// only when `true`.
+fn render_cli_args(o: RenderCliOpts) -> Vec<String> {
+    fn value(args: &mut Vec<String>, flag: &str, v: Option<String>) {
+        if let Some(v) = v.filter(|v| !v.is_empty()) {
+            args.push(flag.into());
+            args.push(v);
         }
     }
-    if let Some(a) = audio_bitrate {
-        if !a.is_empty() {
-            args.push("--audio-bitrate".into());
-            args.push(a);
+    fn toggle(args: &mut Vec<String>, flag: &str, v: Option<bool>) {
+        if v == Some(true) {
+            args.push(flag.into());
         }
     }
-    if dry_run.unwrap_or(false) {
-        args.push("--dry-run".into());
-    }
-    if burn_captions == Some(true) {
-        args.push("--burn-captions".into());
-    }
-    if let Some(f) = caption_font {
-        args.push("--caption-font".into());
-        args.push(f);
-    }
-    if let Some(c) = caption_color {
-        if !c.is_empty() {
-            args.push("--caption-color".into());
-            args.push(c);
-        }
-    }
-    if let Some(c) = caption_outline_color {
-        if !c.is_empty() {
-            args.push("--caption-outline-color".into());
-            args.push(c);
-        }
-    }
-    if caption_bold == Some(true) {
-        args.push("--caption-bold".into());
-    }
-    if caption_italic == Some(true) {
-        args.push("--caption-italic".into());
-    }
-    if caption_underline == Some(true) {
-        args.push("--caption-underline".into());
-    }
-    if caption_shadow == Some(true) {
-        args.push("--caption-shadow".into());
-    }
-    if caption_box == Some(true) {
-        args.push("--caption-box".into());
-    }
-    if let Some(c) = caption_box_color {
-        if !c.is_empty() {
-            args.push("--caption-box-color".into());
-            args.push(c);
-        }
-    }
-    if let Some(a) = caption_angle {
-        args.push("--caption-angle".into());
-        args.push(a.to_string());
-    }
+    let mut args: Vec<String> = vec!["render".into(), o.manifest_path];
+    // A formatted number is never empty, so `value` forwards every number.
+    value(&mut args, "--crf", o.crf.map(|c| c.to_string()));
+    value(&mut args, "--preset", o.preset);
+    value(&mut args, "--audio-bitrate", o.audio_bitrate);
+    toggle(&mut args, "--dry-run", o.dry_run);
+    toggle(&mut args, "--burn-captions", o.burn_captions);
+    value(&mut args, "--caption-font", o.caption_font);
+    value(&mut args, "--caption-color", o.caption_color);
+    value(
+        &mut args,
+        "--caption-outline-color",
+        o.caption_outline_color,
+    );
+    toggle(&mut args, "--caption-bold", o.caption_bold);
+    toggle(&mut args, "--caption-italic", o.caption_italic);
+    toggle(&mut args, "--caption-underline", o.caption_underline);
+    toggle(&mut args, "--caption-shadow", o.caption_shadow);
+    toggle(&mut args, "--caption-box", o.caption_box);
+    value(&mut args, "--caption-box-color", o.caption_box_color);
+    value(
+        &mut args,
+        "--caption-angle",
+        o.caption_angle.map(|a| a.to_string()),
+    );
     args.push("--outdir".into());
-    args.push(out_dir.into());
+    args.push(o.out_dir);
     args
 }
 
@@ -959,7 +956,8 @@ fn render_cli_args(
 /// CLI is resolved relative to the bundled resources; in dev it sits at the
 /// repo's `bin/footlight.js`.
 // The argument list IS the IPC contract the frontend's Tauri backend invokes
-// (kept in sync with the web dev backend), so it stays flat; see #260.
+// (kept in sync with the web dev backend), so it stays flat and is folded into
+// `RenderCliOpts` below.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn render(
@@ -993,9 +991,9 @@ async fn render(
     let out_dir = resolve_outdir(&cli, outdir);
 
     // Render flags from Settings -> CLI (see render_cli_args for the shape).
-    let args = render_cli_args(
-        &manifest_path.to_string_lossy(),
-        &out_dir,
+    let args = render_cli_args(RenderCliOpts {
+        manifest_path: manifest_path.to_string_lossy().into_owned(),
+        out_dir,
         crf,
         preset,
         audio_bitrate,
@@ -1011,7 +1009,7 @@ async fn render(
         caption_box,
         caption_box_color,
         caption_angle,
-    );
+    });
 
     // Kind::Render: quitting while this runs asks first (see `main`).
     let mut cmd = Command::new("node");
@@ -1042,26 +1040,77 @@ fn history_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     Ok(dir.join("history.json"))
 }
 
-/// Load the persisted render history. A missing file yields an empty list; the
-/// frontend owns capping/ordering. Entries are opaque JSON (the TS HistoryEntry
-/// shape) so Rust does not mirror the type.
-#[tauri::command]
-async fn load_history(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
-    let path = history_path(&app)?;
-    let body = match std::fs::read_to_string(&path) {
+/// Read a persisted JSON file, falling back to `T::default()` when it is missing.
+/// An UNPARSEABLE file (e.g. truncated by a crash mid-write from an older build,
+/// possibly mid-UTF-8 sequence) also yields the default, so one bad file can't
+/// wedge the feature for good (#263); it is first renamed aside to
+/// `<name>.corrupt` so the bytes aren't silently destroyed. Any OTHER read error
+/// (permissions, I/O) is returned, not defaulted — the file may be fine, and a
+/// default would let the next save clobber it. Bytes are parsed directly, so
+/// invalid UTF-8 counts as corrupt, not unreadable. Mirrors `readJsonOrDefault`
+/// in app/dev-server/server.mjs — keep the two in parity.
+fn read_json_or_default<T: serde::de::DeserializeOwned + Default>(
+    path: &std::path::Path,
+) -> Result<T, String> {
+    let bytes = match std::fs::read(path) {
         Ok(b) => b,
-        Err(_) => return Ok(vec![]),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(T::default()),
+        Err(e) => return Err(format!("read {}: {e}", path.display())),
     };
-    serde_json::from_str(&body).map_err(|e| format!("parse history: {e}"))
+    match serde_json::from_slice(&bytes) {
+        Ok(value) => Ok(value),
+        Err(_) => {
+            // Best effort: if the rename fails the default is still returned and
+            // the next atomic save replaces the bad file.
+            let _ = std::fs::rename(path, corrupt_path(path));
+            Ok(T::default())
+        }
+    }
 }
 
-/// Persist the full render-history array to the app config dir.
+/// `<path>.corrupt` — where `read_json_or_default` moves an unparseable file.
+fn corrupt_path(path: &std::path::Path) -> std::path::PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(".corrupt");
+    std::path::PathBuf::from(name)
+}
+
+/// Serialize `value` and replace `path` ATOMICALLY: write a uniquely named temp
+/// file in the same directory, flush it to disk, then rename it over `path`. A
+/// crash mid-write leaves the previous file intact, never a truncated one (#263).
+/// Mirrors `writeJsonAtomic` in app/dev-server/server.mjs.
+fn write_json_atomic<T: Serialize>(path: &std::path::Path, value: &T) -> Result<(), String> {
+    use std::io::Write;
+    let body = serde_json::to_string(value).map_err(|e| format!("serialize: {e}"))?;
+    let dir = path
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty())
+        .unwrap_or_else(|| std::path::Path::new("."));
+    // Dropped (and deleted) on any early return, so no partial temp file lingers.
+    let mut tmp = tempfile::NamedTempFile::new_in(dir).map_err(|e| format!("create temp: {e}"))?;
+    tmp.write_all(body.as_bytes())
+        .map_err(|e| format!("write temp: {e}"))?;
+    tmp.as_file()
+        .sync_all()
+        .map_err(|e| format!("sync temp: {e}"))?;
+    tmp.persist(path)
+        .map_err(|e| format!("replace {}: {}", path.display(), e.error))?;
+    Ok(())
+}
+
+/// Load the persisted render history. A missing or corrupt file yields an empty
+/// list (see `read_json_or_default`); the frontend owns capping/ordering.
+/// Entries are opaque JSON (the TS HistoryEntry shape) so Rust does not mirror
+/// the type.
+#[tauri::command]
+async fn load_history(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    read_json_or_default(&history_path(&app)?).map_err(|e| format!("load history: {e}"))
+}
+
+/// Persist the full render-history array to the app config dir (atomically).
 #[tauri::command]
 async fn save_history(app: AppHandle, entries: Vec<serde_json::Value>) -> Result<(), String> {
-    let path = history_path(&app)?;
-    let body = serde_json::to_string(&entries).map_err(|e| format!("serialize history: {e}"))?;
-    std::fs::write(&path, body).map_err(|e| format!("write history: {e}"))?;
-    Ok(())
+    write_json_atomic(&history_path(&app)?, &entries).map_err(|e| format!("save history: {e}"))
 }
 
 /// Path to the persisted working-session file inside the app config dir, creating
@@ -1075,26 +1124,18 @@ fn session_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     Ok(dir.join("session.json"))
 }
 
-/// Load the persisted working session. A missing file yields `None`; the session
-/// is opaque JSON (the TS SessionData shape) so Rust does not mirror the type.
+/// Load the persisted working session. A missing or corrupt file yields `None`
+/// (see `read_json_or_default`); the session is opaque JSON (the TS SessionData
+/// shape) so Rust does not mirror the type.
 #[tauri::command]
 async fn load_session(app: AppHandle) -> Result<Option<serde_json::Value>, String> {
-    let path = session_path(&app)?;
-    let body = match std::fs::read_to_string(&path) {
-        Ok(b) => b,
-        Err(_) => return Ok(None),
-    };
-    let value = serde_json::from_str(&body).map_err(|e| format!("parse session: {e}"))?;
-    Ok(Some(value))
+    read_json_or_default(&session_path(&app)?).map_err(|e| format!("load session: {e}"))
 }
 
-/// Persist the working session to the app config dir.
+/// Persist the working session to the app config dir (atomically).
 #[tauri::command]
 async fn save_session(app: AppHandle, data: serde_json::Value) -> Result<(), String> {
-    let path = session_path(&app)?;
-    let body = serde_json::to_string(&data).map_err(|e| format!("serialize session: {e}"))?;
-    std::fs::write(&path, body).map_err(|e| format!("write session: {e}"))?;
-    Ok(())
+    write_json_atomic(&session_path(&app)?, &data).map_err(|e| format!("save session: {e}"))
 }
 
 /// One installed font family for the caption picker. Family-only is enough —
@@ -1653,6 +1694,108 @@ fn main() {
 mod tests {
     use super::*;
 
+    // --- history / session persistence (#263) ----------------------------
+
+    /// A truncated/corrupt history file loads as the default instead of an
+    /// error, and is preserved as `<name>.corrupt` rather than destroyed.
+    #[test]
+    fn read_json_or_default_recovers_from_a_corrupt_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("history.json");
+        std::fs::write(&path, "[{\"id\":\"a\"").unwrap();
+        let entries: Vec<serde_json::Value> = read_json_or_default(&path).unwrap();
+        assert!(entries.is_empty());
+        assert!(!path.exists());
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("history.json.corrupt")).unwrap(),
+            "[{\"id\":\"a\""
+        );
+        // Same for the session: an empty (truncated) file -> None.
+        let session = dir.path().join("session.json");
+        std::fs::write(&session, "").unwrap();
+        let data: Option<serde_json::Value> = read_json_or_default(&session).unwrap();
+        assert!(data.is_none());
+        assert!(dir.path().join("session.json.corrupt").exists());
+    }
+
+    /// A crash can truncate mid multi-byte character (accented caption text):
+    /// invalid UTF-8 is corrupt, not "unreadable" — the bytes are kept aside.
+    #[test]
+    fn read_json_or_default_keeps_a_file_truncated_mid_utf8() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.json");
+        let full = "{\"title\":\"caf\u{e9}\"}".as_bytes().to_vec();
+        let cut = &full[..full.len() - 3]; // ends inside the 2-byte 'é'
+        assert!(std::str::from_utf8(cut).is_err());
+        std::fs::write(&path, cut).unwrap();
+        let data: Option<serde_json::Value> = read_json_or_default(&path).unwrap();
+        assert!(data.is_none());
+        assert_eq!(
+            std::fs::read(dir.path().join("session.json.corrupt")).unwrap(),
+            cut
+        );
+    }
+
+    /// A read error other than NotFound is surfaced, not defaulted, and the
+    /// file is left in place (a default would let the next save clobber it).
+    #[test]
+    fn read_json_or_default_surfaces_other_read_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("history.json");
+        std::fs::create_dir(&path).unwrap(); // reading a directory fails
+        assert!(read_json_or_default::<Vec<serde_json::Value>>(&path).is_err());
+        assert!(path.is_dir());
+        assert!(!dir.path().join("history.json.corrupt").exists());
+    }
+
+    /// Valid JSON of the wrong shape (an object where history wants an array)
+    /// is treated as corrupt too, matching the web backend.
+    #[test]
+    fn read_json_or_default_treats_a_wrong_shape_as_corrupt() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("history.json");
+        std::fs::write(&path, "{}").unwrap();
+        let entries: Vec<serde_json::Value> = read_json_or_default(&path).unwrap();
+        assert!(entries.is_empty());
+        assert!(dir.path().join("history.json.corrupt").exists());
+    }
+
+    #[test]
+    fn read_json_or_default_missing_file_is_default_and_creates_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.json");
+        let data: Option<serde_json::Value> = read_json_or_default(&path).unwrap();
+        assert!(data.is_none());
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    /// An atomic write replaces the old contents, round-trips through
+    /// `read_json_or_default`, and leaves no temp file behind.
+    #[test]
+    fn write_json_atomic_replaces_and_leaves_no_partial_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("history.json");
+        std::fs::write(&path, "old").unwrap();
+        let entries = vec![serde_json::json!({"id": "a", "ts": 1})];
+        write_json_atomic(&path, &entries).unwrap();
+        let back: Vec<serde_json::Value> = read_json_or_default(&path).unwrap();
+        assert_eq!(back, entries);
+        let names: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(names, vec![std::ffi::OsString::from("history.json")]);
+    }
+
+    /// A failed write (target dir gone) errors and leaves nothing behind.
+    #[test]
+    fn write_json_atomic_failure_leaves_no_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing").join("session.json");
+        assert!(write_json_atomic(&path, &serde_json::json!({"a": 1})).is_err());
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
     // --- probe (ffprobe + cropdetect) ------------------------------------
 
     /// Mirrors test/commands.test.ts "ffprobeStreamArgs / parseProbe" — requests
@@ -2032,111 +2175,20 @@ mod tests {
 
     // --- render -----------------------------------------------------------
 
-    /// No flags set: just `render <manifest> --outdir <dir>`, with --outdir
-    /// LAST (the client parses the log's trailing `--outdir <dir>`).
+    /// The SAME cases test/render-args.test.ts runs against `renderCliArgs` in
+    /// src/render-args.ts, read from the shared JSON so drift fails here.
     #[test]
-    fn render_cli_args_minimal_appends_outdir_last() {
-        let a = render_cli_args(
-            "/tmp/m.json",
-            "/out",
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        );
-        assert_eq!(a, vec!["render", "/tmp/m.json", "--outdir", "/out"]);
-    }
-
-    /// Every Settings flag set: names/order match src/cli.ts's render flags.
-    #[test]
-    fn render_cli_args_full_flag_set() {
-        let a = render_cli_args(
-            "/tmp/m.json",
-            "/out",
-            Some(19),
-            Some("medium".into()),
-            Some("256k".into()),
-            Some(true),
-            Some(true),
-            Some("Avenir".into()),
-            Some("#ffffff".into()),
-            Some("#000000".into()),
-            Some(true),
-            Some(true),
-            Some(true),
-            Some(true),
-            Some(true),
-            Some("#00000080".into()),
-            Some(-4.0),
-        );
-        assert_eq!(
-            a,
-            vec![
-                "render",
-                "/tmp/m.json",
-                "--crf",
-                "19",
-                "--preset",
-                "medium",
-                "--audio-bitrate",
-                "256k",
-                "--dry-run",
-                "--burn-captions",
-                "--caption-font",
-                "Avenir",
-                "--caption-color",
-                "#ffffff",
-                "--caption-outline-color",
-                "#000000",
-                "--caption-bold",
-                "--caption-italic",
-                "--caption-underline",
-                "--caption-shadow",
-                "--caption-box",
-                "--caption-box-color",
-                "#00000080",
-                "--caption-angle",
-                "-4",
-                "--outdir",
-                "/out",
-            ]
-        );
-    }
-
-    /// Empty strings and explicit-false toggles emit no flags at all.
-    #[test]
-    fn render_cli_args_skips_empty_and_false_options() {
-        let a = render_cli_args(
-            "/tmp/m.json",
-            "/out",
-            None,
-            Some(String::new()),
-            Some(String::new()),
-            Some(false),
-            Some(false),
-            None,
-            Some(String::new()),
-            Some(String::new()),
-            Some(false),
-            Some(false),
-            Some(false),
-            Some(false),
-            Some(false),
-            Some(String::new()),
-            None,
-        );
-        assert_eq!(a, vec!["render", "/tmp/m.json", "--outdir", "/out"]);
+    fn render_cli_args_matches_shared_fixtures() {
+        let cases: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("../../../test/fixtures/render-cli-args.json"))
+                .unwrap();
+        assert!(!cases.is_empty());
+        for case in cases {
+            let name = case["name"].as_str().unwrap().to_string();
+            let opts: RenderCliOpts = serde_json::from_value(case["opts"].clone()).unwrap();
+            let want: Vec<String> = serde_json::from_value(case["argv"].clone()).unwrap();
+            assert_eq!(render_cli_args(opts), want, "case {name:?}");
+        }
     }
 
     // --- path helpers -----------------------------------------------------
@@ -2251,6 +2303,112 @@ mod tests {
             parse_timestamp("1::30"),
             Err("bad timestamp: \"1::30\"".to_string())
         );
+    }
+
+    // --- compute_crop / parse_content_crop / clamp_crop_window (issue #261) --
+
+    /// The SAME fixtures test/engine.test.ts runs against core.ts `computeCrop`,
+    /// `parseContentCrop` and `clampCropWindow` — read from the shared JSON so
+    /// drift fails here.
+    fn crop_fixtures() -> serde_json::Value {
+        serde_json::from_str(include_str!("../../../test/fixtures/crop.json")).unwrap()
+    }
+
+    /// A fixture `[cw, ch, x, y]` / `[W, H, X, Y]` array as a tuple.
+    fn quad(v: &serde_json::Value) -> (i64, i64, i64, i64) {
+        let n = |i: usize| v[i].as_i64().unwrap();
+        (n(0), n(1), n(2), n(3))
+    }
+
+    fn cases<'a>(fx: &'a serde_json::Value, func: &str, kind: &str) -> &'a [serde_json::Value] {
+        let list = fx[func][kind].as_array().unwrap();
+        assert!(!list.is_empty(), "{func}.{kind} is empty");
+        list
+    }
+
+    #[test]
+    fn compute_crop_accepts_shared_fixtures() {
+        let fx = crop_fixtures();
+        for case in cases(&fx, "computeCrop", "accept") {
+            let (iw, ih) = (case[0].as_f64().unwrap(), case[1].as_f64().unwrap());
+            let offset = case[2].as_str().unwrap();
+            assert_eq!(
+                compute_crop(iw, ih, offset),
+                Ok(quad(&case[3])),
+                "{iw}x{ih} {offset:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn compute_crop_rejects_shared_fixtures() {
+        let fx = crop_fixtures();
+        for case in cases(&fx, "computeCrop", "reject") {
+            let (iw, ih) = (case[0].as_f64().unwrap(), case[1].as_f64().unwrap());
+            let offset = case[2].as_str().unwrap();
+            let err = compute_crop(iw, ih, offset).expect_err(offset);
+            assert!(err.contains("crop_offset must be"), "{offset:?} -> {err}");
+        }
+    }
+
+    #[test]
+    fn parse_content_crop_accepts_shared_fixtures() {
+        let fx = crop_fixtures();
+        for case in cases(&fx, "parseContentCrop", "accept") {
+            let input = case[0].as_str();
+            let want = (!case[1].is_null()).then(|| {
+                let (w, h, x, y) = quad(&case[1]);
+                [w, h, x, y]
+            });
+            assert_eq!(parse_content_crop(input), Ok(want), "input {input:?}");
+        }
+    }
+
+    #[test]
+    fn parse_content_crop_rejects_shared_fixtures() {
+        let fx = crop_fixtures();
+        for case in cases(&fx, "parseContentCrop", "reject") {
+            let input = case[0].as_str().unwrap();
+            let msg = case[1].as_str().unwrap();
+            let err = parse_content_crop(Some(input)).expect_err(input);
+            assert!(err.contains(msg), "input {input:?} -> {err} (want {msg:?})");
+        }
+    }
+
+    fn fixture_window(v: &serde_json::Value) -> CoverWindow {
+        let n = |k: &str| v[k].as_f64().unwrap();
+        CoverWindow {
+            x: n("x"),
+            y: n("y"),
+            w: n("w"),
+            h: n("h"),
+        }
+    }
+
+    #[test]
+    fn clamp_crop_window_accepts_shared_fixtures() {
+        let fx = crop_fixtures();
+        for case in cases(&fx, "clampCropWindow", "accept") {
+            let win = fixture_window(&case[0]);
+            let (work_w, work_h) = (case[1].as_f64().unwrap(), case[2].as_f64().unwrap());
+            assert_eq!(
+                clamp_crop_window(&win, work_w, work_h),
+                Ok(quad(&case[3])),
+                "{} in {work_w}x{work_h}",
+                case[0]
+            );
+        }
+    }
+
+    #[test]
+    fn clamp_crop_window_rejects_shared_fixtures() {
+        let fx = crop_fixtures();
+        for case in cases(&fx, "clampCropWindow", "reject") {
+            let win = fixture_window(&case[0]);
+            let (work_w, work_h) = (case[1].as_f64().unwrap(), case[2].as_f64().unwrap());
+            let err = clamp_crop_window(&win, work_w, work_h).expect_err("reject");
+            assert!(err.contains("cropWindow"), "{} -> {err}", case[0]);
+        }
     }
 
     // --- cover export (issue #166) -----------------------------------------

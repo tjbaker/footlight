@@ -31,7 +31,19 @@
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { createReadStream, constants as fsConstants } from "node:fs";
-import { writeFile, readFile, mkdtemp, stat, readdir, mkdir, access } from "node:fs/promises";
+import {
+  writeFile,
+  readFile,
+  mkdtemp,
+  stat,
+  readdir,
+  mkdir,
+  access,
+  rename,
+  rm,
+  open,
+} from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve, isAbsolute, extname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -56,6 +68,7 @@ import {
   coverFrameArgs,
   LOUDNESS_BUCKETS,
 } from "../../dist/core.js";
+import { renderCliArgs } from "../../dist/render-args.js";
 
 const PORT = 8787;
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -404,25 +417,9 @@ async function handleRender(body, opts, res, { cliPath, repoRoot }) {
   const outDir = isAbsolute(opts.outdir || "clips")
     ? opts.outdir
     : resolve(repoRoot, opts.outdir || "clips");
-  // Render flags from Settings -> CLI. --outdir is appended LAST so the log's
-  // trailing `--outdir <dir>` still parses cleanly on the client.
-  const args = [cliPath, "render", manifestPath];
-  if (opts.crf) args.push("--crf", String(opts.crf));
-  if (opts.preset) args.push("--preset", opts.preset);
-  if (opts.audioBitrate) args.push("--audio-bitrate", opts.audioBitrate);
-  if (opts.dryRun) args.push("--dry-run");
-  if (opts.burnCaptions) args.push("--burn-captions");
-  if (opts.captionFont) args.push("--caption-font", opts.captionFont);
-  if (opts.captionColor) args.push("--caption-color", opts.captionColor);
-  if (opts.captionOutlineColor) args.push("--caption-outline-color", opts.captionOutlineColor);
-  if (opts.captionBold) args.push("--caption-bold");
-  if (opts.captionItalic) args.push("--caption-italic");
-  if (opts.captionUnderline) args.push("--caption-underline");
-  if (opts.captionShadow) args.push("--caption-shadow");
-  if (opts.captionBox) args.push("--caption-box");
-  if (opts.captionBoxColor) args.push("--caption-box-color", opts.captionBoxColor);
-  if (opts.captionAngle != null) args.push("--caption-angle", String(opts.captionAngle));
-  args.push("--outdir", outDir);
+  // Render flags from Settings -> CLI, built by the ONE shared helper (the
+  // Tauri shell's render_cli_args mirrors it, pinned to the same fixtures).
+  const args = [cliPath, ...renderCliArgs({ ...opts, manifestPath, outDir })];
   // No `signal`: a render keeps running if the request closes (see `run`).
   const result = await run("node", args);
   const log = `$ node ${args.join(" ")}\n\n${result.stdout}${result.stderr}`;
@@ -468,41 +465,80 @@ async function handleCheckOutdir(outdir, res, repoRoot) {
   }
 }
 
+/**
+ * Read a persisted JSON file, falling back to `fallback` when it is missing.
+ * An UNPARSEABLE file (or one `isValid` rejects) also yields the fallback, so
+ * one bad file can't wedge the feature for good (#263); it is first renamed
+ * aside to `<path>.corrupt` so the bytes aren't silently destroyed. Any OTHER
+ * read error (permissions, I/O) is thrown, not defaulted — the file may be
+ * fine, and a default would let the next save clobber it. Mirrors
+ * `read_json_or_default` in app/src-tauri/src/main.rs — keep the two in parity.
+ */
+async function readJsonOrDefault(path, fallback, isValid = () => true) {
+  let text;
+  try {
+    text = await readFile(path, "utf8");
+  } catch (err) {
+    if (err?.code === "ENOENT") return fallback; // missing — start fresh
+    throw err;
+  }
+  try {
+    const value = JSON.parse(text);
+    if (isValid(value)) return value;
+  } catch {
+    // fall through: unparseable
+  }
+  // Best effort: if the rename fails the fallback is still returned and the
+  // next atomic save replaces the bad file.
+  await rename(path, `${path}.corrupt`).catch(() => {});
+  return fallback;
+}
+
+/**
+ * Serialize `value` and replace `path` ATOMICALLY: write a uniquely named temp
+ * file in the same directory, flush it to disk, then rename it over `path`. A crash mid-write
+ * leaves the previous file intact, never a truncated one (#263). Mirrors
+ * `write_json_atomic` in app/src-tauri/src/main.rs.
+ */
+async function writeJsonAtomic(path, value) {
+  const tmp = `${path}.${randomUUID()}.tmp`;
+  try {
+    const fh = await open(tmp, "wx");
+    try {
+      await fh.writeFile(JSON.stringify(value), "utf8");
+      await fh.sync();
+    } finally {
+      await fh.close();
+    }
+    await rename(tmp, path);
+  } catch (err) {
+    await rm(tmp, { force: true });
+    throw err;
+  }
+}
+
 /** GET /history — the persisted render history; [] if missing or malformed. */
 async function handleLoadHistory(res, historyPath) {
-  let entries;
-  try {
-    entries = JSON.parse(await readFile(historyPath, "utf8"));
-  } catch {
-    // Missing file or unparseable JSON — start fresh.
-    entries = [];
-  }
-  sendJson(res, 200, entries);
+  // Non-array JSON is malformed too (the native side fails to deserialize it).
+  sendJson(res, 200, await readJsonOrDefault(historyPath, [], Array.isArray));
 }
 
 /** POST /history — persist the full history array from the body's `entries`. */
 async function handleSaveHistory(body, res, historyPath) {
   const entries = JSON.parse(body).entries;
-  await writeFile(historyPath, JSON.stringify(entries), "utf8");
+  await writeJsonAtomic(historyPath, entries);
   sendJson(res, 200, { ok: true });
 }
 
 /** GET /session — the persisted working session; null if missing or malformed. */
 async function handleLoadSession(res, sessionPath) {
-  let data;
-  try {
-    data = JSON.parse(await readFile(sessionPath, "utf8"));
-  } catch {
-    // Missing file or unparseable JSON — no session to restore.
-    data = null;
-  }
-  sendJson(res, 200, data);
+  sendJson(res, 200, await readJsonOrDefault(sessionPath, null));
 }
 
 /** POST /session — persist the working session from the body's `data`. */
 async function handleSaveSession(body, res, sessionPath) {
   const data = JSON.parse(body).data;
-  await writeFile(sessionPath, JSON.stringify(data), "utf8");
+  await writeJsonAtomic(sessionPath, data);
   sendJson(res, 200, { ok: true });
 }
 
@@ -701,9 +737,15 @@ export function createRequestListener({
         const chunks = [];
         for await (const chunk of req) chunks.push(chunk);
         const body = Buffer.concat(chunks).toString("utf8");
+        // Numeric options arrive as String(number) from web.ts; turn them back
+        // into numbers for renderCliArgs (absent/empty -> unset).
+        const num = (key) => {
+          const v = url.searchParams.get(key);
+          return v ? Number(v) : undefined;
+        };
         const opts = {
           outdir: url.searchParams.get("outdir") || undefined,
-          crf: url.searchParams.get("crf") || undefined,
+          crf: num("crf"),
           preset: url.searchParams.get("preset") || undefined,
           audioBitrate: url.searchParams.get("audioBitrate") || undefined,
           dryRun: url.searchParams.get("dryRun") === "1",
@@ -717,7 +759,7 @@ export function createRequestListener({
           captionShadow: url.searchParams.get("captionShadow") === "1",
           captionBox: url.searchParams.get("captionBox") === "1",
           captionBoxColor: url.searchParams.get("captionBoxColor") || undefined,
-          captionAngle: url.searchParams.get("captionAngle") || undefined,
+          captionAngle: num("captionAngle"),
         };
         return await handleRender(body, opts, res, { cliPath, repoRoot });
       }
