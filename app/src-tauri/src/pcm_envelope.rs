@@ -242,7 +242,7 @@ mod tests {
     }
 
     fn onset_envelope(samples: &[f32], sample_rate: f64) -> Vec<f64> {
-        let mut acc = FrameRms::new(crate::onset_frame_len(sample_rate));
+        let mut acc = FrameRms::new(crate::media::onset_frame_len(sample_rate));
         samples.iter().for_each(|&s| acc.push(s));
         acc.finish(Some(4))
     }
