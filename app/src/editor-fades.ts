@@ -10,6 +10,7 @@
  */
 
 import type { ClipSpec } from "@manifest";
+import { round3 } from "./editor-util.js";
 
 /** The editor's working fade values, in seconds (0 = no fade). */
 export interface FadeState {
@@ -26,7 +27,7 @@ export interface FadeState {
 export function parseFadeField(raw: string): number {
   const n = Number(raw.trim());
   if (!Number.isFinite(n) || n <= 0) return 0;
-  return Math.round(n * 1000) / 1000;
+  return round3(n);
 }
 
 /**

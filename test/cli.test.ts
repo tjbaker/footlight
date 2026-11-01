@@ -49,6 +49,26 @@ function runCli(
 
 const tmp = (): string => mkdtempSync(join(tmpdir(), "footlight-cli-"));
 
+/**
+ * A tiny real 1920x1080 video source (a zero-byte placeholder is not enough —
+ * ffprobe runs) so `probeDimensions` succeeds in dry-run.
+ */
+function makeSource(path: string): void {
+  execFileSync("ffmpeg", [
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc=size=1920x1080:rate=30:duration=2",
+    "-frames:v",
+    "30",
+    path,
+  ]);
+}
+
 // Tests that shell out to the built CLI rely on dist/ being current.
 beforeAll(() => {
   execFileSync("npm", ["run", "build"], { cwd: join(here, ".."), stdio: "ignore" });
@@ -91,22 +111,8 @@ describe("serializeManifestJSON round-trip", () => {
 describe("render JSON manifest (dry-run)", () => {
   it("renders an eased x='...' smoothstep expression for a cropPath clip", () => {
     const dir = tmp();
-    // A real (zero-byte placeholder is not enough — ffprobe runs). Use a tiny
-    // generated source so probeDimensions succeeds.
     const src = join(dir, "src.mp4");
-    execFileSync("ffmpeg", [
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-y",
-      "-f",
-      "lavfi",
-      "-i",
-      "testsrc=size=1920x1080:rate=30:duration=2",
-      "-frames:v",
-      "30",
-      src,
-    ]);
+    makeSource(src);
 
     const manifest: ClipSpec[] = [
       {
@@ -145,19 +151,7 @@ describe("render JSON manifest (dry-run)", () => {
   it("falls back to crop_offset when no cropPath is present", () => {
     const dir = tmp();
     const src = join(dir, "src.mp4");
-    execFileSync("ffmpeg", [
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-y",
-      "-f",
-      "lavfi",
-      "-i",
-      "testsrc=size=1920x1080:rate=30:duration=2",
-      "-frames:v",
-      "30",
-      src,
-    ]);
+    makeSource(src);
 
     const manifest: ClipSpec[] = [
       { source_file: src, in_point: "0", out_point: "2", crop_offset: "right" },
@@ -183,19 +177,7 @@ describe("render JSON manifest (dry-run)", () => {
   it("fades: emits fade/afade filters, forces the AAC re-encode, and logs the note", () => {
     const dir = tmp();
     const src = join(dir, "src.mp4");
-    execFileSync("ffmpeg", [
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-y",
-      "-f",
-      "lavfi",
-      "-i",
-      "testsrc=size=1920x1080:rate=30:duration=2",
-      "-frames:v",
-      "30",
-      src,
-    ]);
+    makeSource(src);
 
     const manifest: ClipSpec[] = [
       {
@@ -310,6 +292,117 @@ describe("render JSON manifest (dry-run)", () => {
     const { code, stderr } = runCli(["render", manifestPath, "--dry-run"]);
     expect(code).toBe(1);
     expect(stderr).toContain("must be an array");
+  });
+
+  // Issue #257: a malformed clip used to throw outside the per-clip try (in the
+  // caption ASS build) and abort the whole batch. It is now skipped per clip,
+  // like a CSV row with an empty source_file, and the good clips still render.
+  it("skips a clip with a mistyped field and renders the rest of the batch", () => {
+    const dir = tmp();
+    const src = join(dir, "src.mp4");
+    makeSource(src);
+    const manifestPath = join(dir, "m.json");
+    writeFileSync(
+      manifestPath,
+      JSON.stringify([
+        { source_file: src, in_point: "0", out_point: "1", hook: 123 },
+        { source_file: src, in_point: "0", out_point: "1", caption: { color: 5 } },
+        { source_file: src, in_point: "0", out_point: "2", hook: "Good", out_name: "ok.mp4" },
+      ]),
+    );
+    const { stdout, stderr, code } = runCli([
+      "render",
+      manifestPath,
+      "--outdir",
+      join(dir, "out"),
+      "--burn-captions",
+      "--dry-run",
+    ]);
+    // Partial-failure convention: the batch finishes, exits non-zero, and tallies.
+    expect(code).toBe(1);
+    expect(stderr).toContain("[1/3] SKIP — clip [0] hook must be a string");
+    expect(stderr).toContain("[2/3] SKIP — clip [1] caption.color must be a string");
+    expect(stdout).toContain("[3/3] ffmpeg ");
+    expect(stdout).toContain("ok.mp4");
+    expect(stdout).toContain("Done: 1/3 clips, 2 failed/skipped");
+  });
+
+  it("names the clip and field for a mistyped boolean/number field", () => {
+    const dir = tmp();
+    const src = join(dir, "src.mp4");
+    makeSource(src);
+    const manifestPath = join(dir, "m.json");
+    writeFileSync(
+      manifestPath,
+      JSON.stringify([
+        { source_file: src, in_point: "0", out_point: "1", caption: { bold: "yes" } },
+        { source_file: src, in_point: "0", out_point: "1", caption: { angle: "15" } },
+        { source_file: src, in_point: "0", out_point: "1", fade_in: true },
+      ]),
+    );
+    const { stderr, code } = runCli(["render", manifestPath, "--dry-run"]);
+    expect(code).toBe(1);
+    expect(stderr).toContain("clip [0] caption.bold must be a boolean");
+    expect(stderr).toContain("clip [1] caption.angle must be a finite number");
+    expect(stderr).toContain("clip [2] fade_in must be a number");
+  });
+
+  it("accepts a numeric crop_offset as the integer x (coerced to its string form)", () => {
+    const dir = tmp();
+    const src = join(dir, "src.mp4");
+    makeSource(src);
+    const manifestPath = join(dir, "m.json");
+    writeFileSync(
+      manifestPath,
+      JSON.stringify([{ source_file: src, in_point: "0", out_point: "2", crop_offset: 440 }]),
+    );
+    const { stdout, code } = runCli([
+      "render",
+      manifestPath,
+      "--outdir",
+      join(dir, "out"),
+      "--dry-run",
+    ]);
+    expect(code).toBe(0);
+    const c = computeCrop(1920, 1080, "440");
+    expect(c.x).toBe(440);
+    expect(stdout).toContain(`crop=${c.cw}:${c.ch}:${c.x}:${c.y}`);
+  });
+
+  // An explicit null on an optional field was always treated as omitted (the
+  // engine and the `??` caption fallbacks ignore it); validation must not reject it.
+  it("treats an explicit null on an optional field as omitted", () => {
+    const dir = tmp();
+    const src = join(dir, "src.mp4");
+    makeSource(src);
+    const manifestPath = join(dir, "m.json");
+    writeFileSync(
+      manifestPath,
+      JSON.stringify([
+        {
+          source_file: src,
+          in_point: "0",
+          out_point: "2",
+          crop_offset: null,
+          hook: null,
+          fade_in: null,
+          caption: { color: null, bold: null, angle: null },
+        },
+      ]),
+    );
+    const { stdout, code } = runCli([
+      "render",
+      manifestPath,
+      "--outdir",
+      join(dir, "out"),
+      "--burn-captions",
+      "--dry-run",
+    ]);
+    expect(code).toBe(0);
+    const c = computeCrop(1920, 1080, "center");
+    expect(stdout).toContain(`crop=${c.cw}:${c.ch}:${c.x}:${c.y}`);
+    expect(stdout).not.toContain("fade=");
+    expect(stdout).toContain("Done: 1/1 clips");
   });
 });
 

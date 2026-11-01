@@ -5,12 +5,11 @@
  * unit-tested without a DOM. All source-pixel math, no `state`/`document`: the
  * editor reads `state` and hands these functions plain values. Mirrors the
  * engine's crop conventions — 9:16 aspect lock (`TARGET_AR`), even dimensions for
- * the H.264 encoder (`roundEvenLocal`), clamped inside the working region.
+ * the H.264 encoder (`roundEven`), clamped inside the working region.
  */
 
-import { TARGET_AR } from "@core";
+import { TARGET_AR, roundEven } from "@core";
 import { cropBoxToWindow, isFullHeightWindow, type Box, type Dims } from "@manifest";
-import { roundEvenLocal } from "./editor-util.js";
 
 /** Smallest crop-box height (source px) a punch-in resize allows — keeps the
  *  derived 9:16 width sane and the upscale from going absurd. */
@@ -101,8 +100,8 @@ export function resizeCrop(
   const roomX = dirX > 0 ? region.x1 - anchorX : anchorX - region.x0;
   h = Math.min(h, roomY, roomX / TARGET_AR);
   h = Math.max(h, MIN_CROP_H);
-  h = roundEvenLocal(h);
-  const w = roundEvenLocal(h * TARGET_AR);
+  h = roundEven(h);
+  const w = roundEven(h * TARGET_AR);
   const x = dirX > 0 ? anchorX : anchorX - w;
   const y = dirY > 0 ? anchorY : anchorY - h;
   return { x, y, w, h };
@@ -113,12 +112,12 @@ export function fullHeightCropBox(region: RegionRect): Box {
   const rw = region.x1 - region.x0;
   const rh = region.y1 - region.y0;
   if (rw / rh >= TARGET_AR) {
-    const cw = roundEvenLocal(rh * TARGET_AR);
+    const cw = roundEven(rh * TARGET_AR);
     const maxX = rw - cw;
-    return { x: region.x0 + Math.floor(maxX / 2), y: region.y0, w: cw, h: roundEvenLocal(rh) };
+    return { x: region.x0 + Math.floor(maxX / 2), y: region.y0, w: cw, h: roundEven(rh) };
   }
-  const ch = roundEvenLocal(rw / TARGET_AR);
-  return { x: region.x0, y: region.y0 + Math.floor((rh - ch) / 2), w: roundEvenLocal(rw), h: ch };
+  const ch = roundEven(rw / TARGET_AR);
+  return { x: region.x0, y: region.y0 + Math.floor((rh - ch) / 2), w: roundEven(rw), h: ch };
 }
 
 /**

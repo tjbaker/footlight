@@ -23,14 +23,14 @@
  * share them) and the onboarding's browse/paste actions via `deps`.
  */
 
-import { TARGET_AR } from "@core";
+import { computeCrop } from "@core";
 import type { Box, Dims } from "@manifest";
 import type { GhostPreview } from "@assistant-types";
 import { openGuide } from "../help.js";
 import { messages } from "../i18n/index.js";
 import { el, button } from "../ui.js";
 import { ICON_BRAND, ICON_DOWN } from "../icons.js";
-import { clamp, roundEvenLocal, escapeHtml } from "../editor-util.js";
+import { clamp, escapeHtml } from "../editor-util.js";
 import {
   edgeHits,
   insideBox,
@@ -243,16 +243,10 @@ export function buildViewer(store: EditorStore, deps: ViewerViewDeps): ViewerVie
   function initCropBox(): void {
     if (!state.dims) return;
     const { width, height } = state.dims;
-    // Mirror engine landscape math: full height, crop width = round(h*9/16).
-    if (width / height >= TARGET_AR) {
-      const cw = roundEvenLocal(height * TARGET_AR);
-      const maxX = width - cw;
-      store.set({ cropBox: { x: Math.floor(maxX / 2), y: 0, w: cw, h: height } });
-    } else {
-      // Taller than 9:16: full width, crop height.
-      const ch = roundEvenLocal(width / TARGET_AR);
-      store.set({ cropBox: { x: 0, y: Math.floor((height - ch) / 2), w: width, h: ch } });
-    }
+    // Exactly the box the engine renders for a centered clip — delegate to its
+    // crop math (even dims and offsets) rather than restating it.
+    const { x, y, cw, ch } = computeCrop(width, height, "center");
+    store.set({ cropBox: { x, y, w: cw, h: ch } });
     // Default content box covers the full frame.
     store.set({ contentBox: { x: 0, y: 0, w: width, h: height } });
   }

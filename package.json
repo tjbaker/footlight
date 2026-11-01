@@ -37,18 +37,18 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "lint": "eslint src test app/src app/test app/dev-server",
-    "verify": "npm run format:check && npm run lint && npm run build && npm run typecheck && npm test",
+    "verify": "npm run format:check && npm run lint && npm run build && npm run typecheck && npm run coverage",
     "typecheck": "tsc -p tsconfig.test.json"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.0",
-    "@vitest/coverage-v8": "^4.1.9",
+    "@vitest/coverage-v8": "^5.0.3",
     "eslint": "^10.10.0",
     "globals": "^17.12.0",
     "prettier": "3.9.6",
     "typescript": "^5.5.0",
     "typescript-eslint": "^8.69.0",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.3"
   }
 }

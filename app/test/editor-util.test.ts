@@ -16,7 +16,6 @@ import {
   joinTextPosition,
   clamp,
   round3,
-  roundEvenLocal,
   shorten,
   fmtClock,
   fmtTC,
@@ -136,12 +135,6 @@ describe("scalar / string utils", () => {
   it("round3 rounds to 3 decimals", () => {
     expect(round3(1.23456)).toBe(1.235);
     expect(round3(2)).toBe(2);
-  });
-
-  it("roundEvenLocal rounds to the nearest even integer", () => {
-    expect(roundEvenLocal(5)).toBe(4);
-    expect(roundEvenLocal(5.6)).toBe(6);
-    expect(roundEvenLocal(7)).toBe(6);
   });
 
   it("shorten keeps the basename and ellipsizes past 28 chars", () => {
