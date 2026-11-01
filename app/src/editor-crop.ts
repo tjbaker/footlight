@@ -8,8 +8,14 @@
  * the H.264 encoder (`roundEven`), clamped inside the working region.
  */
 
-import { TARGET_AR, roundEven } from "@core";
-import { cropBoxToWindow, isFullHeightWindow, type Box, type Dims } from "@manifest";
+import { TARGET_AR, computeCrop, parseContentCrop, roundEven, type ContentCrop } from "@core";
+import {
+  contentCropFromBox,
+  cropBoxToWindow,
+  isFullHeightWindow,
+  type Box,
+  type Dims,
+} from "@manifest";
 
 /** Smallest crop-box height (source px) a punch-in resize allows — keeps the
  *  derived 9:16 width sane and the upscale from going absurd. */
@@ -66,15 +72,16 @@ export function cropRegionRect(
   contentBox: Box | null,
   dims: Dims,
 ): RegionRect {
-  if (contentMode && contentBox && contentBox.w > 2 && contentBox.h > 2) {
-    return {
-      x0: contentBox.x,
-      y0: contentBox.y,
-      x1: contentBox.x + contentBox.w,
-      y1: contentBox.y + contentBox.h,
-    };
-  }
+  const c = activeContentBox(contentMode, contentBox);
+  if (c) return { x0: c.x, y0: c.y, x1: c.x + c.w, y1: c.y + c.h };
   return { x0: 0, y0: 0, x1: dims.width, y1: dims.height };
+}
+
+/** The content box when content-crop mode is active and the box is usable
+ *  (larger than 2px each way), else null — the one gate for "is the working
+ *  region a content box" shared by `cropRegionRect` and `fullHeightCropBox`. */
+function activeContentBox(contentMode: boolean, contentBox: Box | null): Box | null {
+  return contentMode && contentBox && contentBox.w > 2 && contentBox.h > 2 ? contentBox : null;
 }
 
 /**
@@ -107,17 +114,29 @@ export function resizeCrop(
   return { x, y, w, h };
 }
 
-/** The default FULL-HEIGHT, centered 9:16 crop box for a working region. */
-export function fullHeightCropBox(region: RegionRect): Box {
-  const rw = region.x1 - region.x0;
-  const rh = region.y1 - region.y0;
-  if (rw / rh >= TARGET_AR) {
-    const cw = roundEven(rh * TARGET_AR);
-    const maxX = rw - cw;
-    return { x: region.x0 + Math.floor(maxX / 2), y: region.y0, w: cw, h: roundEven(rh) };
-  }
-  const ch = roundEven(rw / TARGET_AR);
-  return { x: region.x0, y: region.y0 + Math.floor((rh - ch) / 2), w: roundEven(rw), h: ch };
+/**
+ * The default FULL-HEIGHT, centered 9:16 crop box (the double-click reset), in
+ * source px: `computeCrop`'s centered box (as `initCropBox` uses) over the
+ * engine's working region, offset by that region's origin. In content mode the
+ * region is the `content_crop` the editor emits (`contentCropFromBox`, every
+ * edge even-rounded) parsed back the way the engine parses it, so a fractional
+ * or odd content box still yields an even box at an even origin; otherwise it
+ * is the full frame.
+ *
+ * For a landscape region (9:16 or wider) this is exactly the box the engine
+ * renders for `crop_offset: center`. A region narrower than 9:16 gets
+ * computeCrop's full-width box, which the editor's emission does not yet
+ * round-trip exactly: it is not full height, so it is emitted as a
+ * `cropWindow` whose width `cropBoxToWindow` re-derives from the height
+ * (400x710 comes back 398 wide). That mismatch predates this helper.
+ */
+export function fullHeightCropBox(contentMode: boolean, contentBox: Box | null, dims: Dims): Box {
+  const content = activeContentBox(contentMode, contentBox);
+  const [w, h, x0, y0]: ContentCrop = content
+    ? parseContentCrop(contentCropFromBox(content))!
+    : [dims.width, dims.height, 0, 0];
+  const c = computeCrop(w, h, "center");
+  return { x: x0 + c.x, y: y0 + c.y, w: c.cw, h: c.ch };
 }
 
 /**

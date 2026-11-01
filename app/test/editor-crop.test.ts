@@ -9,8 +9,10 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { TARGET_AR } from "@core";
-import type { Box, Dims } from "@manifest";
+import { TARGET_AR, computeCrop } from "@core";
+import { specToEditorState, type Box, type Dims } from "@manifest";
+import { framingToSpec } from "../src/editor-framing.js";
+import { createInitialEditorState } from "../src/editor-store.js";
 import {
   edgeHits,
   insideBox,
@@ -113,8 +115,20 @@ describe("resizeCrop (9:16 aspect-locked corner resize)", () => {
 });
 
 describe("fullHeightCropBox", () => {
+  const dims: Dims = { width: 1920, height: 1080 };
+
+  /** The box the ENGINE renders for `cropBox`: the editor's real emission
+   *  (`framingToSpec` over an EditorState) read back through
+   *  `specToEditorState`, which applies the engine's framing precedence
+   *  (computeCrop over the parsed content crop, offset by its origin). */
+  function engineBox(cropBox: Box, contentMode: boolean, contentBox: Box | null, d: Dims) {
+    const state = { ...createInitialEditorState(), dims: d, contentMode, contentBox, cropBox };
+    const spec = { source_file: "s.mp4", in_point: "0", out_point: "1", ...framingToSpec(state) };
+    return specToEditorState(spec, d).cropBox;
+  }
+
   it("a wide region → full height, centered horizontally, even dims", () => {
-    const out = fullHeightCropBox({ x0: 0, y0: 0, x1: 1920, y1: 1080 });
+    const out = fullHeightCropBox(false, null, dims);
     expect(out.h).toBe(1080);
     expect(isEven(out.w)).toBe(true);
     expect(out.w).toBe(608); // even(1080 * 9/16)
@@ -123,7 +137,7 @@ describe("fullHeightCropBox", () => {
   });
 
   it("a tall/narrow region → full width, centered vertically", () => {
-    const out = fullHeightCropBox({ x0: 0, y0: 0, x1: 400, y1: 1080 });
+    const out = fullHeightCropBox(false, null, { width: 400, height: 1080 });
     expect(out.w).toBe(400);
     expect(out.h).toBe(Math.round(400 / TARGET_AR) - (Math.round(400 / TARGET_AR) % 2));
     expect(out.x).toBe(0);
@@ -131,18 +145,46 @@ describe("fullHeightCropBox", () => {
   });
 
   it("respects a non-zero region origin (content box)", () => {
-    const out = fullHeightCropBox({ x0: 200, y0: 50, x1: 1200, y1: 850 });
+    const out = fullHeightCropBox(true, box(200, 50, 1000, 800), dims);
     expect(out.y).toBe(50); // full height of the content region
     expect(out.x).toBeGreaterThanOrEqual(200);
+  });
+
+  it("is exactly computeCrop's centered box, like initCropBox (#302)", () => {
+    // Odd-height source: both "default box" paths must agree.
+    const { x, y, cw, ch } = computeCrop(1920, 1081, "center");
+    expect(fullHeightCropBox(false, null, { width: 1920, height: 1081 })).toEqual({
+      x,
+      y,
+      w: cw,
+      h: ch,
+    });
+  });
+
+  it("lands on the even x the engine renders inside a content box (#302)", () => {
+    // maxX = 1000 − 450 = 550 → floor(275) = 275 is odd; computeCrop evens it
+    // to 274. The un-rounded restatement drew x = 475; the engine renders 474.
+    const cb = box(200, 50, 1000, 800);
+    const out = fullHeightCropBox(true, cb, dims);
+    expect(out).toEqual({ x: 474, y: 50, w: 450, h: 800 });
+    expect(engineBox(out, true, cb, dims)).toEqual(out);
+  });
+
+  it("uses the engine's even-rounded content crop for an odd content box (#302)", () => {
+    // contentCropFromBox emits 1000:800:200:50 for this box, so the engine
+    // crops within the region at (200,50), not (201,51).
+    const cb = box(201, 51, 1001, 801);
+    const out = fullHeightCropBox(true, cb, dims);
+    expect(out).toEqual({ x: 474, y: 50, w: 450, h: 800 });
+    expect(engineBox(out, true, cb, dims)).toEqual(out);
+    for (const v of [out.x, out.y, out.w, out.h]) expect(isEven(v)).toBe(true);
   });
 });
 
 describe("cropWindowSpec", () => {
   const region: Dims = { width: 1920, height: 1080 };
   it("returns null for a full-height box (engine gets a plain offset instead)", () => {
-    expect(
-      cropWindowSpec(fullHeightCropBox({ x0: 0, y0: 0, x1: 1920, y1: 1080 }), region),
-    ).toBeNull();
+    expect(cropWindowSpec(fullHeightCropBox(false, null, region), region)).toBeNull();
   });
   it("returns a window for a punch-in (shorter-than-frame) box", () => {
     expect(cropWindowSpec(box(700, 200, 304, 540), region)).not.toBeNull();
