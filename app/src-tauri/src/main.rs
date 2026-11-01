@@ -677,11 +677,7 @@ fn parse_ebur128_momentary(log: &str) -> Vec<f64> {
     let mut momentary: Vec<f64> = Vec::new();
     for line in log.lines() {
         if let Some(idx) = line.find("M:") {
-            let tok = line[idx + 2..]
-                .trim_start()
-                .split_whitespace()
-                .next()
-                .unwrap_or("");
+            let tok = line[idx + 2..].split_whitespace().next().unwrap_or("");
             momentary.push(tok.parse::<f64>().unwrap_or(f64::NEG_INFINITY));
         }
     }
@@ -865,6 +861,9 @@ async fn track(app: AppHandle, req: serde_json::Value) -> Result<serde_json::Val
 /// manifest path, the Settings-derived flags, then `--outdir` LAST so the log's
 /// trailing `--outdir <dir>` parses cleanly on the client. Flag names mirror
 /// src/cli.ts; empty strings and false/None toggles emit nothing.
+// One parameter per render CLI flag, mirroring the `render` IPC command below;
+// folding the flags into one struct/helper is tracked in #260.
+#[allow(clippy::too_many_arguments)]
 fn render_cli_args(
     manifest_path: &str,
     out_dir: &str,
@@ -958,6 +957,9 @@ fn render_cli_args(
 /// which lets clips carry an eased `cropPath` the CSV path can't express. The
 /// CLI is resolved relative to the bundled resources; in dev it sits at the
 /// repo's `bin/footlight.js`.
+// The argument list IS the IPC contract the frontend's Tauri backend invokes
+// (kept in sync with the web dev backend), so it stays flat; see #260.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn render(
     app: AppHandle,
@@ -1184,7 +1186,7 @@ async fn list_fonts_in_dir(dir: String) -> Result<Vec<FontInfoDto>, String> {
             path: Some(path),
         });
     }
-    fonts.sort_by(|a, b| a.family.to_lowercase().cmp(&b.family.to_lowercase()));
+    fonts.sort_by_key(|f| f.family.to_lowercase());
     Ok(fonts)
 }
 
@@ -1896,6 +1898,9 @@ mod tests {
     /// rounded to 4 decimals (rate 200)" — sample rate 200 → 4 samples/frame,
     /// so [1,1,0,0] → RMS √0.5 and [1,1,1,1] → RMS 1; normalized + rounded →
     /// [0.7071, 1].
+    // 0.7071 is the TS fixture's 4-decimal rounded output, not a stand-in for
+    // FRAC_1_SQRT_2 (the unrounded constant would fail the assertion).
+    #[allow(clippy::approx_constant)]
     #[test]
     fn onset_envelope_pinned_fixture() {
         let samples = [1.0f32, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0];
