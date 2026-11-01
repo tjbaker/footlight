@@ -116,13 +116,19 @@ export function resizeCrop(
 
 /**
  * The default FULL-HEIGHT, centered 9:16 crop box (the double-click reset), in
- * source px: EXACTLY the box the engine renders for `crop_offset: center`.
- * Delegates to `computeCrop` (as `initCropBox` does) over the engine's working
- * region. In content mode that region is the `content_crop` the editor emits
- * (`contentCropFromBox`, every edge even-rounded) parsed back the way the
- * engine parses it, so a fractional or odd content box still yields the even
- * box the engine renders, offset by that region's even origin. Otherwise it is
- * the full frame.
+ * source px: `computeCrop`'s centered box (as `initCropBox` uses) over the
+ * engine's working region, offset by that region's origin. In content mode the
+ * region is the `content_crop` the editor emits (`contentCropFromBox`, every
+ * edge even-rounded) parsed back the way the engine parses it, so a fractional
+ * or odd content box still yields an even box at an even origin; otherwise it
+ * is the full frame.
+ *
+ * For a landscape region (9:16 or wider) this is exactly the box the engine
+ * renders for `crop_offset: center`. A region narrower than 9:16 gets
+ * computeCrop's full-width box, which the editor's emission does not yet
+ * round-trip exactly: it is not full height, so it is emitted as a
+ * `cropWindow` whose width `cropBoxToWindow` re-derives from the height
+ * (400x710 comes back 398 wide). That mismatch predates this helper.
  */
 export function fullHeightCropBox(contentMode: boolean, contentBox: Box | null, dims: Dims): Box {
   const content = activeContentBox(contentMode, contentBox);

@@ -10,14 +10,9 @@
 
 import { describe, it, expect } from "vitest";
 import { TARGET_AR, computeCrop } from "@core";
-import {
-  contentCropFromBox,
-  specToEditorState,
-  type Box,
-  type ClipSpec,
-  type Dims,
-} from "@manifest";
-import { currentRegion, offsetForBox } from "../src/editor-offset.js";
+import { specToEditorState, type Box, type Dims } from "@manifest";
+import { framingToSpec } from "../src/editor-framing.js";
+import { createInitialEditorState } from "../src/editor-store.js";
 import {
   edgeHits,
   insideBox,
@@ -122,23 +117,13 @@ describe("resizeCrop (9:16 aspect-locked corner resize)", () => {
 describe("fullHeightCropBox", () => {
   const dims: Dims = { width: 1920, height: 1080 };
 
-  /** The box the ENGINE renders for the manifest the editor emits for `box`:
-   *  the same `content_crop` + `crop_offset` emission `framingToSpec` uses, read
-   *  back through `specToEditorState` (computeCrop over the parsed content crop,
-   *  offset by its origin). Reused, never restated. */
-  function engineBox(box: Box, contentMode: boolean, contentBox: Box | null, d: Dims): Box | null {
-    const spec: ClipSpec = {
-      source_file: "s.mp4",
-      in_point: "0",
-      out_point: "1",
-      crop_offset: offsetForBox(
-        box,
-        contentMode,
-        contentBox,
-        currentRegion(contentMode, contentBox, d),
-      ),
-      ...(contentMode && contentBox ? { content_crop: contentCropFromBox(contentBox) } : {}),
-    };
+  /** The box the ENGINE renders for `cropBox`: the editor's real emission
+   *  (`framingToSpec` over an EditorState) read back through
+   *  `specToEditorState`, which applies the engine's framing precedence
+   *  (computeCrop over the parsed content crop, offset by its origin). */
+  function engineBox(cropBox: Box, contentMode: boolean, contentBox: Box | null, d: Dims) {
+    const state = { ...createInitialEditorState(), dims: d, contentMode, contentBox, cropBox };
+    const spec = { source_file: "s.mp4", in_point: "0", out_point: "1", ...framingToSpec(state) };
     return specToEditorState(spec, d).cropBox;
   }
 
