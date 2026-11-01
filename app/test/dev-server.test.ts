@@ -632,6 +632,13 @@ describe("POST /render", () => {
     expect(args.slice(3)).toEqual(["--outdir", resolve(root, "clips")]);
   });
 
+  it("forwards crf 0 (x264 lossless) rather than dropping it as falsy", async () => {
+    onSpawn(() => ({ stdout: "ok" }));
+    await fetch(`${base}/render?crf=0`, { method: "POST", body: "[]" });
+    const { args } = spawnCall(0);
+    expect(args.slice(3)).toEqual(["--crf", "0", "--outdir", resolve(root, "clips")]);
+  });
+
   it("honors an absolute outdir as-is", async () => {
     onSpawn(() => ({ stdout: "ok" }));
     const abs = join(root, "elsewhere");
