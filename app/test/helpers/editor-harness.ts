@@ -40,8 +40,13 @@ const localStorageMock = {
 
 /** Install the jsdom gap-fillers (idempotent; call once before importing the editor). */
 export function installDomShims(): void {
-  (globalThis as unknown as { localStorage: typeof localStorageMock }).localStorage =
-    localStorageMock;
+  // defineProperty, not assignment: vitest 5's jsdom globals forward writes to
+  // the window, whose `localStorage` is getter-only (assignment throws).
+  Object.defineProperty(globalThis, "localStorage", {
+    value: localStorageMock,
+    configurable: true,
+    writable: true,
+  });
   if (typeof window.matchMedia !== "function") {
     window.matchMedia = ((query: string) => ({
       matches: false,
