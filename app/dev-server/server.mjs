@@ -68,6 +68,7 @@ import {
   coverFrameArgs,
   LOUDNESS_BUCKETS,
 } from "../../dist/core.js";
+import { renderCliArgs } from "../../dist/render-args.js";
 
 const PORT = 8787;
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -389,25 +390,9 @@ async function handleRender(body, opts, res, { cliPath, repoRoot }) {
   const outDir = isAbsolute(opts.outdir || "clips")
     ? opts.outdir
     : resolve(repoRoot, opts.outdir || "clips");
-  // Render flags from Settings -> CLI. --outdir is appended LAST so the log's
-  // trailing `--outdir <dir>` still parses cleanly on the client.
-  const args = [cliPath, "render", manifestPath];
-  if (opts.crf) args.push("--crf", String(opts.crf));
-  if (opts.preset) args.push("--preset", opts.preset);
-  if (opts.audioBitrate) args.push("--audio-bitrate", opts.audioBitrate);
-  if (opts.dryRun) args.push("--dry-run");
-  if (opts.burnCaptions) args.push("--burn-captions");
-  if (opts.captionFont) args.push("--caption-font", opts.captionFont);
-  if (opts.captionColor) args.push("--caption-color", opts.captionColor);
-  if (opts.captionOutlineColor) args.push("--caption-outline-color", opts.captionOutlineColor);
-  if (opts.captionBold) args.push("--caption-bold");
-  if (opts.captionItalic) args.push("--caption-italic");
-  if (opts.captionUnderline) args.push("--caption-underline");
-  if (opts.captionShadow) args.push("--caption-shadow");
-  if (opts.captionBox) args.push("--caption-box");
-  if (opts.captionBoxColor) args.push("--caption-box-color", opts.captionBoxColor);
-  if (opts.captionAngle != null) args.push("--caption-angle", String(opts.captionAngle));
-  args.push("--outdir", outDir);
+  // Render flags from Settings -> CLI, built by the ONE shared helper (the
+  // Tauri shell's render_cli_args mirrors it, pinned to the same fixtures).
+  const args = [cliPath, ...renderCliArgs({ ...opts, manifestPath, outDir })];
   const result = await run("node", args);
   const log = `$ node ${args.join(" ")}\n\n${result.stdout}${result.stderr}`;
   sendJson(res, 200, { ok: result.code === 0, log });
@@ -714,9 +699,15 @@ export function createRequestListener({
         const chunks = [];
         for await (const chunk of req) chunks.push(chunk);
         const body = Buffer.concat(chunks).toString("utf8");
+        // Numeric options arrive as String(number) from web.ts; turn them back
+        // into numbers for renderCliArgs (absent/empty -> unset).
+        const num = (key) => {
+          const v = url.searchParams.get(key);
+          return v ? Number(v) : undefined;
+        };
         const opts = {
           outdir: url.searchParams.get("outdir") || undefined,
-          crf: url.searchParams.get("crf") || undefined,
+          crf: num("crf"),
           preset: url.searchParams.get("preset") || undefined,
           audioBitrate: url.searchParams.get("audioBitrate") || undefined,
           dryRun: url.searchParams.get("dryRun") === "1",
@@ -730,7 +721,7 @@ export function createRequestListener({
           captionShadow: url.searchParams.get("captionShadow") === "1",
           captionBox: url.searchParams.get("captionBox") === "1",
           captionBoxColor: url.searchParams.get("captionBoxColor") || undefined,
-          captionAngle: url.searchParams.get("captionAngle") || undefined,
+          captionAngle: num("captionAngle"),
         };
         return await handleRender(body, opts, res, { cliPath, repoRoot });
       }

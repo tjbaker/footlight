@@ -857,16 +857,14 @@ async fn track(app: AppHandle, req: serde_json::Value) -> Result<serde_json::Val
         .map_err(|e| format!("track returned unparseable output: {e}"))
 }
 
-/// Build the footlight CLI `render` argv (everything after `node <cli>`):
-/// manifest path, the Settings-derived flags, then `--outdir` LAST so the log's
-/// trailing `--outdir <dir>` parses cleanly on the client. Flag names mirror
-/// src/cli.ts; empty strings and false/None toggles emit nothing.
-// One parameter per render CLI flag, mirroring the `render` IPC command below;
-// folding the flags into one struct/helper is tracked in #260.
-#[allow(clippy::too_many_arguments)]
-fn render_cli_args(
-    manifest_path: &str,
-    out_dir: &str,
+/// The render CLI inputs: a hand mirror of `RenderCliOptions` in
+/// src/render-args.ts (the Tauri shell cannot import TS). `Deserialize` lets the
+/// tests read the shared `test/fixtures/render-cli-args.json` cases verbatim.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RenderCliOpts {
+    manifest_path: String,
+    out_dir: String,
     crf: Option<i64>,
     preset: Option<String>,
     audio_bitrate: Option<String>,
@@ -882,73 +880,53 @@ fn render_cli_args(
     caption_box: Option<bool>,
     caption_box_color: Option<String>,
     caption_angle: Option<f64>,
-) -> Vec<String> {
-    let mut args: Vec<String> = vec!["render".into(), manifest_path.into()];
-    if let Some(c) = crf {
-        args.push("--crf".into());
-        args.push(c.to_string());
-    }
-    if let Some(p) = preset {
-        if !p.is_empty() {
-            args.push("--preset".into());
-            args.push(p);
+}
+
+/// Build the footlight CLI `render` argv (everything after `node <cli>`):
+/// manifest path, the Settings-derived flags, then `--outdir` LAST so the log's
+/// trailing `--outdir <dir>` parses cleanly on the client. Documented mirror of
+/// `renderCliArgs` in src/render-args.ts, pinned to its fixtures: numbers are
+/// emitted whenever present (0 included), strings only when non-empty, toggles
+/// only when `true`.
+fn render_cli_args(o: RenderCliOpts) -> Vec<String> {
+    fn value(args: &mut Vec<String>, flag: &str, v: Option<String>) {
+        if let Some(v) = v.filter(|v| !v.is_empty()) {
+            args.push(flag.into());
+            args.push(v);
         }
     }
-    if let Some(a) = audio_bitrate {
-        if !a.is_empty() {
-            args.push("--audio-bitrate".into());
-            args.push(a);
+    fn toggle(args: &mut Vec<String>, flag: &str, v: Option<bool>) {
+        if v == Some(true) {
+            args.push(flag.into());
         }
     }
-    if dry_run.unwrap_or(false) {
-        args.push("--dry-run".into());
-    }
-    if burn_captions == Some(true) {
-        args.push("--burn-captions".into());
-    }
-    if let Some(f) = caption_font {
-        args.push("--caption-font".into());
-        args.push(f);
-    }
-    if let Some(c) = caption_color {
-        if !c.is_empty() {
-            args.push("--caption-color".into());
-            args.push(c);
-        }
-    }
-    if let Some(c) = caption_outline_color {
-        if !c.is_empty() {
-            args.push("--caption-outline-color".into());
-            args.push(c);
-        }
-    }
-    if caption_bold == Some(true) {
-        args.push("--caption-bold".into());
-    }
-    if caption_italic == Some(true) {
-        args.push("--caption-italic".into());
-    }
-    if caption_underline == Some(true) {
-        args.push("--caption-underline".into());
-    }
-    if caption_shadow == Some(true) {
-        args.push("--caption-shadow".into());
-    }
-    if caption_box == Some(true) {
-        args.push("--caption-box".into());
-    }
-    if let Some(c) = caption_box_color {
-        if !c.is_empty() {
-            args.push("--caption-box-color".into());
-            args.push(c);
-        }
-    }
-    if let Some(a) = caption_angle {
-        args.push("--caption-angle".into());
-        args.push(a.to_string());
-    }
+    let mut args: Vec<String> = vec!["render".into(), o.manifest_path];
+    // A formatted number is never empty, so `value` forwards every number.
+    value(&mut args, "--crf", o.crf.map(|c| c.to_string()));
+    value(&mut args, "--preset", o.preset);
+    value(&mut args, "--audio-bitrate", o.audio_bitrate);
+    toggle(&mut args, "--dry-run", o.dry_run);
+    toggle(&mut args, "--burn-captions", o.burn_captions);
+    value(&mut args, "--caption-font", o.caption_font);
+    value(&mut args, "--caption-color", o.caption_color);
+    value(
+        &mut args,
+        "--caption-outline-color",
+        o.caption_outline_color,
+    );
+    toggle(&mut args, "--caption-bold", o.caption_bold);
+    toggle(&mut args, "--caption-italic", o.caption_italic);
+    toggle(&mut args, "--caption-underline", o.caption_underline);
+    toggle(&mut args, "--caption-shadow", o.caption_shadow);
+    toggle(&mut args, "--caption-box", o.caption_box);
+    value(&mut args, "--caption-box-color", o.caption_box_color);
+    value(
+        &mut args,
+        "--caption-angle",
+        o.caption_angle.map(|a| a.to_string()),
+    );
     args.push("--outdir".into());
-    args.push(out_dir.into());
+    args.push(o.out_dir);
     args
 }
 
@@ -958,7 +936,8 @@ fn render_cli_args(
 /// CLI is resolved relative to the bundled resources; in dev it sits at the
 /// repo's `bin/footlight.js`.
 // The argument list IS the IPC contract the frontend's Tauri backend invokes
-// (kept in sync with the web dev backend), so it stays flat; see #260.
+// (kept in sync with the web dev backend), so it stays flat and is folded into
+// `RenderCliOpts` below.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn render(
@@ -991,9 +970,9 @@ async fn render(
     let out_dir = resolve_outdir(&cli, outdir);
 
     // Render flags from Settings -> CLI (see render_cli_args for the shape).
-    let args = render_cli_args(
-        &manifest_path.to_string_lossy(),
-        &out_dir,
+    let args = render_cli_args(RenderCliOpts {
+        manifest_path: manifest_path.to_string_lossy().into_owned(),
+        out_dir,
         crf,
         preset,
         audio_bitrate,
@@ -1009,7 +988,7 @@ async fn render(
         caption_box,
         caption_box_color,
         caption_angle,
-    );
+    });
 
     let output = Command::new("node")
         .arg(&cli)
@@ -2076,111 +2055,20 @@ mod tests {
 
     // --- render -----------------------------------------------------------
 
-    /// No flags set: just `render <manifest> --outdir <dir>`, with --outdir
-    /// LAST (the client parses the log's trailing `--outdir <dir>`).
+    /// The SAME cases test/render-args.test.ts runs against `renderCliArgs` in
+    /// src/render-args.ts, read from the shared JSON so drift fails here.
     #[test]
-    fn render_cli_args_minimal_appends_outdir_last() {
-        let a = render_cli_args(
-            "/tmp/m.json",
-            "/out",
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        );
-        assert_eq!(a, vec!["render", "/tmp/m.json", "--outdir", "/out"]);
-    }
-
-    /// Every Settings flag set: names/order match src/cli.ts's render flags.
-    #[test]
-    fn render_cli_args_full_flag_set() {
-        let a = render_cli_args(
-            "/tmp/m.json",
-            "/out",
-            Some(19),
-            Some("medium".into()),
-            Some("256k".into()),
-            Some(true),
-            Some(true),
-            Some("Avenir".into()),
-            Some("#ffffff".into()),
-            Some("#000000".into()),
-            Some(true),
-            Some(true),
-            Some(true),
-            Some(true),
-            Some(true),
-            Some("#00000080".into()),
-            Some(-4.0),
-        );
-        assert_eq!(
-            a,
-            vec![
-                "render",
-                "/tmp/m.json",
-                "--crf",
-                "19",
-                "--preset",
-                "medium",
-                "--audio-bitrate",
-                "256k",
-                "--dry-run",
-                "--burn-captions",
-                "--caption-font",
-                "Avenir",
-                "--caption-color",
-                "#ffffff",
-                "--caption-outline-color",
-                "#000000",
-                "--caption-bold",
-                "--caption-italic",
-                "--caption-underline",
-                "--caption-shadow",
-                "--caption-box",
-                "--caption-box-color",
-                "#00000080",
-                "--caption-angle",
-                "-4",
-                "--outdir",
-                "/out",
-            ]
-        );
-    }
-
-    /// Empty strings and explicit-false toggles emit no flags at all.
-    #[test]
-    fn render_cli_args_skips_empty_and_false_options() {
-        let a = render_cli_args(
-            "/tmp/m.json",
-            "/out",
-            None,
-            Some(String::new()),
-            Some(String::new()),
-            Some(false),
-            Some(false),
-            None,
-            Some(String::new()),
-            Some(String::new()),
-            Some(false),
-            Some(false),
-            Some(false),
-            Some(false),
-            Some(false),
-            Some(String::new()),
-            None,
-        );
-        assert_eq!(a, vec!["render", "/tmp/m.json", "--outdir", "/out"]);
+    fn render_cli_args_matches_shared_fixtures() {
+        let cases: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("../../../test/fixtures/render-cli-args.json"))
+                .unwrap();
+        assert!(!cases.is_empty());
+        for case in cases {
+            let name = case["name"].as_str().unwrap().to_string();
+            let opts: RenderCliOpts = serde_json::from_value(case["opts"].clone()).unwrap();
+            let want: Vec<String> = serde_json::from_value(case["argv"].clone()).unwrap();
+            assert_eq!(render_cli_args(opts), want, "case {name:?}");
+        }
     }
 
     // --- path helpers -----------------------------------------------------
