@@ -39,8 +39,13 @@ const localStorageMock = {
     return store.size;
   },
 };
-(globalThis as unknown as { localStorage: typeof localStorageMock }).localStorage =
-  localStorageMock;
+// defineProperty, not assignment: vitest 5's jsdom globals forward writes to the
+// window, whose `localStorage` is getter-only (assignment throws).
+Object.defineProperty(globalThis, "localStorage", {
+  value: localStorageMock,
+  configurable: true,
+  writable: true,
+});
 
 // --- Platform mock: every method openSettings can reach, resolving benignly.
 vi.mock("../src/platform/index.js", () => ({
