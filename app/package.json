@@ -24,7 +24,8 @@
     "coverage": "vitest run --coverage",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"dev-server/**/*.mjs\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"dev-server/**/*.mjs\"",
-    "verify": "npm run format:check && npm test && npm run build"
+    "verify": "npm run format:check && npm run typecheck && npm test && npm run build",
+    "typecheck": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",

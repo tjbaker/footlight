@@ -32,18 +32,12 @@ async function invoke<T>(cmd: string, args: Record<string, unknown>): Promise<T>
 
 export const tauriPlatform: FootlightPlatform = {
   async extractFrame(source: string, tSeconds: number): Promise<string> {
-    // The Rust side writes a temp jpg and returns a path we can wrap with the
-    // Tauri asset protocol so an <img> can display it.
-    const path = await invoke<string>("extract_frame", { source, t: tSeconds });
-    const { convertFileSrc } = await import("@tauri-apps/api/core");
-    // extract_frame reuses the same temp filename, so the asset URL is otherwise
-    // stable — append a cache-buster keyed on BOTH the source and the timestamp
-    // so the webview reloads whenever either changes. (Keying on time alone meant
-    // switching clips while staying at the same t produced an identical URL and
-    // kept showing the previous clip's cached frame.) The asset protocol resolves
-    // by path and ignores the query string.
-    const bust = `v=${encodeURIComponent(String(tSeconds))}&s=${encodeURIComponent(source)}`;
-    return `${convertFileSrc(path)}?${bust}`;
+    // The Rust side extracts the frame to a per-call temp JPEG, returns its raw
+    // bytes, and deletes the file (#249: a shared temp path let concurrent grabs
+    // clobber each other). Wrap the bytes in an object URL, exactly like the web
+    // backend — the caller is responsible for revoking it.
+    const bytes = await invoke<ArrayBuffer>("extract_frame", { source, t: tSeconds });
+    return URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
   },
 
   async probe(source: string): Promise<ProbeResult> {

@@ -7,35 +7,13 @@ import {
   LOUDNESS_BUCKETS,
   LUFS_FLOOR,
   LUFS_CEIL,
-  loudnessArgs,
   bucketLoudness,
-  loudnessEbur128Args,
   loudnessCombinedArgs,
   parseEbur128Momentary,
   lufsToNormalized,
   bucketLufs,
   detectSwells,
 } from "../src/core.js";
-
-describe("loudnessArgs", () => {
-  it("decodes mono f32le PCM at 8kHz to stdout", () => {
-    const a = loudnessArgs("in.mp4");
-    expect(a).toEqual([
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-i",
-      "in.mp4",
-      "-ac",
-      "1",
-      "-ar",
-      "8000",
-      "-f",
-      "f32le",
-      "-",
-    ]);
-  });
-});
 
 describe("bucketLoudness", () => {
   it("returns exactly `buckets` values", () => {
@@ -75,25 +53,6 @@ describe("bucketLoudness", () => {
       expect(v).toBeGreaterThanOrEqual(0);
       expect(v).toBeLessThanOrEqual(1);
     }
-  });
-});
-
-describe("loudnessEbur128Args", () => {
-  it("runs ebur128 momentary metadata at verbose level, discarding A/V", () => {
-    const a = loudnessEbur128Args("in.mp4");
-    expect(a).toEqual([
-      "-hide_banner",
-      "-nostats",
-      "-loglevel",
-      "verbose",
-      "-i",
-      "in.mp4",
-      "-af",
-      "ebur128=metadata=1",
-      "-f",
-      "null",
-      "-",
-    ]);
   });
 });
 

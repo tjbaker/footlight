@@ -6,8 +6,9 @@
  *
  * This is the INVERSE of the engine's `computeCrop`: where the engine maps a
  * `crop_offset` -> a pixel crop window, here a user-drawn box maps back to the
- * `crop_offset` value. Crop-width and maxX math mirror `computeCrop` exactly so
- * the round-trip box -> offset -> crop is consistent.
+ * `crop_offset` value. Crop-width, maxX and clamp math are delegated to
+ * `computeCrop` itself (not mirrored) so the round-trip box -> offset -> crop is
+ * consistent by construction.
  */
 
 import {
@@ -69,37 +70,23 @@ const SNAP_TOLERANCE = 2;
 export { roundEven };
 
 /**
- * The fixed 9:16 crop width the engine uses for a landscape working region:
- * `even(round(height * 9/16))`.
- */
-function cropWidth(region: Dims): number {
-  // engine: cw = even(Math.round(ih * TARGET_AR))
-  const w = Math.round(region.height * TARGET_AR);
-  return w - (w % 2);
-}
-
-/**
  * Invert a drawn 9:16 crop box back to the `crop_offset` value the engine needs.
  *
  * The engine fixes the crop WIDTH and uses full height on a landscape source, so
- * the only meaningful degree of freedom is the horizontal x. We round box.x to
- * an even integer and clamp it into [0, maxX] (same as `computeCrop`). If the
- * result lands within SNAP_TOLERANCE of the canonical left (0), center
- * (floor(maxX/2)) or right (maxX) offset, we return the NAMED value instead of a
- * bare integer so manifests stay readable and stable.
+ * the only meaningful degree of freedom is the horizontal x. The crop width,
+ * clamp and even-rounding are delegated to `computeCrop` itself (no restated
+ * rule), so the x returned here is exactly the x the engine renders. If it lands
+ * within SNAP_TOLERANCE of the engine's rendered left / center / right x, we
+ * return the NAMED value instead of a bare integer so manifests stay readable
+ * and stable.
  */
 export function cropBoxToOffset(box: Box, region: Dims): string {
-  const cw = cropWidth(region);
-  const maxX = region.width - cw;
+  const at = (offset: string) => computeCrop(region.width, region.height, offset).x;
+  const x = at(String(box.x));
 
-  // Match engine: x is even-rounded, then clamped into frame.
-  let x = roundEven(box.x);
-  x = Math.max(0, Math.min(x, maxX));
-
-  const center = Math.floor(maxX / 2);
-  if (Math.abs(x - 0) <= SNAP_TOLERANCE) return "left";
-  if (Math.abs(x - center) <= SNAP_TOLERANCE) return "center";
-  if (Math.abs(x - maxX) <= SNAP_TOLERANCE) return "right";
+  if (Math.abs(x - at("left")) <= SNAP_TOLERANCE) return "left";
+  if (Math.abs(x - at("center")) <= SNAP_TOLERANCE) return "center";
+  if (Math.abs(x - at("right")) <= SNAP_TOLERANCE) return "right";
 
   return String(x);
 }
