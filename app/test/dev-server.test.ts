@@ -68,6 +68,8 @@ type FakeChild = EventEmitter & {
   stdout: EventEmitter;
   stderr: EventEmitter;
   kill: ReturnType<typeof vi.fn>;
+  /** Settles on the child's first "close". */
+  closed: Promise<void>;
 };
 
 /** Every fake child spawned in the current test, in spawn order. */
@@ -82,6 +84,7 @@ function fakeChild(script: SpawnScript): FakeChild {
     setImmediate(() => child.emit("close", null, "SIGTERM"));
     return true;
   });
+  child.closed = new Promise((r) => child.once("close", () => r()));
   children.push(child);
   setImmediate(() => {
     if (script.hang) return;
@@ -673,15 +676,33 @@ describe("POST /render", () => {
 // --- abandoned requests (#262) ----------------------------------------------------
 
 describe("abandoned requests", () => {
+  /** Settles a tick after the server's response for the next request closes. */
+  function nextResponseClosed(): Promise<void> {
+    return new Promise((r) =>
+      server.once("request", (_req, res) => res.once("close", () => setImmediate(r))),
+    );
+  }
+
+  /** A tick after `child` closes: the handler has acted on its result. */
+  async function afterClose(child: FakeChild): Promise<void> {
+    await child.closed;
+    await new Promise((r) => setImmediate(r));
+  }
+
   /** Start a request, wait for its first subprocess, then drop the connection. */
-  async function abandonAfterSpawn(method: string, path: string, body = ""): Promise<FakeChild> {
+  async function abandonAfterSpawn(
+    method: string,
+    path: string,
+    body = "",
+  ): Promise<{ child: FakeChild; responseClosed: Promise<void> }> {
+    const responseClosed = nextResponseClosed();
     const { port } = server.address() as { port: number };
     const req = httpRequest({ host: "127.0.0.1", port, method, path });
     req.on("error", () => {}); // the socket is torn down on purpose
     req.end(body);
     await vi.waitFor(() => expect(children).toHaveLength(1));
     req.destroy();
-    return children[0]!;
+    return { child: children[0]!, responseClosed };
   }
 
   it.each([
@@ -695,12 +716,13 @@ describe("abandoned requests", () => {
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     onSpawn(() => ({ hang: true }));
 
-    const child = await abandonAfterSpawn(method, path, body);
+    const { child } = await abandonAfterSpawn(method, path, body);
 
-    await vi.waitFor(() => expect(child.kill).toHaveBeenCalledTimes(1));
-    // Let the handler finish: it starts nothing further (no /frame tail grab,
-    // no /probe cropdetect) and writing to the closed response doesn't throw.
-    await new Promise((r) => setTimeout(r, 50));
+    // The hung child only closes if it is killed.
+    await afterClose(child);
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    // The handler starts nothing further (no /frame tail grab, no /probe
+    // cropdetect) and writing to the closed response doesn't throw.
     expect(spawnMock).toHaveBeenCalledTimes(1);
     expect(errors).not.toHaveBeenCalled();
   });
@@ -708,17 +730,22 @@ describe("abandoned requests", () => {
   it("never kills a render because its request closed", async () => {
     onSpawn(() => ({ hang: true }));
 
-    const child = await abandonAfterSpawn("POST", "/render", "[]");
+    const { child, responseClosed } = await abandonAfterSpawn("POST", "/render", "[]");
 
-    await new Promise((r) => setTimeout(r, 100));
+    await responseClosed; // the server has seen the client go
     expect(child.kill).not.toHaveBeenCalled();
     child.emit("close", 0); // let the render finish so the handler settles
   });
 
-  it("leaves a completed request's subprocess alone", async () => {
+  it("doesn't abort once the response has finished", async () => {
+    // The response's "close" also fires after a normal finish; the
+    // `writableFinished` guard keeps that from counting as abandonment. The
+    // abort listener outlives the child, so a missing guard would call kill.
     onSpawn(() => ({ stderr: "" }));
+    const responseClosed = nextResponseClosed();
     const res = await fetch(`${base}/scenes?source=/v.mp4`);
     expect(await res.json()).toEqual([]);
+    await responseClosed;
     expect(children[0]!.kill).not.toHaveBeenCalled();
   });
 });
