@@ -29,3 +29,12 @@ font-kit = "0.14"
 # Uniquely named, auto-deleted temp files for the frame / track / render
 # commands, so concurrent calls never share (and clobber) one path (#249).
 tempfile = "3"
+# Async subprocesses (#262): every ffmpeg / ffprobe / CLI child is awaited via
+# tokio::process instead of blocking a runtime worker, and killed on quit. The
+# same tokio Tauri already runs on; `process` / `sync` / `macros` add
+# tokio::process, the quit signal (watch) and `select!`.
+tokio = { version = "1.52", features = ["process", "sync", "macros"] }
+
+[dev-dependencies]
+# The subprocess tests build their own multi-thread runtime with timers.
+tokio = { version = "1.52", features = ["rt-multi-thread", "time"] }

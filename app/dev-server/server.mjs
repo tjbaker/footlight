@@ -69,10 +69,33 @@ const REPO_ROOT = resolve(__dirname, "..", "..");
 // Persisted render history and working session live at the repo root (next to
 // where GUI renders land); see the defaults in `createRequestListener`.
 
-/** Spawn a command, collecting stdout/stderr. Resolves even on non-zero exit. */
-function run(command, args, { collectStdoutBinary = false } = {}) {
+/**
+ * Spawn a command, collecting stdout/stderr. Resolves even on non-zero exit.
+ *
+ * `signal` ties the child to the HTTP request that started it: when the client
+ * goes away before the response is sent (a superseded hover thumbnail, a closed
+ * tab), the request's signal aborts and the child is killed instead of running
+ * to completion for nobody (#262). Renders are NOT passed a signal: a render is
+ * never stopped because a request closed, only by the user (the native shell
+ * applies the same policy; see app/src-tauri/src/subprocess.rs).
+ */
+function run(command, args, { collectStdoutBinary = false, signal } = {}) {
+  // Already abandoned (e.g. between a handler's two runs): don't start it. The
+  // result reads like a killed child, so the handler takes its failure path.
+  if (signal?.aborted) {
+    return Promise.resolve({
+      code: null,
+      stdout: collectStdoutBinary ? Buffer.alloc(0) : "",
+      stderr: "",
+    });
+  }
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    if (signal) {
+      const kill = () => child.kill();
+      signal.addEventListener("abort", kill, { once: true });
+      child.on("close", () => signal.removeEventListener("abort", kill));
+    }
     const stdoutChunks = [];
     let stderr = "";
     child.stdout.on("data", (d) => stdoutChunks.push(d));
@@ -147,9 +170,10 @@ function sendText(res, status, text) {
  * t and emits the displayed frame, which is the frame-accurate-seek approach
  * the prototype demonstrates (accuracy comes from seeking per displayed frame).
  */
-async function handleFrame(source, t, res) {
+async function handleFrame(source, t, res, signal) {
   let result = await run("ffmpeg", frameExtractArgs(source, Number(t)), {
     collectStdoutBinary: true,
+    signal,
   });
   // An exact-time seek at/after EOF (seek to the clip end, or the final sampled
   // still) decodes no frame, so the mjpeg encoder fails with no packets. Fall
@@ -157,6 +181,7 @@ async function handleFrame(source, t, res) {
   if (result.code !== 0 || result.stdout.length === 0) {
     result = await run("ffmpeg", frameExtractTailArgs(source), {
       collectStdoutBinary: true,
+      signal,
     });
   }
   if (result.code !== 0 || result.stdout.length === 0) {
@@ -179,7 +204,7 @@ async function handleFrame(source, t, res) {
  * punch-in cropWindow), and streams the PNG from ffmpeg's stdout — the same
  * pattern as `handleFrame`, but through the clip's render crop math.
  */
-async function handleCover(source, t, body, res) {
+async function handleCover(source, t, body, res, signal) {
   let spec;
   try {
     spec = JSON.parse(body || "{}");
@@ -188,7 +213,7 @@ async function handleCover(source, t, body, res) {
     return;
   }
 
-  const probe = await run("ffprobe", ffprobeStreamArgs(source));
+  const probe = await run("ffprobe", ffprobeStreamArgs(source), { signal });
   if (probe.code !== 0) {
     sendText(res, 500, `ffprobe failed: ${probe.stderr}`);
     return;
@@ -220,7 +245,7 @@ async function handleCover(source, t, body, res) {
     return;
   }
 
-  const result = await run("ffmpeg", args, { collectStdoutBinary: true });
+  const result = await run("ffmpeg", args, { collectStdoutBinary: true, signal });
   if (result.code !== 0 || result.stdout.length === 0) {
     sendText(res, 500, `cover export failed: ${result.stderr || "no output"}`);
     return;
@@ -234,8 +259,8 @@ async function handleCover(source, t, body, res) {
 }
 
 /** GET /probe — dimensions + duration via ffprobe, plus a cropdetect hint. */
-async function handleProbe(source, res) {
-  const probe = await run("ffprobe", ffprobeStreamArgs(source));
+async function handleProbe(source, res, signal) {
+  const probe = await run("ffprobe", ffprobeStreamArgs(source), { signal });
   if (probe.code !== 0) {
     sendText(res, 500, `ffprobe failed: ${probe.stderr}`);
     return;
@@ -249,13 +274,13 @@ async function handleProbe(source, res) {
   }
 
   // cropdetect suggestion — black bars only.
-  const cd = await run("ffmpeg", cropdetectArgs(source));
+  const cd = await run("ffmpeg", cropdetectArgs(source), { signal });
   sendJson(res, 200, { ...info, cropdetect: parseCropdetect(cd.stderr) });
 }
 
 /** GET /scenes — scene-cut timestamps (seconds). */
-async function handleScenes(source, res) {
-  const result = await run("ffmpeg", scenesArgs(source));
+async function handleScenes(source, res, signal) {
+  const result = await run("ffmpeg", scenesArgs(source), { signal });
   sendJson(res, 200, parseScenes(result.stderr));
 }
 
@@ -267,8 +292,11 @@ async function handleScenes(source, res) {
  * RMS over the same PCM) for the In/Out beat-snap onset detector. The ebur128
  * filter passes audio through, so all three come out of the same decode.
  */
-async function handleLoudness(source, res) {
-  const result = await run("ffmpeg", loudnessCombinedArgs(source), { collectStdoutBinary: true });
+async function handleLoudness(source, res, signal) {
+  const result = await run("ffmpeg", loudnessCombinedArgs(source), {
+    collectStdoutBinary: true,
+    signal,
+  });
   const momentary = parseEbur128Momentary(result.stderr);
   if (result.code !== 0 && momentary.length === 0 && result.stdout.length === 0) {
     sendText(res, 500, `loudness failed: ${result.stderr || "no output"}`);
@@ -344,12 +372,12 @@ async function handleVideo(source, req, res) {
  * ONLY the samples to stdout, so we parse and forward that. Errors (bad key,
  * unsupported provider, etc.) land on stderr with a non-zero exit.
  */
-async function handleTrack(body, res, cliPath) {
+async function handleTrack(body, res, cliPath, signal) {
   const dir = await mkdtemp(join(tmpdir(), "footlight-"));
   const reqPath = join(dir, "track-request.json");
   await writeFile(reqPath, body, "utf8");
 
-  const result = await run("node", [cliPath, "track", reqPath]);
+  const result = await run("node", [cliPath, "track", reqPath], { signal });
   if (result.code !== 0) {
     sendText(res, 500, `track failed: ${result.stderr || result.stdout || "no output"}`);
     return;
@@ -396,6 +424,7 @@ async function handleRender(body, opts, res, { cliPath, repoRoot }) {
   if (opts.captionBoxColor) args.push("--caption-box-color", opts.captionBoxColor);
   if (opts.captionAngle != null) args.push("--caption-angle", String(opts.captionAngle));
   args.push("--outdir", outDir);
+  // No `signal`: a render keeps running if the request closes (see `run`).
   const result = await run("node", args);
   const log = `$ node ${args.join(" ")}\n\n${result.stdout}${result.stderr}`;
   sendJson(res, 200, { ok: result.code === 0, log });
@@ -598,12 +627,21 @@ export function createRequestListener({
 
     const url = new URL(req.url, `http://localhost:${PORT}`);
 
+    // Aborts when the client goes away before the response finished (#262).
+    // `res` "close", not `req` "close": the latter fires as soon as the request
+    // body has been read, not when the connection drops.
+    const abandoned = new AbortController();
+    res.on("close", () => {
+      if (!res.writableFinished) abandoned.abort();
+    });
+    const signal = abandoned.signal;
+
     try {
       if (req.method === "GET" && url.pathname === "/frame") {
         const source = url.searchParams.get("source");
         const t = url.searchParams.get("t") || "0";
         if (!source) return sendText(res, 400, "missing source");
-        return await handleFrame(source, t, res);
+        return await handleFrame(source, t, res, signal);
       }
 
       // GET /env-key — the BYOK Gemini key from THIS server's environment
@@ -621,19 +659,19 @@ export function createRequestListener({
       if (req.method === "GET" && url.pathname === "/probe") {
         const source = url.searchParams.get("source");
         if (!source) return sendText(res, 400, "missing source");
-        return await handleProbe(source, res);
+        return await handleProbe(source, res, signal);
       }
 
       if (req.method === "GET" && url.pathname === "/scenes") {
         const source = url.searchParams.get("source");
         if (!source) return sendText(res, 400, "missing source");
-        return await handleScenes(source, res);
+        return await handleScenes(source, res, signal);
       }
 
       if (req.method === "GET" && url.pathname === "/loudness") {
         const source = url.searchParams.get("source");
         if (!source) return sendText(res, 400, "missing source");
-        return await handleLoudness(source, res);
+        return await handleLoudness(source, res, signal);
       }
 
       if (req.method === "GET" && url.pathname === "/video") {
@@ -649,14 +687,14 @@ export function createRequestListener({
         const chunks = [];
         for await (const chunk of req) chunks.push(chunk);
         const body = Buffer.concat(chunks).toString("utf8");
-        return await handleCover(source, t, body, res);
+        return await handleCover(source, t, body, res, signal);
       }
 
       if (req.method === "POST" && url.pathname === "/track") {
         const chunks = [];
         for await (const chunk of req) chunks.push(chunk);
         const body = Buffer.concat(chunks).toString("utf8");
-        return await handleTrack(body, res, cliPath);
+        return await handleTrack(body, res, cliPath, signal);
       }
 
       if (req.method === "POST" && url.pathname === "/render") {

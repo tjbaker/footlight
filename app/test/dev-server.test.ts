@@ -60,16 +60,31 @@ interface SpawnScript {
   stderr?: string;
   /** Emit a spawn-level error (binary not on PATH) instead of running. */
   error?: Error;
+  /** Keep running until killed (a long ffmpeg / render). */
+  hang?: boolean;
 }
 
-function fakeChild(script: SpawnScript): EventEmitter {
-  const child = new EventEmitter() as EventEmitter & {
-    stdout: EventEmitter;
-    stderr: EventEmitter;
-  };
+type FakeChild = EventEmitter & {
+  stdout: EventEmitter;
+  stderr: EventEmitter;
+  kill: ReturnType<typeof vi.fn>;
+};
+
+/** Every fake child spawned in the current test, in spawn order. */
+let children: FakeChild[] = [];
+
+function fakeChild(script: SpawnScript): FakeChild {
+  const child = new EventEmitter() as FakeChild;
   child.stdout = new EventEmitter();
   child.stderr = new EventEmitter();
+  // Like a real child: killing it ends it with a signal (code null).
+  child.kill = vi.fn(() => {
+    setImmediate(() => child.emit("close", null, "SIGTERM"));
+    return true;
+  });
+  children.push(child);
   setImmediate(() => {
+    if (script.hang) return;
     if (script.error) {
       child.emit("error", script.error);
       return;
@@ -119,6 +134,7 @@ afterAll(async () => {
 
 beforeEach(() => {
   spawnMock.mockReset();
+  children = [];
 });
 
 afterEach(() => {
@@ -651,6 +667,59 @@ describe("POST /render", () => {
     expect(body.ok).toBe(false);
     expect(body.log).toContain("partial");
     expect(body.log).toContain("boom");
+  });
+});
+
+// --- abandoned requests (#262) ----------------------------------------------------
+
+describe("abandoned requests", () => {
+  /** Start a request, wait for its first subprocess, then drop the connection. */
+  async function abandonAfterSpawn(method: string, path: string, body = ""): Promise<FakeChild> {
+    const { port } = server.address() as { port: number };
+    const req = httpRequest({ host: "127.0.0.1", port, method, path });
+    req.on("error", () => {}); // the socket is torn down on purpose
+    req.end(body);
+    await vi.waitFor(() => expect(children).toHaveLength(1));
+    req.destroy();
+    return children[0]!;
+  }
+
+  it.each([
+    ["GET", "/frame?source=/v.mp4&t=1", ""],
+    ["GET", "/probe?source=/v.mp4", ""],
+    ["GET", "/scenes?source=/v.mp4", ""],
+    ["GET", "/loudness?source=/v.mp4", ""],
+    ["POST", "/cover?source=/v.mp4&t=1", "{}"],
+    ["POST", "/track", "{}"],
+  ])("%s %s kills its subprocess when the client goes away", async (method, path, body) => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    onSpawn(() => ({ hang: true }));
+
+    const child = await abandonAfterSpawn(method, path, body);
+
+    await vi.waitFor(() => expect(child.kill).toHaveBeenCalledTimes(1));
+    // Let the handler finish: it starts nothing further (no /frame tail grab,
+    // no /probe cropdetect) and writing to the closed response doesn't throw.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    expect(errors).not.toHaveBeenCalled();
+  });
+
+  it("never kills a render because its request closed", async () => {
+    onSpawn(() => ({ hang: true }));
+
+    const child = await abandonAfterSpawn("POST", "/render", "[]");
+
+    await new Promise((r) => setTimeout(r, 100));
+    expect(child.kill).not.toHaveBeenCalled();
+    child.emit("close", 0); // let the render finish so the handler settles
+  });
+
+  it("leaves a completed request's subprocess alone", async () => {
+    onSpawn(() => ({ stderr: "" }));
+    const res = await fetch(`${base}/scenes?source=/v.mp4`);
+    expect(await res.json()).toEqual([]);
+    expect(children[0]!.kill).not.toHaveBeenCalled();
   });
 });
 
