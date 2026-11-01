@@ -519,7 +519,7 @@ export function buildViewer(store: EditorStore, deps: ViewerViewDeps): ViewerVie
   /** Reset the crop box to the default FULL-HEIGHT, centered 9:16 of the region. */
   function resetCropBoxFullHeight(): void {
     if (!state.dims) return;
-    store.set({ cropBox: fullHeightCropBox(cropRegionRect()) });
+    store.set({ cropBox: fullHeightCropBox(state.contentMode, state.contentBox, state.dims) });
   }
 
   /**
