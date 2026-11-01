@@ -58,6 +58,12 @@ describe("clampCropX parity with the engine/manifest", () => {
     expect(clampCropX(701, region)).toBe(700); // even-rounded
   });
 
+  it("rounds a fractional x (the tool schema types x as a number)", () => {
+    expect(clampCropX(410.6, region)).toBe(410); // 411 -> even 410
+    expect(clampCropX(409.4, region)).toBe(408);
+    expect(clampCropX(-0.4, region)).toBe(0);
+  });
+
   it("matches cropBoxToOffset's numeric result for an unsnapped x", () => {
     const x = 700;
     const box: Box = { x, y: 0, w: 608, h: 1080 };
@@ -89,6 +95,11 @@ describe("interpretTool (deterministic tools)", () => {
     const a = interpretTool("addCropKeyframe", { t: 6.4, x: 99999 }, { region });
     expect(a.commit).toEqual({ kind: "addCropKeyframe", t: 6.4, x: MAX_X });
     expect(a.ghost?.keyframe).toEqual({ t: 6.4, x: MAX_X });
+  });
+
+  it("addCropKeyframe accepts a fractional x", () => {
+    const a = interpretTool("addCropKeyframe", { t: 1, x: 410.6 }, { region });
+    expect(a.commit).toEqual({ kind: "addCropKeyframe", t: 1, x: 410 });
   });
 
   it("setContentCrop validates the W:H:X:Y region", () => {
