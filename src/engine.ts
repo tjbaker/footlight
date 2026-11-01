@@ -21,6 +21,7 @@
 
 import { spawn } from "node:child_process";
 import { constants as osConstants } from "node:os";
+import { StringDecoder } from "node:string_decoder";
 
 import { ffprobeStreamArgs, parseProbe, ffmpegListHasFilter } from "./core.js";
 
@@ -83,12 +84,19 @@ export function run(
     const child = spawn(command, args, {
       stdio: opts.inheritStdio ? "inherit" : ["ignore", "pipe", "pipe"],
     });
+    // One streaming UTF-8 decoder per pipe: a multi-byte character split across
+    // two chunks is held back until its tail arrives, instead of each chunk's
+    // `toString()` mangling both halves into U+FFFD.
+    const outDecoder = new StringDecoder("utf8");
+    const errDecoder = new StringDecoder("utf8");
     let stdout = "";
     let stderr = "";
-    child.stdout?.on("data", (d) => (stdout += d.toString()));
-    child.stderr?.on("data", (d) => (stderr += d.toString()));
+    child.stdout?.on("data", (d: Buffer) => (stdout += outDecoder.write(d)));
+    child.stderr?.on("data", (d: Buffer) => (stderr += errDecoder.write(d)));
     child.on("error", (err) => reject(err));
     child.on("close", (code, signal) => {
+      stdout += outDecoder.end();
+      stderr += errDecoder.end();
       // Node reports `code === null` when the child died by signal. That is a
       // failure (a killed ffmpeg leaves a truncated MP4), never a clean exit.
       const result: RunResult =

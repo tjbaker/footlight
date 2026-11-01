@@ -10,6 +10,7 @@ import { buildEasedCropX, TARGET_AR, type CropPathKeyframe } from "../src/core.j
 import type { Dims } from "../src/manifest.js";
 import {
   planSampleTimes,
+  MAX_SAMPLE_TIMES,
   OneEuroFilter,
   boxCenterToCropX,
   samplesToCropPath,
@@ -71,6 +72,24 @@ describe("planSampleTimes", () => {
   it("throws on non-positive span or interval", () => {
     expect(() => planSampleTimes({ shotStart: 5, shotEnd: 5, intervalSec: 1 })).toThrow();
     expect(() => planSampleTimes({ shotStart: 0, shotEnd: 5, intervalSec: 0 })).toThrow();
+  });
+
+  it("refuses a degenerate interval that would plan an unbounded sample count (issue #279)", () => {
+    // Just over the cap: 20 s at 1 ms = 20,000 uniform samples.
+    expect(() => planSampleTimes({ shotStart: 0, shotEnd: 20, intervalSec: 1e-3 })).toThrow(
+      /max 10000/,
+    );
+    // 600 s at 1 µs would push 6e8 numbers before the guard.
+    expect(() => planSampleTimes({ shotStart: 0, shotEnd: 600, intervalSec: 1e-6 })).toThrow(
+      /would plan 600000000 samples \(max 10000\)/,
+    );
+    // NaN/Infinity spans can't sneak past the guard either.
+    expect(() => planSampleTimes({ shotStart: 0, shotEnd: Infinity, intervalSec: 1 })).toThrow();
+  });
+
+  it("still plans right up to the cap", () => {
+    const ts = planSampleTimes({ shotStart: 0, shotEnd: MAX_SAMPLE_TIMES, intervalSec: 1 });
+    expect(ts.length).toBe(MAX_SAMPLE_TIMES + 1);
   });
 });
 
