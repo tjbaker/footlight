@@ -51,8 +51,7 @@ import {
   loudnessCombinedArgs,
   parseEbur128Momentary,
   bucketLufs,
-  bucketLoudness,
-  onsetEnvelope,
+  PcmLoudnessStream,
   coverFrameArgs,
   LOUDNESS_BUCKETS,
 } from "../../dist/core.js";
@@ -78,8 +77,12 @@ const REPO_ROOT = resolve(__dirname, "..", "..");
  * to completion for nobody (#262). Renders are NOT passed a signal: a render is
  * never stopped because a request closed, only by the user (the native shell
  * applies the same policy; see app/src-tauri/src/subprocess.rs).
+ *
+ * `onStdout`, when given, receives each stdout chunk as it arrives and nothing
+ * is collected (`stdout` resolves empty): for output too large to buffer, like
+ * the loudness pass's PCM (#277).
  */
-function run(command, args, { collectStdoutBinary = false, signal } = {}) {
+function run(command, args, { collectStdoutBinary = false, signal, onStdout } = {}) {
   // Already abandoned (e.g. between a handler's two runs): don't start it. The
   // result reads like a killed child, so the handler takes its failure path.
   if (signal?.aborted) {
@@ -98,7 +101,7 @@ function run(command, args, { collectStdoutBinary = false, signal } = {}) {
     }
     const stdoutChunks = [];
     let stderr = "";
-    child.stdout.on("data", (d) => stdoutChunks.push(d));
+    child.stdout.on("data", (d) => (onStdout ? onStdout(d) : stdoutChunks.push(d)));
     child.stderr.on("data", (d) => (stderr += d.toString()));
     child.on("error", reject);
     child.on("close", (code) => {
@@ -293,22 +296,21 @@ async function handleScenes(source, res, signal) {
  * filter passes audio through, so all three come out of the same decode.
  */
 async function handleLoudness(source, res, signal) {
+  // The PCM is folded into the envelopes as it streams in (#277), so memory
+  // stays flat however long the source is instead of buffering ~32 KB/s.
+  const pcm = new PcmLoudnessStream();
   const result = await run("ffmpeg", loudnessCombinedArgs(source), {
-    collectStdoutBinary: true,
     signal,
+    onStdout: (chunk) => pcm.push(chunk),
   });
   const momentary = parseEbur128Momentary(result.stderr);
-  if (result.code !== 0 && momentary.length === 0 && result.stdout.length === 0) {
+  if (result.code !== 0 && momentary.length === 0 && pcm.bytes === 0) {
     sendText(res, 500, `loudness failed: ${result.stderr || "no output"}`);
     return;
   }
-  // RMS from the PCM stdout (Buffer byteOffset may be non-zero; floor to whole floats).
-  const buf = result.stdout;
-  const samples = new Float32Array(buf.buffer, buf.byteOffset, Math.floor(buf.length / 4));
   sendJson(res, 200, {
     display: bucketLufs(momentary, LOUDNESS_BUCKETS),
-    detect: bucketLoudness(samples, LOUDNESS_BUCKETS),
-    onsetEnvelope: onsetEnvelope(samples),
+    ...pcm.finish(),
   });
 }
 

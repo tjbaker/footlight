@@ -31,6 +31,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Condvar, Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 use tokio::sync::watch;
 
@@ -102,7 +103,28 @@ impl Registry {
     /// program in error messages ("ffmpeg", "node CLI"). A non-zero exit is
     /// NOT an error here (callers inspect `status`), only a failed spawn or a
     /// quit.
-    pub async fn run(&self, mut cmd: Command, what: &str, kind: Kind) -> Result<Output, String> {
+    pub async fn run(&self, cmd: Command, what: &str, kind: Kind) -> Result<Output, String> {
+        let mut stdout = Vec::new();
+        let mut out = self
+            .run_streaming(cmd, what, kind, |chunk| stdout.extend_from_slice(chunk))
+            .await?;
+        out.stdout = stdout;
+        Ok(out)
+    }
+
+    /// [`Registry::run`], but stdout is handed to `on_stdout` chunk by chunk
+    /// as the child writes it instead of being collected (the returned
+    /// `Output::stdout` is empty), for output too large to hold, like the
+    /// loudness pass's PCM (#277). stderr is still collected. Same lifetime
+    /// policy: the run is registered, `kill_on_drop` holds, and quitting stops
+    /// it.
+    pub async fn run_streaming(
+        &self,
+        mut cmd: Command,
+        what: &str,
+        kind: Kind,
+        mut on_stdout: impl FnMut(&[u8]),
+    ) -> Result<Output, String> {
         cmd.stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -114,13 +136,39 @@ impl Registry {
         if *quitting.borrow_and_update() {
             return Err(format!("{what} not started: Footlight is quitting"));
         }
-        let child = cmd
+        let mut child = cmd
             .spawn()
             .map_err(|e| format!("failed to spawn {what}: {e}"))?;
+        let mut stdout = child.stdout.take().expect("stdout is piped");
+        let mut stderr = child.stderr.take().expect("stderr is piped");
+        let work = async {
+            // Drain both pipes concurrently (a child blocked on a full stderr
+            // pipe would never finish its stdout), then reap it.
+            let read_stdout = async {
+                let mut buf = vec![0u8; 64 * 1024];
+                loop {
+                    let n = stdout.read(&mut buf).await?;
+                    if n == 0 {
+                        return Ok::<(), std::io::Error>(());
+                    }
+                    on_stdout(&buf[..n]);
+                }
+            };
+            let mut err = Vec::new();
+            let (out_res, err_res) = tokio::join!(read_stdout, stderr.read_to_end(&mut err));
+            out_res?;
+            err_res?;
+            let status = child.wait().await?;
+            Ok::<Output, std::io::Error>(Output {
+                status,
+                stdout: Vec::new(),
+                stderr: err,
+            })
+        };
         tokio::select! {
-            out = child.wait_with_output() => out.map_err(|e| format!("{what} failed: {e}")),
-            // Losing this race drops the `wait_with_output` future, and with it
-            // the child: `kill_on_drop` kills it.
+            out = work => out.map_err(|e| format!("{what} failed: {e}")),
+            // Losing this race drops `work`; the child drops when this function
+            // returns, and `kill_on_drop` kills it.
             _ = quitting.wait_for(|q| *q) => Err(format!("{what} stopped: Footlight is quitting")),
         }
     }
@@ -159,6 +207,16 @@ fn registry() -> &'static Registry {
 /// subprocess goes through here.
 pub async fn run_output(cmd: Command, what: &str, kind: Kind) -> Result<Output, String> {
     registry().run(cmd, what, kind).await
+}
+
+/// [`Registry::run_streaming`] on the app-wide registry.
+pub async fn run_streaming(
+    cmd: Command,
+    what: &str,
+    kind: Kind,
+    on_stdout: impl FnMut(&[u8]),
+) -> Result<Output, String> {
+    registry().run_streaming(cmd, what, kind, on_stdout).await
 }
 
 /// Whether a render is running in the app (asked before quitting).
@@ -205,6 +263,32 @@ mod tests {
         assert_eq!(out.stderr, b"err");
         assert_eq!(out.status.code(), Some(3)); // non-zero is the caller's call
         assert!(!reg.render_running());
+        assert!(reg.stop_all(Duration::from_millis(10))); // nothing left live
+    }
+
+    #[test]
+    fn run_streaming_hands_over_stdout_without_collecting_it() {
+        // ~1 MiB of stdout across many reads, plus stderr, without deadlock.
+        let reg = Registry::new();
+        let mut seen = 0usize;
+        let mut chunks = 0usize;
+        let out = rt()
+            .block_on(reg.run_streaming(
+                sh("head -c 1048576 /dev/zero; printf err >&2; exit 2"),
+                "sh",
+                Kind::Analysis,
+                |chunk| {
+                    assert!(chunk.iter().all(|&b| b == 0));
+                    seen += chunk.len();
+                    chunks += 1;
+                },
+            ))
+            .unwrap();
+        assert_eq!(seen, 1 << 20);
+        assert!(chunks > 1, "stdout arrived in one piece");
+        assert!(out.stdout.is_empty()); // handed over, not collected
+        assert_eq!(out.stderr, b"err");
+        assert_eq!(out.status.code(), Some(2));
         assert!(reg.stop_all(Duration::from_millis(10))); // nothing left live
     }
 

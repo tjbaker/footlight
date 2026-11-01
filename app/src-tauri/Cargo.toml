@@ -32,8 +32,9 @@ tempfile = "3"
 # Async subprocesses (#262): every ffmpeg / ffprobe / CLI child is awaited via
 # tokio::process instead of blocking a runtime worker, and killed on quit. The
 # same tokio Tauri already runs on; `process` / `sync` / `macros` add
-# tokio::process, the quit signal (watch) and `select!`.
-tokio = { version = "1.52", features = ["process", "sync", "macros"] }
+# tokio::process, the quit signal (watch) and `select!`; `io-util` reads a
+# child's stdout incrementally (the streamed loudness pass, #277).
+tokio = { version = "1.52", features = ["process", "sync", "macros", "io-util"] }
 
 [dev-dependencies]
 # The subprocess tests build their own multi-thread runtime with timers.
