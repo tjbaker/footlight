@@ -1,0 +1,8 @@
+// Published build (npm prepack): tsconfig.json minus sourcemaps, which would
+// point at src/ — not shipped in the tarball. Local dev keeps `npm run build`.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "sourceMap": false
+  }
+}

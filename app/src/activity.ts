@@ -8,6 +8,11 @@
  */
 
 import "./style.css";
+import { messages } from "./i18n/index.js";
+
+// Same catalog as the main window: both webviews resolve the locale from
+// `navigator.language`, so the separate Activity window always matches.
+const m = messages.editor.activity;
 
 interface ActivityPayload {
   text: string;
@@ -35,33 +40,33 @@ const head = document.createElement("div");
 head.className = "activity-head";
 const title = document.createElement("div");
 title.className = "activity-title";
-title.textContent = "Activity";
+title.textContent = m.title;
 const outDir = document.createElement("div");
 outDir.className = "hint";
 const copyBtn = document.createElement("button");
 copyBtn.className = "iconbtn";
-copyBtn.textContent = "⧉ Copy";
-copyBtn.title = "Copy the output to the clipboard";
+copyBtn.textContent = m.copy;
+copyBtn.title = m.copyTitle;
 head.append(title, outDir, copyBtn);
 
 const pre = document.createElement("pre");
 pre.className = "log";
-pre.textContent = "(output appears here)";
+pre.textContent = m.placeholder;
 
 root.append(head, pre);
 
 copyBtn.addEventListener("click", () => {
   const text = pre.textContent ?? "";
-  if (!text.trim() || text === "(output appears here)") return;
+  if (!text.trim() || text === m.placeholder) return;
   void navigator.clipboard.writeText(text).then(
-    () => flash("✓ Copied"),
-    () => flash("Copy failed"),
+    () => flash(m.copied),
+    () => flash(m.copyFailed),
   );
 });
 
 function flash(msg: string): void {
   copyBtn.textContent = msg;
-  window.setTimeout(() => (copyBtn.textContent = "⧉ Copy"), 1200);
+  window.setTimeout(() => (copyBtn.textContent = m.copyIdle), 1200);
 }
 
 function render(p: ActivityPayload): void {
@@ -69,7 +74,7 @@ function render(p: ActivityPayload): void {
   pre.textContent = p.text;
   outDir.textContent = "";
   if (p.outDir) {
-    outDir.append(document.createTextNode("Clips written to "));
+    outDir.append(document.createTextNode(m.clipsWrittenTo));
     const s = document.createElement("span");
     s.className = "stat";
     s.textContent = p.outDir;

@@ -120,7 +120,7 @@ export async function openHistoryModal(deps: HistoryViewDeps): Promise<void> {
       `<span class="idot out"></span><span class="v">${outT}</span>` +
       `<span class="sep">·</span><span class="k">${escapeHtml(m.clip.durKey)}</span><span class="v accent">${dur}</span>` +
       (kf > 0
-        ? `<span class="sep">·</span><span class="k">kf</span><span class="v">${kf}</span>`
+        ? `<span class="sep">·</span><span class="k">${escapeHtml(m.history.kfKey)}</span><span class="v">${kf}</span>`
         : "") +
       `<span class="sep">·</span><span class="path">${escapeHtml(entry.outdir)}</span>`;
     meta.append(top, src, read);

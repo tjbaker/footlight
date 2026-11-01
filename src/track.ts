@@ -13,7 +13,6 @@
  * Pipeline (SPEC §6.9):
  *   planSampleTimes  -> when to ask the tracker (fixed interval, cut-anchored)
  *   [tracker]        -> a box per sample time (injected; mock or Gemini)
- *   refineByMotion   -> ADAPTIVE: extra sample times where the box moved a lot
  *   samplesToCropPath-> raw crop x -> one-euro smoothing -> deadzone ->
  *                       velocity limit -> eased keyframes
  *
@@ -24,7 +23,7 @@
 
 import { computeCrop, type CropPathKeyframe } from "./core.js";
 import type { Box, Dims } from "./manifest.js";
-import type { TrackSample, VisionTracker } from "./providers/types.js";
+import type { TrackSample } from "./providers/types.js";
 
 /** Horizontal center of a box in working-region pixels. */
 function boxCenterX(box: Box): number {
@@ -38,9 +37,6 @@ function boxCenterX(box: Box): number {
  * including both endpoints, plus a sample just after each scene cut that falls
  * strictly inside the shot (cut-anchored, SPEC §6.9 — force a fresh detection
  * right after a cut). Times are deduped (to ~1ms) and sorted ascending.
- *
- * This is the FIXED-interval pass; `refineByMotion` adds the adaptive samples
- * once boxes are known.
  */
 export function planSampleTimes(opts: {
   shotStart: number;
@@ -92,36 +88,6 @@ function dedupSort(times: number[]): number[] {
     }
   }
   return out;
-}
-
-/**
- * ADAPTIVE pass (SPEC §6.9 — densify where motion is high). Given the samples
- * already located, return ADDITIONAL timestamps (segment midpoints) between any
- * two consecutive samples whose box-CENTER moved more than `motionThresholdPx`,
- * provided the segment is at least `minGapSec` wide (so we never request samples
- * closer together than that). Returns ONLY the new times, sorted; callers merge
- * them, re-track, and may iterate (coarse-then-refine).
- */
-export function refineByMotion(
-  samples: TrackSample[],
-  opts: { motionThresholdPx: number; minGapSec: number },
-): number[] {
-  const sorted = [...samples].sort((a, b) => a.t - b.t);
-  const extra: number[] = [];
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const a = sorted[i]!;
-    const b = sorted[i + 1]!;
-    const gap = b.t - a.t;
-    if (gap < opts.minGapSec * 2) {
-      // Splitting would create sub-minGap segments; leave it alone.
-      continue;
-    }
-    const moved = Math.abs(boxCenterX(b.box) - boxCenterX(a.box));
-    if (moved > opts.motionThresholdPx) {
-      extra.push((a.t + b.t) / 2);
-    }
-  }
-  return dedupSort(extra);
 }
 
 /**
@@ -289,73 +255,4 @@ export function samplesToCropPath(
   }
 
   return out;
-}
-
-/** Options for the convenience `trackToCropPath` orchestrator. */
-export interface TrackToCropPathOpts {
-  sourcePath: string;
-  region: Dims;
-  shotStart: number;
-  shotEnd: number;
-  intervalSec: number;
-  apiKey: string;
-  subjectHint?: string;
-  sceneCuts?: number[];
-  /** Run the adaptive densify pass (one round) after the coarse pass. Default true. */
-  adaptive?: boolean;
-  motionThresholdPx?: number;
-  minGapSec?: number;
-  smoothing?: SmoothingOpts;
-  deadzonePx?: number;
-  maxVelPxPerSec?: number;
-  signal?: AbortSignal;
-}
-
-/**
- * End-to-end convenience: plan sample times -> ask the injected tracker ->
- * optionally densify by motion and re-track the new times -> build the eased
- * crop path. The tracker is INJECTED (not constructed here) so this stays pure
- * and testable with `MockTracker`; the real Gemini provider plugs in unchanged.
- *
- * This is a single-shot operation (SPEC §6.9): bound [shotStart, shotEnd] to one
- * shot. Result is a human-in-the-loop SUGGESTION — review/edit before render.
- */
-export async function trackToCropPath(
-  tracker: VisionTracker,
-  opts: TrackToCropPathOpts,
-): Promise<CropPathKeyframe[]> {
-  const baseTimes = planSampleTimes({
-    shotStart: opts.shotStart,
-    shotEnd: opts.shotEnd,
-    intervalSec: opts.intervalSec,
-    sceneCuts: opts.sceneCuts,
-  });
-
-  const reqBase = {
-    sourcePath: opts.sourcePath,
-    region: opts.region,
-    subjectHint: opts.subjectHint,
-    apiKey: opts.apiKey,
-    signal: opts.signal,
-  };
-
-  let samples = await tracker.track({ ...reqBase, sampleTimes: baseTimes });
-
-  // Adaptive densify (one round): add midpoints where motion is high, re-track.
-  if (opts.adaptive !== false) {
-    const extra = refineByMotion(samples, {
-      motionThresholdPx: opts.motionThresholdPx ?? 80,
-      minGapSec: opts.minGapSec ?? 0.5,
-    });
-    if (extra.length > 0) {
-      const more = await tracker.track({ ...reqBase, sampleTimes: extra });
-      samples = [...samples, ...more];
-    }
-  }
-
-  return samplesToCropPath(samples, opts.region, {
-    smoothing: opts.smoothing,
-    deadzonePx: opts.deadzonePx,
-    maxVelPxPerSec: opts.maxVelPxPerSec,
-  });
 }

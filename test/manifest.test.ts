@@ -15,7 +15,7 @@ import {
   type ClipRow,
   type ClipSpec,
 } from "../src/manifest.js";
-import { computeCrop } from "../src/engine.js";
+import { computeCrop, parseContentCrop } from "../src/engine.js";
 import { parseCsv } from "../src/csv.js";
 
 const box = (x: number, y = 0, w = 0, h = 0): Box => ({ x, y, w, h });
@@ -66,6 +66,31 @@ describe("cropBoxToOffset", () => {
       const crop = computeCrop(region.width, region.height, offset);
       expect(crop.x).toBe(x);
     }
+  });
+
+  describe("odd-maxX working region (via content_crop)", () => {
+    // content_crop 1799:1010 -> cw = 568, maxX = 1231 (ODD). The engine renders
+    // left/center/right at x = 0 / 614 / 1230 (even-rounded after the clamp).
+    const [w, h] = parseContentCrop("1799:1010:60:34")!;
+    const region: Dims = { width: w, height: h };
+
+    it("box -> offset -> computeCrop yields an even x the engine doesn't move", () => {
+      for (let x = -40; x <= 1300; x++) {
+        const offset = cropBoxToOffset(box(x), region);
+        const crop = computeCrop(region.width, region.height, offset);
+        expect(crop.x % 2).toBe(0);
+        // Feeding the rendered x back as a numeric offset is a fixed point.
+        expect(computeCrop(region.width, region.height, String(crop.x)).x).toBe(crop.x);
+        // A numeric offset is emitted exactly as the engine renders it.
+        if (/^\d+$/.test(offset)) expect(Number(offset)).toBe(crop.x);
+      }
+    });
+
+    it("snaps against the engine's rendered center, not floor(maxX / 2)", () => {
+      expect(computeCrop(region.width, region.height, "center").x).toBe(614);
+      expect(cropBoxToOffset(box(612), region)).toBe("center"); // |612 - 614| = 2
+      expect(cropBoxToOffset(box(618), region)).toBe("618"); // |618 - 614| = 4
+    });
   });
 });
 

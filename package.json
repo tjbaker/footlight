@@ -21,20 +21,24 @@
   },
   "files": [
     "dist",
-    "bin"
+    "!dist/**/*.map",
+    "bin",
+    "NOTICE"
   ],
   "engines": {
     "node": ">=26"
   },
   "scripts": {
     "build": "tsc",
+    "prepack": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "lint": "eslint src test app/src app/test app/dev-server",
-    "verify": "npm run format:check && npm run lint && npm run build && npm test"
+    "verify": "npm run format:check && npm run lint && npm run build && npm run typecheck && npm test",
+    "typecheck": "tsc -p tsconfig.test.json"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

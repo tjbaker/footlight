@@ -488,6 +488,8 @@ export const es: Messages = {
       apiKeyHint: "Almacenada en el llavero del SO, nunca en archivos del proyecto.",
       model: "Modelo de IA",
       recommended: "recomendado",
+      perFrame: "/fotograma",
+      perRequest: "/solic.",
       costNote:
         "El seguimiento es el principal factor de costo: Footlight envía fotogramas muestreados, no video, así que el costo escala con los fotogramas — definido por tu intervalo. Una toma típica de 20s a",
       costInterval: "Intervalo",
@@ -852,6 +854,7 @@ export const es: Messages = {
       modeTrack: "seguimiento",
       modePunchIn: "acercamiento",
       modeKeyframes: "fotogramas clave",
+      kfKey: "fc",
     },
     errors: {
       loadSourceFirst: "Carga un origen primero.",

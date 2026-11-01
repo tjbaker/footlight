@@ -26,3 +26,6 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 # System font enumeration for the caption font picker (list_fonts command).
 # CoreText on macOS, DirectWrite on Windows, fontconfig on Linux.
 font-kit = "0.14"
+# Uniquely named, auto-deleted temp files for the frame / track / render
+# commands, so concurrent calls never share (and clobber) one path (#249).
+tempfile = "3"

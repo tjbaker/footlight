@@ -240,7 +240,7 @@ async function cmdRender(argv: string[]): Promise<number> {
   try {
     items = manifestPath.toLowerCase().endsWith(".json")
       ? parseJsonManifest(text)
-      : (parseCsv(text) as ClipRow[]).map((row) => ({ row }));
+      : parseCsvManifest(text);
   } catch (err) {
     console.error(`render: ${errMsg(err)}`);
     return 1;
@@ -410,6 +410,30 @@ async function cmdRender(argv: string[]): Promise<number> {
   return failures ? 1 : 0;
 }
 
+/** CSV columns every manifest must have; the rest are optional. */
+const REQUIRED_CSV_COLUMNS = ["source_file", "in_point", "out_point"] as const;
+
+/**
+ * Parse a CSV manifest into render items. Every record from `parseCsv` carries
+ * every header column as a key, so a missing required column is detected once,
+ * up front, with one error naming all of them — instead of every row being
+ * skipped with a confusing per-row message.
+ */
+function parseCsvManifest(text: string): RenderItem[] {
+  const records = parseCsv(text);
+  const first = records[0];
+  if (first) {
+    const missing = REQUIRED_CSV_COLUMNS.filter((col) => !(col in first));
+    if (missing.length > 0) {
+      throw new Error(
+        `manifest is missing required column(s): ${missing.join(", ")} ` +
+          `(header has: ${Object.keys(first).join(", ")})`,
+      );
+    }
+  }
+  return (records as ClipRow[]).map((row) => ({ row }));
+}
+
 /** A JSON clip rejected at parse time: rendered as a per-clip SKIP, not a batch abort. */
 interface InvalidItem {
   error: string;
@@ -473,10 +497,12 @@ function parseJsonClip(raw: unknown, i: number): RenderItem {
     in_point: spec.in_point,
     out_point: spec.out_point,
   };
+  // An explicit `null` on an optional field means "omitted" (what the engine and
+  // the `??` caption fallbacks always did with it), so it is skipped, not rejected.
   // crop_offset: a JSON author will reasonably write the integer x as a bare
   // number (440); coerce a finite number to the string form the engine parses.
   const cropOffset = fields["crop_offset"];
-  if (cropOffset !== undefined) {
+  if (cropOffset != null) {
     if (typeof cropOffset === "number" && Number.isFinite(cropOffset)) {
       row.crop_offset = String(cropOffset);
     } else if (typeof cropOffset === "string") {
@@ -487,7 +513,7 @@ function parseJsonClip(raw: unknown, i: number): RenderItem {
   }
   for (const key of JSON_STRING_FIELDS) {
     const value = fields[key];
-    if (value === undefined) continue;
+    if (value == null) continue;
     if (typeof value !== "string") throw new Error(`clip [${i}] ${key} must be a string`);
     row[key] = value;
   }
@@ -496,7 +522,7 @@ function parseJsonClip(raw: unknown, i: number): RenderItem {
   // A numeric string is still accepted (it always was); anything else is a type error.
   for (const key of ["fade_in", "fade_out"] as const) {
     const value = fields[key];
-    if (value === undefined) continue;
+    if (value == null) continue;
     if (typeof value !== "number" && typeof value !== "string") {
       throw new Error(`clip [${i}] ${key} must be a number (seconds)`);
     }
@@ -510,20 +536,23 @@ function parseJsonClip(raw: unknown, i: number): RenderItem {
     }
     const style = spec.caption as Record<string, unknown>;
     for (const key of CAPTION_STRING_FIELDS) {
-      if (style[key] !== undefined && typeof style[key] !== "string") {
+      if (style[key] != null && typeof style[key] !== "string") {
         throw new Error(`clip [${i}] caption.${key} must be a string`);
       }
     }
     for (const key of CAPTION_BOOLEAN_FIELDS) {
-      if (style[key] !== undefined && typeof style[key] !== "boolean") {
+      if (style[key] != null && typeof style[key] !== "boolean") {
         throw new Error(`clip [${i}] caption.${key} must be a boolean`);
       }
     }
     const angle = style["angle"];
-    if (angle !== undefined && (typeof angle !== "number" || !Number.isFinite(angle))) {
+    if (angle != null && (typeof angle !== "number" || !Number.isFinite(angle))) {
       throw new Error(`clip [${i}] caption.angle must be a finite number (degrees)`);
     }
-    caption = spec.caption;
+    // Drop explicit nulls so the merge below falls back to the render-wide flag.
+    caption = Object.fromEntries(
+      Object.entries(style).filter(([, v]) => v != null),
+    ) as CaptionStyle;
   }
 
   let cropPath: CropPathKeyframe[] | undefined;

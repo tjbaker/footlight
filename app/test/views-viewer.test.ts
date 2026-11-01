@@ -30,7 +30,7 @@
  */
 /** @vitest-environment jsdom */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import type { GhostPreview } from "@assistant-types";
 import { createEditorStore, type EditorState } from "../src/editor-store.js";
 import { currentRegion, contentOrigin } from "../src/editor-framing.js";
@@ -44,28 +44,29 @@ installDomShims();
 // installDomShims nulls getContext (fine for suites that never assert paints);
 // here the painting IS the behavior under test, so swap in a per-canvas
 // recording stub: every method is a vi.fn, state-property writes are accepted.
-type CtxStub = Record<string, ReturnType<typeof vi.fn>>;
+const CTX_METHODS = [
+  "clearRect",
+  "fillRect",
+  "strokeRect",
+  "setLineDash",
+  "beginPath",
+  "moveTo",
+  "lineTo",
+  "stroke",
+  "save",
+  "restore",
+  "translate",
+  "rotate",
+  "fillText",
+  "strokeText",
+  "drawImage",
+] as const;
+type CtxStub = Record<(typeof CTX_METHODS)[number] | "measureText", Mock>;
 const ctxByCanvas = new Map<HTMLCanvasElement, CtxStub>();
 
 function makeCtxStub(): CtxStub {
   const ctx: CtxStub = {} as CtxStub;
-  for (const f of [
-    "clearRect",
-    "fillRect",
-    "strokeRect",
-    "setLineDash",
-    "beginPath",
-    "moveTo",
-    "lineTo",
-    "stroke",
-    "save",
-    "restore",
-    "translate",
-    "rotate",
-    "fillText",
-    "strokeText",
-    "drawImage",
-  ]) {
+  for (const f of CTX_METHODS) {
     ctx[f] = vi.fn();
   }
   ctx["measureText"] = vi.fn(() => ({ width: 50 }));

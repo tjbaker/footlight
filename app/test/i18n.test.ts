@@ -79,6 +79,22 @@ describe("help guide catalog", () => {
   });
 });
 
+describe("translated stragglers (#272)", () => {
+  // Units and abbreviations that used to be hard-coded English literals; the
+  // non-English catalogs must carry their own wording, not an English copy.
+  it("es and pt-br localize the model-card cost units", () => {
+    for (const code of ["es", "pt"]) {
+      const ai = locales[code]!.settings.ai;
+      expect(ai.perFrame).not.toBe(en.settings.ai.perFrame);
+      expect(ai.perRequest).not.toBe(en.settings.ai.perRequest);
+    }
+  });
+
+  it("es localizes the keyframe-count abbreviation", () => {
+    expect(locales.es!.editor.history.kfKey).not.toBe(en.editor.history.kfKey);
+  });
+});
+
 describe("locale parity (every locale matches the en key set)", () => {
   /** The canonical set of leaf key-paths in the reference catalog. */
   const enPaths = [...leaves(en)].map(([p]) => p).sort();
