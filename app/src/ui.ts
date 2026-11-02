@@ -170,19 +170,27 @@ export function openModal(opts: ModalOptions): ModalHandle {
     }
     if (!isTopmost()) return;
     if (e.key === "Escape") {
+      if (e.isComposing) return; // Escape cancels an IME composition, not the modal
+      // The modal consumes this Escape: stop it at `document` so the editor's
+      // window-level handler (assistant close, marker deselect) never sees it.
+      e.preventDefault();
+      e.stopPropagation();
       close();
     } else if (e.key === "Tab") {
       const stops = tabStops(dialog);
       const first = stops[0];
       const last = stops.at(-1);
       const active = document.activeElement;
+      // The dialog itself (focused by a click on its padding) counts as outside
+      // the stops: either direction must land on a stop, never the page behind.
+      const outside = active === dialog || !dialog.contains(active);
       if (!first || !last) {
         e.preventDefault();
         dialog.focus();
-      } else if (e.shiftKey && (active === first || !dialog.contains(active))) {
+      } else if (e.shiftKey && (active === first || outside)) {
         e.preventDefault();
         last.focus();
-      } else if (!e.shiftKey && (active === last || !dialog.contains(active))) {
+      } else if (!e.shiftKey && (active === last || outside)) {
         e.preventDefault();
         first.focus();
       }

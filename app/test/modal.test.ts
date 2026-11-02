@@ -151,6 +151,48 @@ describe("openModal", () => {
     expect(document.activeElement).toBe(z);
   });
 
+  it("from the dialog itself (a click on its padding), Tab and Shift-Tab land on a stop", () => {
+    const { dialog, title, a, z } = sampleDialog();
+    openModal({ dialog, backdropClass: "modal-backdrop", labelledBy: title });
+    dialog.focus();
+    expect(tab(true).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(z);
+    dialog.focus();
+    expect(tab().defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(a);
+  });
+
+  it("consumes its Escape: the editor's window-level handler never sees it", () => {
+    const onWindow = vi.fn();
+    window.addEventListener("keydown", onWindow);
+    try {
+      const { dialog, title, a } = sampleDialog();
+      const { backdrop } = openModal({
+        dialog,
+        backdropClass: "modal-backdrop",
+        labelledBy: title,
+      });
+      // From a focused button inside the dialog, as a real key press would be.
+      a.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      expect(backdrop.isConnected).toBe(false);
+      expect(onWindow).not.toHaveBeenCalled();
+      // With no modal open, Escape reaches the window as before.
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      expect(onWindow).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener("keydown", onWindow);
+    }
+  });
+
+  it("an Escape that ends an IME composition leaves the modal open", () => {
+    const { dialog, title, z } = sampleDialog();
+    const { backdrop } = openModal({ dialog, backdropClass: "modal-backdrop", labelledBy: title });
+    z.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", isComposing: true, bubbles: true }),
+    );
+    expect(backdrop.isConnected).toBe(true);
+  });
+
   it("Escape closes, restores focus to the opener, and unhooks", () => {
     const opener = focusedOpener();
     const before = vi.fn();
