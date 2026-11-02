@@ -7,7 +7,7 @@
  * than in ui.ts.
  */
 
-import { el, button } from "./ui.js";
+import { el, button, ensureId } from "./ui.js";
 
 /** A `<span class="fl-set-secth">` heading + optional `.fl-set-secsub` sub. */
 export function panelHeader(title: string, sub?: string): HTMLElement {
@@ -47,21 +47,39 @@ export function segmented<T extends string>(
   const seg = el("div", "fl-seg");
   for (const opt of options) {
     const b = button(opt.label, opt.value === value ? "on" : undefined, () => {
-      for (const child of Array.from(seg.children)) child.classList.remove("on");
+      for (const child of Array.from(seg.children)) {
+        child.classList.remove("on");
+        child.setAttribute("aria-pressed", "false");
+      }
       b.classList.add("on");
+      b.setAttribute("aria-pressed", "true");
       onPick(opt.value);
     });
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(opt.value === value));
     seg.append(b);
   }
   return seg;
 }
 
-/** A pill-toggle switch (`.fl-switch`). Returns the element + a getter. */
-export function toggleSwitch(on: boolean, onChange: (v: boolean) => void): HTMLElement {
-  const sw = el("div", on ? "fl-switch on" : "fl-switch");
+/**
+ * A pill-toggle switch (`.fl-switch`): a real `<button role="switch">`, so Tab
+ * reaches it and Enter/Space flip it natively. `label` is the visible text that
+ * names it (`aria-labelledby`); the optional `hint` describes it.
+ */
+export function toggleSwitch(
+  on: boolean,
+  onChange: (v: boolean) => void,
+  label: HTMLElement,
+  hint?: HTMLElement,
+): HTMLButtonElement {
+  const sw = button("", on ? "fl-switch on" : "fl-switch");
+  sw.type = "button";
   sw.setAttribute("role", "switch");
   sw.setAttribute("aria-checked", String(on));
-  sw.append(el("div", "knob"));
+  sw.setAttribute("aria-labelledby", ensureId(label, "switch-label"));
+  if (hint) sw.setAttribute("aria-describedby", ensureId(hint, "switch-hint"));
+  sw.append(el("span", "knob"));
   sw.addEventListener("click", () => {
     const next = !sw.classList.contains("on");
     sw.classList.toggle("on", next);

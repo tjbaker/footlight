@@ -117,13 +117,18 @@ export function buildGeneralPanel(): HTMLElement {
   const autosaveOn = readStr(AUTOSAVE_KEY, "on") !== "off";
   const autosaveRow = el("div", "fl-adv-toggle");
   autosaveRow.style.cursor = "default";
-  const sw = toggleSwitch(autosaveOn, (v) => writeStr(AUTOSAVE_KEY, v ? "on" : "off"));
   const autosaveBody = el("div");
   autosaveBody.style.flex = "1";
   const autosaveTitle = el("div", "fl-adv-title");
   autosaveTitle.textContent = s.autosave;
   const autosaveSub = el("div", "fl-adv-sub");
   autosaveSub.textContent = s.autosaveHint;
+  const sw = toggleSwitch(
+    autosaveOn,
+    (v) => writeStr(AUTOSAVE_KEY, v ? "on" : "off"),
+    autosaveTitle,
+    autosaveSub,
+  );
   autosaveBody.append(autosaveTitle, autosaveSub);
   autosaveRow.append(autosaveBody, sw);
 

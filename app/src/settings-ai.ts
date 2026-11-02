@@ -14,7 +14,7 @@ import { platform } from "./platform/index.js";
 import { BASE_PROMPT } from "./assistant/base-prompt.js";
 import { priceForModel } from "@assistant-cost";
 import { perFrameUsd, perRequestUsd } from "./settings-util.js";
-import { el, button } from "./ui.js";
+import { el, button, ensureId } from "./ui.js";
 import { createGeneration } from "./generation.js";
 import {
   ICON_KEY,
@@ -64,7 +64,10 @@ export function buildAiPanel(): HTMLElement {
   ];
   for (const p of providers) {
     const implemented = IMPLEMENTED_PROVIDERS.has(p.id);
-    const chip = el("div", p.id === prefs.provider ? "fl-prov on" : "fl-prov");
+    // A real button (Tab + Enter/Space); `aria-pressed` carries the selection.
+    const chip = button("", p.id === prefs.provider ? "fl-prov on" : "fl-prov");
+    chip.type = "button";
+    chip.setAttribute("aria-pressed", String(p.id === prefs.provider));
     if (!p.connected) chip.classList.add("add");
     if (!implemented) {
       chip.classList.add("soon");
@@ -80,9 +83,15 @@ export function buildAiPanel(): HTMLElement {
         ? s.providerConnected
         : s.providerAddKey;
     chip.append(dot, name, stat);
+    chip.setAttribute("aria-labelledby", ensureId(name, "prov-name"));
+    chip.setAttribute("aria-describedby", ensureId(stat, "prov-stat"));
     chip.addEventListener("click", () => {
-      for (const c of Array.from(provRow.children)) c.classList.remove("on");
+      for (const c of Array.from(provRow.children)) {
+        c.classList.remove("on");
+        c.setAttribute("aria-pressed", "false");
+      }
       chip.classList.add("on");
+      chip.setAttribute("aria-pressed", "true");
       prefs.provider = p.id;
       // The selected model must belong to the new provider — reset to its default
       // if not, then re-render the model list and recompute the cost.
@@ -190,21 +199,63 @@ export function buildAiPanel(): HTMLElement {
   keyBlock.body.append(keyRow, keyHint);
   root.append(keyBlock.root);
 
-  // Model picker (radio cards)
+  // Model picker (radio cards): a radiogroup with one Tab stop (the checked
+  // card, roving tabindex); arrows move the selection, Space/Enter pick.
   const modelBlock = block(s.model);
   const optList = el("div");
   optList.style.cssText = "display:flex; flex-direction:column; gap:9px;";
+  optList.setAttribute("aria-label", s.model);
+  const modelCards = (): HTMLElement[] =>
+    Array.from(optList.querySelectorAll<HTMLElement>('[role="radio"]'));
+  function selectModel(card: HTMLElement): void {
+    for (const c of modelCards()) {
+      const on = c === card;
+      c.classList.toggle("sel", on);
+      c.setAttribute("aria-checked", String(on));
+      c.tabIndex = on ? 0 : -1;
+    }
+    prefs.model = card.dataset.model!;
+    save();
+    paintCost();
+  }
+  optList.addEventListener("keydown", (e) => {
+    const cards = modelCards();
+    const at = cards.indexOf(e.target as HTMLElement);
+    if (at < 0) return;
+    const last = cards.length - 1;
+    const to: Record<string, number> = {
+      ArrowDown: at === last ? 0 : at + 1,
+      ArrowRight: at === last ? 0 : at + 1,
+      ArrowUp: at === 0 ? last : at - 1,
+      ArrowLeft: at === 0 ? last : at - 1,
+      Home: 0,
+      End: last,
+      " ": at,
+      Enter: at,
+    };
+    const next = cards[to[e.key] ?? -1];
+    if (!next) return;
+    e.preventDefault();
+    selectModel(next);
+    next.focus();
+  });
   function renderModels(): void {
     optList.replaceChildren();
     if (!IMPLEMENTED_PROVIDERS.has(prefs.provider)) {
+      optList.removeAttribute("role");
       const notice = el("div", "fl-set-secsub");
       notice.style.cssText = "padding:10px 2px; line-height:1.5;";
       notice.textContent = s.notImplementedBody;
       optList.append(notice);
       return;
     }
+    optList.setAttribute("role", "radiogroup");
     for (const m of modelsFor(prefs.provider)) {
       const card = el("div", m.id === prefs.model ? "fl-opt sel" : "fl-opt");
+      card.dataset.model = m.id;
+      card.setAttribute("role", "radio");
+      card.setAttribute("aria-checked", String(m.id === prefs.model));
+      card.tabIndex = m.id === prefs.model ? 0 : -1;
       const radio = el("span", "radio");
       const body = el("div", "fl-opt-body");
       const top = el("div", "fl-opt-top");
@@ -230,15 +281,14 @@ export function buildAiPanel(): HTMLElement {
       meta.append(speed, cost);
       body.append(top, cap, meta);
       card.append(radio, body);
-      card.addEventListener("click", () => {
-        for (const c of Array.from(optList.children)) c.classList.remove("sel");
-        card.classList.add("sel");
-        prefs.model = m.id;
-        save();
-        paintCost();
-      });
+      card.setAttribute("aria-labelledby", ensureId(name, "model-name"));
+      card.setAttribute("aria-describedby", ensureId(cap, "model-cap"));
+      card.addEventListener("click", () => selectModel(card));
       optList.append(card);
     }
+    // No card checked (a stale saved model): the first one is the Tab stop.
+    const cards = modelCards();
+    if (cards.length && !cards.some((c) => c.tabIndex === 0)) cards[0]!.tabIndex = 0;
   }
   renderModels();
   modelBlock.body.append(optList);
@@ -371,9 +421,14 @@ export function buildAiPanel(): HTMLElement {
   advArea.append(advNote);
   advToggle.append(
     advBody,
-    toggleSwitch(false, (on) => {
-      advArea.style.display = on ? "block" : "none";
-    }),
+    toggleSwitch(
+      false,
+      (on) => {
+        advArea.style.display = on ? "block" : "none";
+      },
+      advTitle,
+      advSub,
+    ),
   );
   advBlock.body.append(advToggle, advArea);
   root.append(advBlock.root);

@@ -145,10 +145,15 @@ export function buildRenderingPanel(): HTMLElement {
   dryBody.append(dryTitle, drySub);
   dryToggle.append(
     dryBody,
-    toggleSwitch(prefs.dryRun, (v) => {
-      prefs.dryRun = v;
-      save();
-    }),
+    toggleSwitch(
+      prefs.dryRun,
+      (v) => {
+        prefs.dryRun = v;
+        save();
+      },
+      dryTitle,
+      drySub,
+    ),
   );
   dryBlock.body.append(dryToggle);
   root.append(dryBlock.root);
@@ -167,10 +172,15 @@ export function buildRenderingPanel(): HTMLElement {
   capBody.append(capTitle, capSub);
   capToggle.append(
     capBody,
-    toggleSwitch(prefs.burnCaptions, (v) => {
-      prefs.burnCaptions = v;
-      save();
-    }),
+    toggleSwitch(
+      prefs.burnCaptions,
+      (v) => {
+        prefs.burnCaptions = v;
+        save();
+      },
+      capTitle,
+      capSub,
+    ),
   );
 
   // --- Fonts folder: a typed path (web) / Browse… (Tauri) bound to its own

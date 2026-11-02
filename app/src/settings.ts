@@ -105,7 +105,8 @@ export function openSettings(panel: PanelId = "general"): void {
 
   // body: nav + main
   const setRoot = el("div", "fl-set fl-grow");
-  const nav = el("div", "fl-set-nav");
+  const nav = el("nav", "fl-set-nav");
+  nav.setAttribute("aria-label", s.title);
   const main = el("div", "fl-set-main");
 
   const navItems = new Map<PanelId, HTMLElement>();
@@ -130,13 +131,19 @@ export function openSettings(panel: PanelId = "general"): void {
   const renderPanel = (id: PanelId): void => {
     commitFocusedField();
     current = id;
-    for (const [pid, item] of navItems) item.classList.toggle("on", pid === id);
+    for (const [pid, item] of navItems) {
+      item.classList.toggle("on", pid === id);
+      if (pid === id) item.setAttribute("aria-current", "page");
+      else item.removeAttribute("aria-current");
+    }
     main.replaceChildren(NAV.find((n) => n.id === id)!.build());
     main.scrollTop = 0;
   };
 
   for (const item of NAV) {
-    const navItem = el("div", "fl-set-navitem");
+    // A real button: Tab reaches it and Enter/Space switch the panel.
+    const navItem = button("", "fl-set-navitem");
+    navItem.type = "button";
     navItem.innerHTML = item.icon;
     const lab = document.createElement("span");
     lab.textContent = item.label();
