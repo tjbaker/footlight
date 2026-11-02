@@ -246,11 +246,17 @@ pub(crate) fn default_outdir(app: AppHandle) -> String {
 }
 
 /// A short, user-facing reason for a filesystem error (no raw errno/OS string).
+/// Mirrors `friendlyFsError` in `app/dev-server/server.mjs` case for case and
+/// word for word, so both backends give the same reason (std maps EACCES and
+/// EPERM both to `PermissionDenied`).
 fn friendly_fs_error(err: &std::io::Error) -> String {
     use std::io::ErrorKind;
     match err.kind() {
         ErrorKind::PermissionDenied => "permission denied".into(),
+        ErrorKind::ReadOnlyFilesystem => "the drive is read-only".into(),
+        ErrorKind::NotADirectory => "part of the path is not a folder".into(),
         ErrorKind::NotFound => "the parent folder does not exist".into(),
+        ErrorKind::StorageFull => "the disk is full".into(),
         _ => "it could not be created".into(),
     }
 }
@@ -395,5 +401,46 @@ mod tests {
             friendly_fs_error(&Error::from(ErrorKind::TimedOut)),
             "it could not be created"
         );
+    }
+
+    #[test]
+    fn friendly_fs_error_maps_read_only_full_and_not_a_directory() {
+        use std::io::{Error, ErrorKind};
+        assert_eq!(
+            friendly_fs_error(&Error::from(ErrorKind::ReadOnlyFilesystem)),
+            "the drive is read-only"
+        );
+        assert_eq!(
+            friendly_fs_error(&Error::from(ErrorKind::StorageFull)),
+            "the disk is full"
+        );
+        assert_eq!(
+            friendly_fs_error(&Error::from(ErrorKind::NotADirectory)),
+            "part of the path is not a folder"
+        );
+    }
+
+    /// The real OS errors (what `create_dir_all`/`write` actually return)
+    /// decode to the same reasons, not just hand-built kinds: EPERM shares
+    /// "permission denied" with EACCES, exactly as server.mjs maps it.
+    #[cfg(unix)]
+    #[test]
+    fn friendly_fs_error_maps_raw_unix_errnos_like_the_dev_server() {
+        use std::io::Error;
+        // POSIX errno values, identical on macOS and Linux.
+        for (errno, reason) in [
+            (1, "permission denied"),                 // EPERM
+            (13, "permission denied"),                // EACCES
+            (30, "the drive is read-only"),           // EROFS
+            (20, "part of the path is not a folder"), // ENOTDIR
+            (2, "the parent folder does not exist"),  // ENOENT
+            (28, "the disk is full"),                 // ENOSPC
+        ] {
+            assert_eq!(
+                friendly_fs_error(&Error::from_raw_os_error(errno)),
+                reason,
+                "errno {errno}"
+            );
+        }
     }
 }
