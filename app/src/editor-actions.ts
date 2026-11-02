@@ -493,23 +493,41 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
 
   // ---- frame thumbnails (hover-scrub + queue/history cards) ----
   // Cache extracted frames by source@time so re-renders and repeated hovers don't
-  // re-spawn ffmpeg. Blob URLs (web) are revoked on eviction.
-  const frameCache = new Map<string, string>();
-  async function extractCached(source: string, t: number): Promise<string> {
+  // re-spawn ffmpeg. The cache holds the in-flight PROMISE, so concurrent misses
+  // for one key share a single fetch (#278); a failed fetch is dropped so the
+  // next ask retries. Only SETTLED entries are evicted (oldest first), and their
+  // blob URLs (web) revoked: evicting an in-flight one would revoke its URL the
+  // moment its waiting thumbnail adopted it. While everything is in flight the
+  // cache may briefly exceed the cap; the next miss trims it.
+  const frameCache = new Map<string, { promise: Promise<string>; url?: string }>();
+  const FRAME_CACHE_CAP = 96;
+  function trimFrameCache(): void {
+    for (const [k, entry] of frameCache) {
+      if (frameCache.size <= FRAME_CACHE_CAP) return;
+      if (entry.url === undefined) continue; // still in flight
+      frameCache.delete(k);
+      if (entry.url.startsWith("blob:")) URL.revokeObjectURL(entry.url);
+    }
+  }
+  function extractCached(source: string, t: number): Promise<string> {
     const key = `${source}@${t.toFixed(3)}`;
     const hit = frameCache.get(key);
-    if (hit) return hit;
-    const url = await platform.extractFrame(source, t);
-    frameCache.set(key, url);
-    if (frameCache.size > 96) {
-      const k = frameCache.keys().next().value;
-      if (k) {
-        const u = frameCache.get(k);
-        frameCache.delete(k);
-        if (u && u.startsWith("blob:")) URL.revokeObjectURL(u);
-      }
-    }
-    return url;
+    if (hit) return hit.promise;
+    const promise = platform.extractFrame(source, t);
+    const entry: { promise: Promise<string>; url?: string } = { promise };
+    frameCache.set(key, entry);
+    promise.then(
+      (url) => {
+        // Not trimmed here: this entry's own waiters haven't adopted the URL
+        // yet, so evicting it now would revoke it under them.
+        entry.url = url;
+      },
+      () => {
+        if (frameCache.get(key) === entry) frameCache.delete(key);
+      },
+    );
+    trimFrameCache();
+    return promise;
   }
 
   /** Fill a `.fl-thumb` with the source frame at `t` (object-fit cover). */

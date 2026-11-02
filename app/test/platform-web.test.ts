@@ -244,6 +244,13 @@ describe("render", () => {
     expect(p.get("captionFont")).toBe("Inter");
     expect(p.get("captionAngle")).toBe("0");
   });
+
+  it("throws with the status and body text when the response is not ok (#278)", async () => {
+    mockFetch(() => fail(500, "Internal Server Error: mkdtemp EACCES"));
+    await expect(webPlatform.render("[]")).rejects.toThrow(
+      /render failed \(500\): Internal Server Error: mkdtemp EACCES/,
+    );
+  });
 });
 
 describe("checkOutdir", () => {
