@@ -28,6 +28,7 @@ import { openShortcuts } from "./shortcuts.js";
 import { el, button } from "./ui.js";
 import { PAUSE_GLYPH, PLAY_GLYPH } from "./icons.js";
 import { clamp, errMsg, escapeHtml } from "./editor-util.js";
+import { createGeneration } from "./generation.js";
 import type { EditorStore } from "./editor-store.js";
 import type { ViewerView } from "./views/viewer.js";
 import type { TimelineView } from "./views/timeline.js";
@@ -103,7 +104,7 @@ export function createTransport(store: EditorStore, deps: TransportDeps): Transp
   tpRight.append(tLabel);
   transport.append(tpLeft, jog, tpRight);
 
-  let frameToken = 0;
+  const frameGen = createGeneration();
   let debounceTimer: number | undefined;
 
   /** Set current time, fetch the frame (debounced unless immediate). */
@@ -115,16 +116,17 @@ export function createTransport(store: EditorStore, deps: TransportDeps): Transp
     viewer.setStageTime(t);
     if (debounceTimer) window.clearTimeout(debounceTimer);
     const fetchFrame = async () => {
-      const token = ++frameToken;
+      const isCurrent = frameGen.begin();
       try {
         const url = await platform.extractFrame(state.source, state.t);
-        if (token !== frameToken) {
+        if (!isCurrent()) {
           URL.revokeObjectURL(url);
           return; // a newer request superseded this one
         }
         viewer.showFrame(url);
       } catch (err) {
-        viewer.showFrameError(errMsg(err));
+        // A failed OLDER fetch must not paint an error over a newer frame (#264).
+        if (isCurrent()) viewer.showFrameError(errMsg(err));
       }
     };
     if (immediate) await fetchFrame();

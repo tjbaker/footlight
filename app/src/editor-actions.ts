@@ -31,6 +31,7 @@ import {
 import { applyCommitToState } from "./editor-commit.js";
 import { fadesToSpec, fadesFromSpec, fadesFit } from "./editor-fades.js";
 import { framingToSpec } from "./editor-framing.js";
+import { createGeneration } from "./generation.js";
 import type { EditorStore, EditorState } from "./editor-store.js";
 import { el, button } from "./ui.js";
 import { openHistoryModal } from "./views/history.js";
@@ -105,6 +106,7 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
     }
   }
 
+  const loadGen = createGeneration();
   async function load(): Promise<boolean> {
     const source = inspector.getSource();
     if (!source) {
@@ -113,8 +115,12 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
       return false;
     }
     inspector.setProbing();
+    // A newer load (e.g. a second quick queue-card click) supersedes this one:
+    // its probe must not adopt this source after the fact (#264).
+    const isCurrent = loadGen.begin();
     try {
       const p = await platform.probe(source);
+      if (!isCurrent()) return false;
       state.source = source;
       store.set({
         dims: { width: p.width, height: p.height },
@@ -143,9 +149,11 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
       // Default 9:16 crop box: full height, centered.
       viewer.initCropBox();
       await transport.setT(state.t, true);
-      return true;
+      // A newer load can also land during the frame await: report this one as
+      // superseded so openSpec doesn't apply its spec onto that source (#264).
+      return isCurrent();
     } catch (err) {
-      inspector.setSourceError(errMsg(err));
+      if (isCurrent()) inspector.setSourceError(errMsg(err));
       return false;
     }
   }
@@ -177,9 +185,11 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
 
   async function doScenes(): Promise<void> {
     if (!state.source) return inspector.flashError(m.errors.loadSourceFirst);
+    const source = state.source;
     setOutput(m.activity.detectingScenes);
     try {
-      const cuts = await platform.scenes(state.source);
+      const cuts = await platform.scenes(source);
+      if (state.source !== source) return; // a newer load superseded this one (#264)
       store.set({ sceneCuts: cuts }); // the timeline's cut markers follow
       setOutput(
         cuts.length
@@ -187,6 +197,7 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
           : m.activity.noScenes,
       );
     } catch (err) {
+      if (state.source !== source) return;
       setOutput(errMsg(err), "err");
     }
   }
@@ -227,7 +238,10 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
     } catch {
       /* checkOutdir itself failed (backend down) — let the render attempt report it. */
     }
-    const manifestJson = serializeManifestJSON(state.clips);
+    // Snapshot the queue being rendered: clips added while the render runs are
+    // NOT in this manifest, so they must not be recorded as rendered (#264).
+    const clips = [...state.clips];
+    const manifestJson = serializeManifestJSON(clips);
     setOutput(m.activity.rendering);
     try {
       const result = await platform.render(manifestJson, renderOptions(outdir));
@@ -243,7 +257,7 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
       if (result.ok && outdirMatch && outdirMatch[1]?.trim()) setOutDir(resolvedOutdir);
       // On success, record each rendered clip to history so it can be re-opened
       // and tweaked later (a render is the meaningful checkpoint).
-      if (result.ok) void recordHistory(state.clips, resolvedOutdir);
+      if (result.ok) void recordHistory(clips, resolvedOutdir);
     } catch (err) {
       setOutput(errMsg(err), "err");
     }

@@ -38,6 +38,7 @@ import {
 } from "./settings-util.js";
 import { APP_NAME, APP_VERSION, LICENSE, REPO_URL, ISSUES_NEW_URL } from "./version.js";
 import { el, button } from "./ui.js";
+import { createGeneration } from "./generation.js";
 
 /** A `<span class="fl-set-secth">` heading + optional `.fl-set-secsub` sub. */
 function panelHeader(title: string, sub?: string): HTMLElement {
@@ -367,6 +368,9 @@ function fmtUsd(n: number): string {
 }
 
 // ---- key persistence (OS keychain via secretStore) ----
+
+/** How long a key test may run before it is aborted (and Test re-enabled). */
+const KEY_TEST_TIMEOUT_MS = 15_000;
 
 async function saveApiKey(key: string): Promise<void> {
   try {
@@ -806,23 +810,38 @@ function buildAiPanel(): HTMLElement {
     testBtn.disabled =
       !IMPLEMENTED_PROVIDERS.has(prefs.provider) || keyInput.value.trim().length === 0;
   };
+  // Only the LATEST test may report, and only for the key still in the field:
+  // a result for an edited-away key (or a superseded click) is dropped (#264).
+  const keyTestGen = createGeneration();
   testBtn.addEventListener("click", () => {
     const key = keyInput.value.trim();
     if (!key) return;
+    const isCurrent = keyTestGen.begin();
     testBtn.disabled = true;
     testStatus.className = "fl-set-test";
     testStatus.textContent = s.apiKeyTesting;
     const model = IMPLEMENTED_PROVIDERS.has(prefs.provider) ? prefs.model : DEFAULT_AI.model;
-    void testGeminiKey(key, model).then((r) => {
-      if (r.ok) {
-        testStatus.className = "fl-set-test ok";
-        testStatus.textContent = s.apiKeyValid;
-      } else {
-        testStatus.className = "fl-set-test err";
-        testStatus.textContent = `${s.apiKeyInvalid} — ${r.detail}`;
-      }
-      syncTestEnabled();
-    });
+    // A hung request must not leave Test disabled forever: abort it after a
+    // bound; testGeminiKey reports the abort as a failure like any other.
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => ctrl.abort(), KEY_TEST_TIMEOUT_MS);
+    void testGeminiKey(key, model, ctrl.signal)
+      .then((r) => {
+        if (!isCurrent() || keyInput.value.trim() !== key) return;
+        if (r.ok) {
+          testStatus.className = "fl-set-test ok";
+          testStatus.textContent = s.apiKeyValid;
+        } else {
+          testStatus.className = "fl-set-test err";
+          testStatus.textContent = `${s.apiKeyInvalid} — ${r.detail}`;
+        }
+      })
+      .finally(() => {
+        window.clearTimeout(timer);
+        // The latest test always re-enables Test; a superseded one leaves the
+        // button to the test (or edit) that replaced it.
+        if (isCurrent()) syncTestEnabled();
+      });
   });
   keyInput.addEventListener("input", () => {
     void saveApiKey(keyInput.value.trim());
