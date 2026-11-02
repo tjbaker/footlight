@@ -149,7 +149,9 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
       // Default 9:16 crop box: full height, centered.
       viewer.initCropBox();
       await transport.setT(state.t, true);
-      return true;
+      // A newer load can also land during the frame await: report this one as
+      // superseded so openSpec doesn't apply its spec onto that source (#264).
+      return isCurrent();
     } catch (err) {
       if (isCurrent()) inspector.setSourceError(errMsg(err));
       return false;
