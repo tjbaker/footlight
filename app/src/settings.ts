@@ -382,6 +382,16 @@ async function saveApiKey(key: string): Promise<void> {
 }
 
 /**
+ * Every key write, chained in commit order. Module-scoped (not per panel
+ * build) so saves from a closed or rebuilt AI panel and the next panel's
+ * hydration all queue on ONE chain (#278). `saveApiKey` never rejects.
+ */
+let apiKeySaves: Promise<void> = Promise.resolve();
+function queueApiKeySave(key: string): void {
+  apiKeySaves = apiKeySaves.then(() => saveApiKey(key));
+}
+
+/**
  * Validate a Gemini BYOK key by making the SAME fetch-only `generateContent`
  * call the assistant uses (header auth, no key in the URL), with a 1-token reply
  * so it's the cheapest request that still exercises auth + the chosen model.
@@ -788,9 +798,14 @@ function buildAiPanel(): HTMLElement {
   keyInput.type = "password";
   keyInput.className = "mono";
   keyInput.placeholder = s.apiKeyPlaceholder;
-  void platform
-    .getSecret(GEMINI_API_KEY_SECRET)
+  // Hydrate AFTER any in-flight save (e.g. one committed as the modal closed),
+  // so a reopened panel reads the key just written, not the one before it. A
+  // field the user has already typed into is left alone.
+  let keyEdited = false;
+  void apiKeySaves
+    .then(() => platform.getSecret(GEMINI_API_KEY_SECRET))
     .then((v) => {
+      if (keyEdited) return;
       keyInput.value = v ?? "";
       syncTestEnabled(); // a key hydrated from the keychain enables Test
     })
@@ -845,13 +860,10 @@ function buildAiPanel(): HTMLElement {
   });
   // Persist the key on COMMIT (change = blur/Enter), like the other text fields
   // here — not per keystroke, whose racing writes could land out of order and
-  // store a truncated key (#278). Commits are chained so they land in order.
-  let keySaves: Promise<void> = Promise.resolve();
-  keyInput.addEventListener("change", () => {
-    const key = keyInput.value.trim();
-    keySaves = keySaves.then(() => saveApiKey(key));
-  });
+  // store a truncated key (#278). Commits join the module-wide save chain.
+  keyInput.addEventListener("change", () => queueApiKeySave(keyInput.value.trim()));
   keyInput.addEventListener("input", () => {
+    keyEdited = true;
     testStatus.textContent = ""; // a new key invalidates the prior result
     testStatus.className = "fl-set-test";
     syncTestEnabled();
@@ -1201,6 +1213,9 @@ const NAV: { id: PanelId; icon: string; label: () => string; build: () => HTMLEl
   },
 ];
 
+/** Input types whose value commits on `change` (blur/Enter) rather than per click. */
+const TEXT_INPUT_TYPES = new Set(["text", "password", "search", "url", "number"]);
+
 /** Show the Settings modal, landing on `panel` (default General). */
 export function openSettings(panel: PanelId = "general"): void {
   const s = messages.settings;
@@ -1234,11 +1249,19 @@ export function openSettings(panel: PanelId = "general"): void {
   let current: PanelId = panel;
 
   // Text fields persist on `change`, which a browser fires on blur but NOT when
-  // a focused field is simply removed; blur it first so closing the modal or
-  // switching panels mid-edit still commits the value.
+  // a focused field is simply removed. So before closing the modal or swapping
+  // panels, fire the focused field's `change` ourselves: explicit rather than
+  // relying on blur → change, which differs across engines (jsdom never fires
+  // it). The field is removed right after, so no native change follows; at
+  // worst a handler re-writes an unchanged value, which is idempotent.
   const commitFocusedField = (): void => {
     const active = document.activeElement;
-    if (active instanceof HTMLElement && modal.contains(active)) active.blur();
+    const isTextField =
+      active instanceof HTMLTextAreaElement ||
+      (active instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(active.type));
+    if (isTextField && modal.contains(active)) {
+      active.dispatchEvent(new Event("change", { bubbles: true }));
+    }
   };
 
   const renderPanel = (id: PanelId): void => {

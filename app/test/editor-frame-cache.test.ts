@@ -18,7 +18,7 @@ vi.mock(
 
 import { platformMocks, mockPlatform } from "./helpers/platform-mock.js";
 import { installDomShims, resetHarness, flush } from "./helpers/editor-harness.js";
-import { deferred } from "./helpers/deferred.js";
+import { deferred, type Deferred } from "./helpers/deferred.js";
 
 installDomShims();
 const { createEditorActions } = await import("../src/editor-actions.js");
@@ -88,6 +88,30 @@ describe("extractCached — the editor frame cache (#278)", () => {
     await actions.extractCached("/abs/a.mp4", 96); // the 97th entry evicts t=0
     await flush();
     expect(revoke).toHaveBeenCalledTimes(1);
+    expect(revoke).toHaveBeenCalledWith("blob:0");
+  });
+
+  it("never evicts an in-flight entry, so its waiter's blob URL isn't revoked under it", async () => {
+    const actions = buildActions();
+    const revoke = vi.spyOn(URL, "revokeObjectURL");
+    const held = new Map<number, Deferred<string>>();
+    platformMocks.extractFrame.mockImplementation((_s: string, t: number) => {
+      const d = deferred<string>();
+      held.set(t, d);
+      return d.promise;
+    });
+
+    // 97 misses, all still in flight: over the cap, but nothing is evictable.
+    const first = actions.extractCached("/abs/a.mp4", 0);
+    for (let t = 1; t <= 96; t++) void actions.extractCached("/abs/a.mp4", t);
+
+    held.get(0)!.resolve("blob:0");
+    expect(await first).toBe("blob:0"); // the waiting thumbnail adopts it…
+    await flush();
+    expect(revoke).not.toHaveBeenCalled(); // …and it stays valid
+
+    // Once settled, the next miss trims the oldest settled entry as usual.
+    void actions.extractCached("/abs/a.mp4", 97);
     expect(revoke).toHaveBeenCalledWith("blob:0");
   });
 });

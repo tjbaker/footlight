@@ -179,17 +179,84 @@ describe("Settings API key persistence: saved on commit, in order (#278)", () =>
     ]);
   });
 
-  it("closing the modal mid-edit blurs the key field so its change still commits", async () => {
+  it("closing the modal mid-edit still saves the typed key", async () => {
     const { keyInput } = await openAiPanel();
     keyInput.focus();
-    setValue(keyInput, "typed-then-escaped");
-    const blurred = vi.fn();
-    keyInput.addEventListener("blur", blurred);
+    setValue(keyInput, "typed-then-escaped"); // input only: never blurred or committed
 
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await flush();
 
-    expect(blurred).toHaveBeenCalledTimes(1);
     expect(document.querySelector(".fl-modal-backdrop")).toBeNull();
+    expect(platformMocks.setSecret).toHaveBeenCalledWith(
+      GEMINI_API_KEY_SECRET,
+      "typed-then-escaped",
+    );
+  });
+
+  it("switching panels mid-edit still saves the typed key", async () => {
+    const { keyInput } = await openAiPanel();
+    keyInput.focus();
+    setValue(keyInput, "typed-then-navigated");
+
+    const general = [...document.querySelectorAll<HTMLElement>(".fl-set-navitem")].find(
+      (n) => n.textContent === messages.settings.nav.general,
+    )!;
+    general.click();
+    await flush();
+
+    expect(platformMocks.setSecret).toHaveBeenCalledWith(
+      GEMINI_API_KEY_SECRET,
+      "typed-then-navigated",
+    );
+  });
+
+  /** A keychain stand-in: getSecret reads what the last COMPLETED setSecret wrote. */
+  function backKeychain(): { held: Deferred<void>[] } {
+    let stored: string | null = "old-key";
+    const held: Deferred<void>[] = [];
+    platformMocks.getSecret.mockImplementation(async () => stored);
+    platformMocks.setSecret.mockImplementation((_name: string, value: string) => {
+      const d = deferred<void>();
+      held.push(d);
+      return d.promise.then(() => {
+        stored = value;
+      });
+    });
+    return { held };
+  }
+
+  it("a reopened panel hydrates the key saved as the modal closed, not the one before", async () => {
+    const { held } = backKeychain();
+    const first = await openAiPanel();
+    expect(first.keyInput.value).toBe("old-key");
+    setValue(first.keyInput, "new-key", "change"); // save in flight
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+    const second = await openAiPanel();
+    held[0]!.resolve(); // the save lands after the reopen started hydrating
+    await flush();
+
+    expect(second.keyInput.value).toBe("new-key");
+  });
+
+  it("a save from a rebuilt panel waits for the previous panel's save", async () => {
+    const { held } = backKeychain();
+    const first = await openAiPanel();
+    setValue(first.keyInput, "from-first-panel", "change"); // save #1 in flight
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+    const second = await openAiPanel();
+    setValue(second.keyInput, "from-second-panel", "change");
+    await flush();
+    expect(platformMocks.setSecret).toHaveBeenCalledTimes(1);
+
+    held[0]!.resolve();
+    await flush();
+    expect(platformMocks.setSecret).toHaveBeenCalledTimes(2);
+    expect(platformMocks.setSecret.mock.calls.at(-1)![1]).toBe("from-second-panel");
+    held[1]!.resolve();
+    await flush();
   });
 
   it("the key test still reads the field's current value", async () => {
