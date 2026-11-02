@@ -201,8 +201,8 @@ export const tauriPlatform: FootlightPlatform = {
     return invoke<FontInfo[]>("list_fonts", {});
   },
 
-  // Stub — real impl (invoke `list_fonts_in_dir`, scanning the folder via
-  // font-kit) lands in the fonts-folder backends slice.
+  // Scans a user fonts folder via `list_fonts_in_dir`; like `listFonts`, a
+  // failure degrades to `[]` so the picker falls back to the free-text field.
   async listUserFonts(dir: string): Promise<FontInfo[]> {
     return invoke<FontInfo[]>("list_fonts_in_dir", { dir }).catch(() => []);
   },

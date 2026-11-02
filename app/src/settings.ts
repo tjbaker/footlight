@@ -843,8 +843,15 @@ function buildAiPanel(): HTMLElement {
         if (isCurrent()) syncTestEnabled();
       });
   });
+  // Persist the key on COMMIT (change = blur/Enter), like the other text fields
+  // here — not per keystroke, whose racing writes could land out of order and
+  // store a truncated key (#278). Commits are chained so they land in order.
+  let keySaves: Promise<void> = Promise.resolve();
+  keyInput.addEventListener("change", () => {
+    const key = keyInput.value.trim();
+    keySaves = keySaves.then(() => saveApiKey(key));
+  });
   keyInput.addEventListener("input", () => {
-    void saveApiKey(keyInput.value.trim());
     testStatus.textContent = ""; // a new key invalidates the prior result
     testStatus.className = "fl-set-test";
     syncTestEnabled();
@@ -1226,7 +1233,16 @@ export function openSettings(panel: PanelId = "general"): void {
   const navItems = new Map<PanelId, HTMLElement>();
   let current: PanelId = panel;
 
+  // Text fields persist on `change`, which a browser fires on blur but NOT when
+  // a focused field is simply removed; blur it first so closing the modal or
+  // switching panels mid-edit still commits the value.
+  const commitFocusedField = (): void => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && modal.contains(active)) active.blur();
+  };
+
   const renderPanel = (id: PanelId): void => {
+    commitFocusedField();
     current = id;
     for (const [pid, item] of navItems) item.classList.toggle("on", pid === id);
     main.replaceChildren(NAV.find((n) => n.id === id)!.build());
@@ -1258,6 +1274,7 @@ export function openSettings(panel: PanelId = "general"): void {
   renderPanel(current);
 
   const dismiss = (): void => {
+    commitFocusedField();
     backdrop.remove();
     document.removeEventListener("keydown", onKey);
   };

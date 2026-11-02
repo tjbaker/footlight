@@ -491,23 +491,34 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
 
   // ---- frame thumbnails (hover-scrub + queue/history cards) ----
   // Cache extracted frames by source@time so re-renders and repeated hovers don't
-  // re-spawn ffmpeg. Blob URLs (web) are revoked on eviction.
-  const frameCache = new Map<string, string>();
-  async function extractCached(source: string, t: number): Promise<string> {
+  // re-spawn ffmpeg. The cache holds the in-flight PROMISE, so concurrent misses
+  // for one key share a single fetch (#278); a failed fetch is dropped so the
+  // next ask retries. Blob URLs (web) are revoked on eviction.
+  const frameCache = new Map<string, Promise<string>>();
+  const FRAME_CACHE_CAP = 96;
+  function revokeWhenSettled(p: Promise<string>): void {
+    p.then(
+      (u) => {
+        if (u.startsWith("blob:")) URL.revokeObjectURL(u);
+      },
+      () => undefined,
+    );
+  }
+  function extractCached(source: string, t: number): Promise<string> {
     const key = `${source}@${t.toFixed(3)}`;
     const hit = frameCache.get(key);
     if (hit) return hit;
-    const url = await platform.extractFrame(source, t);
-    frameCache.set(key, url);
-    if (frameCache.size > 96) {
-      const k = frameCache.keys().next().value;
-      if (k) {
-        const u = frameCache.get(k);
-        frameCache.delete(k);
-        if (u && u.startsWith("blob:")) URL.revokeObjectURL(u);
-      }
+    const p = platform.extractFrame(source, t);
+    frameCache.set(key, p);
+    p.catch(() => {
+      if (frameCache.get(key) === p) frameCache.delete(key);
+    });
+    if (frameCache.size > FRAME_CACHE_CAP) {
+      const [oldKey, old] = frameCache.entries().next().value!;
+      frameCache.delete(oldKey);
+      revokeWhenSettled(old);
     }
-    return url;
+    return p;
   }
 
   /** Fill a `.fl-thumb` with the source frame at `t` (object-fit cover). */

@@ -107,6 +107,9 @@ export const webPlatform: FootlightPlatform = {
       headers: { "content-type": "application/json" },
       body: manifestJson,
     });
+    if (!res.ok) {
+      throw new Error(`render failed (${res.status}): ${await res.text()}`);
+    }
     const data = (await res.json()) as { ok: boolean; log: string };
     return data;
   },
