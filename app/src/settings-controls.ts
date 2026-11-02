@@ -23,8 +23,8 @@ export function panelHeader(title: string, sub?: string): HTMLElement {
   return wrap;
 }
 
-/** A titled block (`.fl-set-block` + `.fl-set-blockh` label). */
-export function block(title: string): { root: HTMLElement; body: HTMLElement } {
+/** A titled block (`.fl-set-block` + `.fl-set-blockh` label; `label` can name a control). */
+export function block(title: string): { root: HTMLElement; body: HTMLElement; label: HTMLElement } {
   const root = el("div", "fl-set-block");
   const head = el("div", "fl-set-blockh");
   const lab = el("span", "fl-label");
@@ -32,12 +32,30 @@ export function block(title: string): { root: HTMLElement; body: HTMLElement } {
   head.append(lab);
   const body = el("div");
   root.append(head, body);
-  return { root, body };
+  return { root, body, label: lab };
+}
+
+/** Name `control` by the visible `label` element (`aria-labelledby`). */
+export function labelBy(control: HTMLElement, label: HTMLElement): void {
+  control.setAttribute("aria-labelledby", ensureId(label, "label"));
 }
 
 /**
- * A segmented control (`.fl-seg`). `value` is the initially-selected option;
- * `onPick` fires with the chosen value. Returns the element.
+ * Mark `chosen` as the one pressed button among `group`'s children: the `on`
+ * class for the look, `aria-pressed` for assistive tech. Shared by every
+ * pick-one button row (segmented controls, the encoder preset chips).
+ */
+export function pressOnly(group: HTMLElement, chosen: HTMLElement): void {
+  for (const child of Array.from(group.children)) {
+    child.classList.toggle("on", child === chosen);
+    child.setAttribute("aria-pressed", String(child === chosen));
+  }
+}
+
+/**
+ * A segmented control (`.fl-seg`, a `role=group` of pressed/unpressed
+ * buttons). `value` is the initially-selected option; `onPick` fires with the
+ * chosen value. Name the group with `labelBy` (`labeledRow` does it for you).
  */
 export function segmented<T extends string>(
   options: { value: T; label: string }[],
@@ -45,14 +63,10 @@ export function segmented<T extends string>(
   onPick: (v: T) => void,
 ): HTMLElement {
   const seg = el("div", "fl-seg");
+  seg.setAttribute("role", "group");
   for (const opt of options) {
     const b = button(opt.label, opt.value === value ? "on" : undefined, () => {
-      for (const child of Array.from(seg.children)) {
-        child.classList.remove("on");
-        child.setAttribute("aria-pressed", "false");
-      }
-      b.classList.add("on");
-      b.setAttribute("aria-pressed", "true");
+      pressOnly(seg, b);
       onPick(opt.value);
     });
     b.type = "button";
@@ -89,11 +103,15 @@ export function toggleSwitch(
   return sw;
 }
 
-/** A labeled General-panel row (`.fl-row2` + `.fl-rowlab`). */
+/**
+ * A labeled General-panel row (`.fl-row2` + `.fl-rowlab`). The row label names
+ * any `role=group` control in it (a segmented control).
+ */
 export function labeledRow(label: string, ...controls: HTMLElement[]): HTMLElement {
   const row = el("div", "fl-row2");
   const lab = el("span", "fl-rowlab");
   lab.textContent = label;
+  for (const c of controls) if (c.getAttribute("role") === "group") labelBy(c, lab);
   row.append(lab, ...controls);
   return row;
 }

@@ -20,6 +20,7 @@ import {
   ICON_KEY,
   ICON_SPARK,
   block,
+  labelBy,
   panelHeader,
   segmented,
   toggleSwitch,
@@ -204,7 +205,6 @@ export function buildAiPanel(): HTMLElement {
   const modelBlock = block(s.model);
   const optList = el("div");
   optList.style.cssText = "display:flex; flex-direction:column; gap:9px;";
-  optList.setAttribute("aria-label", s.model);
   const modelCards = (): HTMLElement[] =>
     Array.from(optList.querySelectorAll<HTMLElement>('[role="radio"]'));
   function selectModel(card: HTMLElement): void {
@@ -242,7 +242,9 @@ export function buildAiPanel(): HTMLElement {
   function renderModels(): void {
     optList.replaceChildren();
     if (!IMPLEMENTED_PROVIDERS.has(prefs.provider)) {
+      // A plain notice: no radiogroup, and so no name (prohibited on a generic div).
       optList.removeAttribute("role");
+      optList.removeAttribute("aria-label");
       const notice = el("div", "fl-set-secsub");
       notice.style.cssText = "padding:10px 2px; line-height:1.5;";
       notice.textContent = s.notImplementedBody;
@@ -250,6 +252,7 @@ export function buildAiPanel(): HTMLElement {
       return;
     }
     optList.setAttribute("role", "radiogroup");
+    optList.setAttribute("aria-label", s.model);
     for (const m of modelsFor(prefs.provider)) {
       const card = el("div", m.id === prefs.model ? "fl-opt sel" : "fl-opt");
       card.dataset.model = m.id;
@@ -262,10 +265,14 @@ export function buildAiPanel(): HTMLElement {
       const name = el("span", "fl-opt-name");
       name.textContent = m.name;
       top.append(name);
+      // role=radio makes the card's children presentational, so every visible
+      // detail (badge, capability, speed, cost) is exposed via aria-describedby.
+      const details: HTMLElement[] = [];
       if (m.recommended) {
         const badge = el("span", "fl-pill on");
         badge.textContent = s.recommended;
         top.append(badge);
+        details.push(badge);
       }
       const cap = el("div", "fl-opt-cap");
       cap.textContent = m.cap;
@@ -281,8 +288,13 @@ export function buildAiPanel(): HTMLElement {
       meta.append(speed, cost);
       body.append(top, cap, meta);
       card.append(radio, body);
+      details.push(cap, speed);
+      if (cost.textContent) details.push(cost);
       card.setAttribute("aria-labelledby", ensureId(name, "model-name"));
-      card.setAttribute("aria-describedby", ensureId(cap, "model-cap"));
+      card.setAttribute(
+        "aria-describedby",
+        details.map((d) => ensureId(d, "model-detail")).join(" "),
+      );
       card.addEventListener("click", () => selectModel(card));
       optList.append(card);
     }
@@ -315,6 +327,7 @@ export function buildAiPanel(): HTMLElement {
   const ctlLabel = el("div");
   ctlLabel.style.cssText = "margin-top:9px; font-size:11.5px; color:var(--muted);";
   ctlLabel.textContent = s.costInterval;
+  labelBy(intervalCtl, ctlLabel);
   ct.append(noteText, ctlLabel, intervalCtl);
   note.append(ct);
 
@@ -353,6 +366,7 @@ export function buildAiPanel(): HTMLElement {
       save();
     },
   );
+  labelBy(stillsCtl, stillsBlock.label);
   const stillsHint = el("div", "fl-set-secsub");
   stillsHint.style.marginTop = "8px";
   stillsHint.textContent = s.chatStillsHint;

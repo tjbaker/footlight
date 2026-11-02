@@ -201,3 +201,85 @@ describe("Settings model radiogroup (keyboard)", () => {
     expect(checkedRadio()).toBe(first);
   });
 });
+
+describe("Settings accessible names and pressed state (#265)", () => {
+  /** Every `role=group` in the panel, keyed by its accessible name. */
+  const groupsByName = (): Map<string, HTMLElement> =>
+    new Map(
+      Array.from(main().querySelectorAll<HTMLElement>('[role="group"]')).map((g) => [nameOf(g), g]),
+    );
+  const pressed = (g: HTMLElement): string[] =>
+    Array.from(g.querySelectorAll<HTMLElement>('button[aria-pressed="true"]')).map(
+      (b) => b.textContent ?? "",
+    );
+  const buttonIn = (g: HTMLElement, text: string): HTMLElement =>
+    Array.from(g.querySelectorAll<HTMLElement>("button")).find((b) => b.textContent === text)!;
+
+  it("segmented controls are named groups whose buttons carry aria-pressed", () => {
+    openSettings();
+    const groups = groupsByName();
+    const theme = groups.get(s.general.theme)!;
+    expect(theme).toBeTruthy();
+    expect(groups.get(s.general.timecode)).toBeTruthy();
+    expect(groups.get(s.general.trackingInterval)).toBeTruthy();
+    for (const b of Array.from(theme.querySelectorAll("button"))) {
+      expect(b.hasAttribute("aria-pressed")).toBe(true);
+    }
+    expect(pressed(theme)).toEqual([s.general.themeLight]);
+
+    const dark = buttonIn(theme, s.general.themeDark);
+    pressOn(dark, "Enter");
+    expect(pressed(theme)).toEqual([s.general.themeDark]);
+    expect(dark.classList.contains("on")).toBe(true);
+  });
+
+  it("Rendering: the CRF slider and every group are named; preset chips carry aria-pressed", () => {
+    openSettings("rendering");
+    const range = main().querySelector<HTMLElement>("input.fl-range")!;
+    expect(nameOf(range)).toBe(s.rendering.quality);
+    expect(range.getAttribute("aria-valuetext")).toMatch(/^CRF 19 · /);
+
+    const groups = groupsByName();
+    expect(groups.get(s.rendering.audio)).toBeTruthy();
+    expect(groups.get(s.rendering.bitrate)).toBeTruthy();
+    const presets = groups.get(s.rendering.preset)!;
+    expect(presets.classList.contains("fl-preset-row")).toBe(true);
+    expect(pressed(presets)).toEqual(["medium"]);
+    pressOn(buttonIn(presets, "slow"), " ");
+    expect(pressed(presets)).toEqual(["slow"]);
+    const blob = JSON.parse(localStorage.getItem("footlight.render")!) as { preset: string };
+    expect(blob.preset).toBe("slow");
+  });
+
+  it("AI: the interval and chat-stills groups are named", () => {
+    openSettings("ai");
+    const groups = groupsByName();
+    expect(groups.get(s.ai.costInterval)).toBeTruthy();
+    expect(groups.get(s.ai.chatStills)).toBeTruthy();
+  });
+
+  it("model cards describe every visible detail (badge, capability, speed, cost)", () => {
+    openSettings("ai");
+    const card = checkedRadio()!;
+    const described = (card.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .map((id) => document.getElementById(id)?.textContent ?? "");
+    expect(described).toContain(s.ai.recommended);
+    expect(described).toContain(card.querySelector(".fl-opt-cap")!.textContent);
+    expect(described).toContain(card.querySelector(".fl-tag-speed")!.textContent);
+    expect(described).toContain(card.querySelector(".fl-tag-cost")!.textContent);
+  });
+
+  it("the model list drops its name with the radiogroup role for an unimplemented provider", () => {
+    openSettings("ai");
+    const list = main().querySelector<HTMLElement>('[role="radiogroup"]')!;
+    const chip = (name: string): HTMLElement =>
+      Array.from(main().querySelectorAll<HTMLElement>(".fl-prov")).find((c) => nameOf(c) === name)!;
+    pressOn(chip(s.ai.providerClaude), "Enter");
+    expect(list.hasAttribute("role")).toBe(false);
+    expect(list.hasAttribute("aria-label")).toBe(false);
+    pressOn(chip(s.ai.providerGemini), "Enter");
+    expect(list.getAttribute("role")).toBe("radiogroup");
+    expect(list.getAttribute("aria-label")).toBe(s.ai.model);
+  });
+});
