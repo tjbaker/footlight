@@ -189,5 +189,15 @@ describe("Settings model radiogroup (keyboard)", () => {
     const [first] = radios() as [HTMLElement];
     expect(pressOn(first, "a").defaultPrevented).toBe(false);
     expect(checkedRadio()).toBe(first);
+    // Modified arrows are OS/browser combos, not radio navigation.
+    const alt = new KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      altKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    first.dispatchEvent(alt);
+    expect(alt.defaultPrevented).toBe(false);
+    expect(checkedRadio()).toBe(first);
   });
 });

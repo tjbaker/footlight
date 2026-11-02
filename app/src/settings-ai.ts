@@ -221,7 +221,7 @@ export function buildAiPanel(): HTMLElement {
   optList.addEventListener("keydown", (e) => {
     const cards = modelCards();
     const at = cards.indexOf(e.target as HTMLElement);
-    if (at < 0) return;
+    if (at < 0 || e.altKey || e.ctrlKey || e.metaKey) return; // leave OS/browser combos alone
     const last = cards.length - 1;
     const to: Record<string, number> = {
       ArrowDown: at === last ? 0 : at + 1,
