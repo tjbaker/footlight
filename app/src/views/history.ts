@@ -17,7 +17,7 @@
 
 import { parseTimestamp } from "@core";
 import { messages } from "../i18n/index.js";
-import { el, button, input } from "../ui.js";
+import { el, button, input, openModal } from "../ui.js";
 import { ICON_X, ICON_SEARCH, ICON_TRASH } from "../icons.js";
 import { shorten, baseName, safeParse, kfCount, escapeHtml, fmtTC } from "../editor-util.js";
 import { offsetMode, fmtClockTime, dayLabel } from "../editor-format.js";
@@ -37,9 +37,7 @@ export async function openHistoryModal(deps: HistoryViewDeps): Promise<void> {
   const { platform, openSpec, setThumb } = deps;
   const m = messages.editor;
 
-  const backdrop = el("div", "fl-modal-backdrop");
   const modal = el("div", "fl-modal");
-  modal.setAttribute("role", "dialog");
   modal.setAttribute("aria-label", m.history.ariaLabel);
 
   // header: title + N renders · spacer · Clear all · close
@@ -83,8 +81,14 @@ export async function openHistoryModal(deps: HistoryViewDeps): Promise<void> {
     '<span class="idot in" style="background:var(--accent)"></span>' + m.history.footHtmlBody;
 
   modal.append(head, tools, body, empty, foot);
-  backdrop.append(modal);
-  document.body.append(backdrop);
+  // Focus lands on the filter, never on the destructive Clear all.
+  const { close: dismiss } = openModal({
+    dialog: modal,
+    backdropClass: "fl-modal-backdrop",
+    labelledBy: title,
+    initialFocus: filterInput,
+  });
+  closeBtn.addEventListener("click", dismiss);
 
   let entries: HistoryEntry[] = [];
   const save = () => platform.saveHistory(entries).catch(() => undefined);
@@ -189,17 +193,4 @@ export async function openHistoryModal(deps: HistoryViewDeps): Promise<void> {
     entries = [];
   }
   draw();
-
-  const dismiss = () => {
-    backdrop.remove();
-    document.removeEventListener("keydown", onKey);
-  };
-  function onKey(e: KeyboardEvent) {
-    if (e.key === "Escape") dismiss();
-  }
-  closeBtn.addEventListener("click", dismiss);
-  backdrop.addEventListener("click", (e) => {
-    if (e.target === backdrop) dismiss();
-  });
-  document.addEventListener("keydown", onKey);
 }
