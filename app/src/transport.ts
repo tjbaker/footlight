@@ -25,7 +25,7 @@
 import { platform } from "./platform/index.js";
 import { messages } from "./i18n/index.js";
 import { openShortcuts } from "./shortcuts.js";
-import { el, button } from "./ui.js";
+import { el, button, isModalOpen } from "./ui.js";
 import { PAUSE_GLYPH, PLAY_GLYPH } from "./icons.js";
 import { clamp, errMsg, escapeHtml } from "./editor-util.js";
 import { createGeneration } from "./generation.js";
@@ -276,9 +276,6 @@ export function createTransport(store: EditorStore, deps: TransportDeps): Transp
 
   // ---- keyboard-first operation ----
   const CROP_NUDGE_PX = 4;
-  // The editor's modals: history/settings/clear-confirm use `.fl-modal-backdrop`;
-  // the shortcuts and help dialogs use `.modal-backdrop`.
-  const MODAL_BACKDROP = ".fl-modal-backdrop, .modal-backdrop:not([hidden])";
 
   /** True when the focused control handles `key` natively, so a global hotkey
    *  must not steal it. Text fields and selects own every key (typing, arrows,
@@ -300,7 +297,7 @@ export function createTransport(store: EditorStore, deps: TransportDeps): Transp
     if (e.metaKey || e.ctrlKey) return;
     // A modal is open: the editor behind it is inert, `?` included (it would
     // stack another dialog). Each modal handles its own Escape.
-    if (document.querySelector(MODAL_BACKDROP)) return;
+    if (isModalOpen()) return;
     if (e.key === "?") {
       openShortcuts();
       return;

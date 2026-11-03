@@ -8,13 +8,11 @@
 
 import { messages } from "./i18n/index.js";
 import type { GuideBlock, GuideSection } from "./i18n/types.js";
+import { openModal } from "./ui.js";
 
 /** Show the User Guide modal. */
 export function openGuide(): void {
   const g = messages.help;
-
-  const backdrop = document.createElement("div");
-  backdrop.className = "modal-backdrop";
 
   const modal = document.createElement("div");
   modal.className = "modal guide";
@@ -58,21 +56,12 @@ export function openGuide(): void {
   close.textContent = g.close;
 
   modal.append(h3, subtitle, cols, close);
-  backdrop.append(modal);
-  document.body.append(backdrop);
-
-  const dismiss = () => {
-    backdrop.remove();
-    document.removeEventListener("keydown", onKey);
-  };
-  function onKey(e: KeyboardEvent) {
-    if (e.key === "Escape") dismiss();
-  }
-  close.addEventListener("click", dismiss);
-  backdrop.addEventListener("click", (e) => {
-    if (e.target === backdrop) dismiss();
+  const { close: dismiss } = openModal({
+    dialog: modal,
+    backdropClass: "modal-backdrop",
+    labelledBy: h3,
   });
-  document.addEventListener("keydown", onKey);
+  close.addEventListener("click", dismiss);
 }
 
 function renderSection(section: GuideSection): HTMLElement {

@@ -2,21 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * Keyboard-shortcuts modal. A static, read-only reference listing every key
- * binding the editor implements, grouped by purpose. Mirrors the imperative
- * modal pattern used by the Settings modal (backdrop > modal > h3 > … > .close)
- * with dismissal on the close button, on backdrop click, and on Escape.
+ * binding the editor implements, grouped by purpose. Built on the shared
+ * `openModal` (ui.ts): dismissal on the close button, on backdrop click, and on
+ * Escape, with focus trapped inside and restored on close.
  *
  * The binding list is single-sourced in the i18n catalog (`messages.shortcuts`),
  * shared with the Settings → Shortcuts panel so the two never drift.
  */
 
 import { messages } from "./i18n/index.js";
+import { openModal } from "./ui.js";
 
 /** Show the Keyboard shortcuts modal. */
 export function openShortcuts(): void {
   const m = messages.shortcuts;
-  const backdrop = document.createElement("div");
-  backdrop.className = "modal-backdrop";
 
   const modal = document.createElement("div");
   modal.className = "modal shortcuts";
@@ -64,19 +63,10 @@ export function openShortcuts(): void {
   close.textContent = m.close;
 
   modal.append(h3, groups, close);
-  backdrop.append(modal);
-  document.body.append(backdrop);
-
-  const dismiss = () => {
-    backdrop.remove();
-    document.removeEventListener("keydown", onKey);
-  };
-  function onKey(e: KeyboardEvent) {
-    if (e.key === "Escape") dismiss();
-  }
-  close.addEventListener("click", dismiss);
-  backdrop.addEventListener("click", (e) => {
-    if (e.target === backdrop) dismiss();
+  const { close: dismiss } = openModal({
+    dialog: modal,
+    backdropClass: "modal-backdrop",
+    labelledBy: h3,
   });
-  document.addEventListener("keydown", onKey);
+  close.addEventListener("click", dismiss);
 }

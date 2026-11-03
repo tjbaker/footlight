@@ -37,7 +37,7 @@ import {
   resolveThemeMode,
 } from "./settings-util.js";
 import { APP_NAME, APP_VERSION, LICENSE, REPO_URL, ISSUES_NEW_URL } from "./version.js";
-import { el, button } from "./ui.js";
+import { el, button, openModal } from "./ui.js";
 import { createGeneration } from "./generation.js";
 
 /** A `<span class="fl-set-secth">` heading + optional `.fl-set-secsub` sub. */
@@ -1220,9 +1220,7 @@ const TEXT_INPUT_TYPES = new Set(["text", "password", "search", "url", "number"]
 export function openSettings(panel: PanelId = "general"): void {
   const s = messages.settings;
 
-  const backdrop = el("div", "fl-modal-backdrop");
   const modal = el("div", "fl-modal settings");
-  modal.setAttribute("role", "dialog");
   modal.setAttribute("aria-label", s.title);
 
   // header: spark mark + "Settings" + close ✕
@@ -1291,22 +1289,14 @@ export function openSettings(panel: PanelId = "general"): void {
   foot.append(el("span", "fl-spacer"), cancelBtn, saveBtn);
 
   modal.append(head, setRoot, foot);
-  backdrop.append(modal);
-  document.body.append(backdrop);
-
   renderPanel(current);
 
-  const dismiss = (): void => {
-    commitFocusedField();
-    backdrop.remove();
-    document.removeEventListener("keydown", onKey);
-  };
-  function onKey(e: KeyboardEvent): void {
-    if (e.key === "Escape") dismiss();
-  }
-  closeBtn.addEventListener("click", dismiss);
-  backdrop.addEventListener("click", (e) => {
-    if (e.target === backdrop) dismiss();
+  // Every dismiss path commits the focused text field while it is still mounted.
+  const { close: dismiss } = openModal({
+    dialog: modal,
+    backdropClass: "fl-modal-backdrop",
+    labelledBy: title,
+    beforeClose: commitFocusedField,
   });
-  document.addEventListener("keydown", onKey);
+  closeBtn.addEventListener("click", dismiss);
 }

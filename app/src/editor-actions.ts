@@ -33,7 +33,7 @@ import { fadesToSpec, fadesFromSpec, fadesFit } from "./editor-fades.js";
 import { framingToSpec } from "./editor-framing.js";
 import { createGeneration } from "./generation.js";
 import type { EditorStore, EditorState } from "./editor-store.js";
-import { el, button } from "./ui.js";
+import { el, button, openModal } from "./ui.js";
 import { openHistoryModal } from "./views/history.js";
 import { renderOptions, saveOutdir, pushRecent } from "./editor-prefs.js";
 import type { ViewerView } from "./views/viewer.js";
@@ -611,9 +611,7 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
   /** Confirm before Clear when there's work to lose; nudges toward Export first. */
   function confirmClear(): void {
     if (!state.source && state.clips.length === 0) return; // nothing to clear
-    const backdrop = el("div", "fl-modal-backdrop");
     const modal = el("div", "fl-modal");
-    modal.setAttribute("role", "dialog");
     modal.setAttribute("aria-label", m.clear.title);
     const h = el("div", "fl-modal-h");
     const title = el("span", "fl-label");
@@ -624,26 +622,20 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
     bodyEl.style.cssText = "padding:4px 2px 2px; line-height:1.55; color:var(--muted);";
     bodyEl.textContent = m.clear.body;
     const foot = el("div", "fl-modal-foot");
-    const dismiss = (): void => {
-      backdrop.remove();
-      document.removeEventListener("keydown", onKey);
-    };
-    function onKey(e: KeyboardEvent): void {
-      if (e.key === "Escape") dismiss();
-    }
-    const cancelBtn = button(m.clear.cancel, "fl-btn ghost", dismiss);
+    const cancelBtn = button(m.clear.cancel, "fl-btn ghost", () => dismiss());
     const confirmBtn = button(m.clear.confirm, "fl-btn primary danger", () => {
       dismiss();
       void clearAll();
     });
     foot.append(el("span", "fl-spacer"), cancelBtn, confirmBtn);
     modal.append(h, bodyEl, foot);
-    backdrop.append(modal);
-    document.body.append(backdrop);
-    backdrop.addEventListener("click", (e) => {
-      if (e.target === backdrop) dismiss();
+    // Focus lands on Cancel: Enter on open must never wipe the session.
+    const { close: dismiss } = openModal({
+      dialog: modal,
+      backdropClass: "fl-modal-backdrop",
+      labelledBy: title,
+      initialFocus: cancelBtn,
     });
-    document.addEventListener("keydown", onKey);
   }
 
   // The BYOK Gemini key lives in the OS keychain (via `secretStore`), not in

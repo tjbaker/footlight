@@ -461,6 +461,8 @@ pre.log { max-height: 240px; white-space: pre-wrap; overflow-wrap: anywhere; }
 /* ---- modals ---- */
 .modal-backdrop { position: fixed; inset: 0; background: #000a; display: flex; align-items: center; justify-content: center; z-index: 100; }
 .modal-backdrop[hidden] { display: none; }
+/* openModal focuses the dialog itself only as a fallback (no Tab stops): no ring there. */
+[role="dialog"][aria-modal="true"]:focus { outline: none; }
 .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 26px; max-width: 420px; box-shadow: var(--shadow); }
 .modal h3 { margin: 0 0 6px; }
 .modal a { color: var(--accent-2); cursor: pointer; }
