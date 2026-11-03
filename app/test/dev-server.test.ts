@@ -457,7 +457,7 @@ describe("GET /loudness", () => {
     expect(Math.max(...body.display)).toBeGreaterThan(0);
     expect(Math.max(...body.detect)).toBeGreaterThan(0);
     // The fine onset envelope rides along: one frame per ONSET_FRAME_SEC,
-    // max-normalized (computed by the same core.ts onsetEnvelope the CLI uses).
+    // max-normalized (computed by the same audio.ts onsetEnvelope the CLI uses).
     expect(body.onsetEnvelope).toEqual([0.1, 1, 0.1]);
     expect(spawnCall(0)).toEqual({ cmd: "ffmpeg", args: loudnessCombinedArgs("/v.mp4") });
   });

@@ -237,7 +237,7 @@ pub(crate) struct LoudnessResult {
     onset_envelope: Vec<f64>,
 }
 
-// Keep these in sync with core.ts LOUDNESS_BUCKETS / LUFS_FLOOR / LUFS_CEIL /
+// Keep these in sync with audio.ts LOUDNESS_BUCKETS / LUFS_FLOOR / LUFS_CEIL /
 // ONSET_FRAME_SEC.
 const LOUDNESS_BUCKETS: usize = 160;
 const LUFS_FLOOR: f64 = -40.0;
@@ -283,7 +283,7 @@ fn parse_ebur128_momentary(log: &str) -> Vec<f64> {
 }
 
 /// Map one LUFS reading to 0..1 over [LUFS_FLOOR, LUFS_CEIL]; non-finite -> 0.
-/// HAND MIRROR of core.ts `lufsToNormalized`.
+/// HAND MIRROR of audio.ts `lufsToNormalized`.
 fn lufs_to_normalized(lufs: f64) -> f64 {
     if !lufs.is_finite() {
         return 0.0;
@@ -294,7 +294,7 @@ fn lufs_to_normalized(lufs: f64) -> f64 {
 /// Bucket momentary LUFS into `buckets` windows of averaged normalized (0..1)
 /// levels — an ABSOLUTE perceptual scale (not max-normalized). Non-finite
 /// readings are skipped within a window (an all-silence window -> 0). HAND
-/// MIRROR of core.ts `bucketLufs`.
+/// MIRROR of audio.ts `bucketLufs`.
 fn bucket_lufs(momentary: &[f64], buckets: usize) -> Vec<f64> {
     let mn = momentary.len();
     let mut display = vec![0.0f64; buckets];
@@ -317,29 +317,30 @@ fn bucket_lufs(momentary: &[f64], buckets: usize) -> Vec<f64> {
 }
 
 /// Samples per onset frame at `sample_rate` (at least 1). HAND MIRROR of
-/// core.ts `onsetFrameLen`.
+/// audio.ts `onsetFrameLen`.
 pub(crate) fn onset_frame_len(sample_rate: f64) -> usize {
     ((sample_rate * ONSET_FRAME_SEC).round() as usize).max(1)
 }
 
-/// Onset-envelope rounding (decimal places); core.ts `ONSET_DECIMALS`.
+/// Onset-envelope rounding (decimal places); audio.ts `ONSET_DECIMALS`.
 const ONSET_DECIMALS: i32 = 4;
 
 /// Compute the timeline's audio envelopes (0..1) in ONE ffmpeg pass.
-/// Mirrors core.ts `loudnessCombinedArgs` + `parseEbur128Momentary`/`bucketLufs`
-/// (display) + `bucketLoudness` (detect) + `onsetEnvelope` (onset_envelope);
-/// Rust can't import the TS. The ebur128 analysis filter passes audio through,
-/// so the same run logs per-frame momentary LUFS to stderr (→ `display`, the
-/// perceptual bars) AND emits mono 8 kHz f32le PCM on stdout (→ `detect`, the
-/// raw-energy RMS the swell detector needs, and → `onset_envelope`, the fine
-/// envelope the beat-snap onset detector needs). Keep LOUDNESS_BUCKETS (160),
-/// the LUFS floor/ceiling, and ONSET_FRAME_SEC in sync with core.ts.
+/// Mirrors commands.ts `loudnessCombinedArgs` + `parseEbur128Momentary`, then
+/// audio.ts `bucketLufs` (display) + `bucketLoudness` (detect) + `onsetEnvelope`
+/// (onset_envelope); Rust can't import the TS. The ebur128 analysis filter
+/// passes audio through, so the same run logs per-frame momentary LUFS to
+/// stderr (→ `display`, the perceptual bars) AND emits mono 8 kHz f32le PCM on
+/// stdout (→ `detect`, the raw-energy RMS the swell detector needs, and →
+/// `onset_envelope`, the fine envelope the beat-snap onset detector needs). Keep
+/// LOUDNESS_BUCKETS (160), the LUFS floor/ceiling, and ONSET_FRAME_SEC in sync
+/// with audio.ts.
 #[tauri::command]
 pub(crate) async fn loudness(source: String) -> Result<LoudnessResult, String> {
     let mut cmd = Command::new("ffmpeg");
     cmd.args(loudness_combined_args(&source));
     // --- detect + onset envelope: the mono 8 kHz f32le PCM on stdout is folded
-    // in as it streams (mirrors core.ts PcmLoudnessStream, #277), so memory
+    // in as it streams (mirrors audio.ts PcmLoudnessStream, #277), so memory
     // stays flat however long the source is.
     let mut pcm = LoudnessPcm::new(onset_frame_len(8000.0));
     let out = run_streaming(cmd, "ffmpeg", Kind::Analysis, |chunk| pcm.push(chunk)).await?;
@@ -379,7 +380,7 @@ fn last_crop_suggestion(stderr: &str) -> Option<String> {
 
 // Unit tests for the pure pieces of the shell: the hand-mirrored ffmpeg/ffprobe
 // arg builders and output parsers, plus the path helpers. Where a piece mirrors
-// src/commands.ts or src/core.ts, the test mirrors the corresponding vitest case
+// src/commands.ts or src/audio.ts, the test mirrors the corresponding vitest case
 // (cited per test) with the SAME inputs and expected values, so drift between
 // the two implementations fails one suite or the other.
 #[cfg(test)]

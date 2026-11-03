@@ -27,7 +27,7 @@
  * shipped to the frontend), so it grows with duration at 1/frameLen of the PCM.
  *
  * Pure (bytes/samples in, numbers out), browser-safe and file-free in tests.
- * core.ts builds `bucketLoudness` / `onsetEnvelope` / `PcmLoudnessStream` on
+ * audio.ts builds `bucketLoudness` / `onsetEnvelope` / `PcmLoudnessStream` on
  * these, so buffered and streamed results come from ONE implementation. The
  * native Rust backend (app/src-tauri/src/pcm_envelope.rs) hand-mirrors this
  * module, pinned to the same fixtures.
