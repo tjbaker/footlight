@@ -8,7 +8,10 @@ authors = ["Trevor Baker"]
 license = "Apache-2.0"
 repository = "https://github.com/tjbaker/footlight"
 edition = "2021"
-rust-version = "1.77"
+# The real MSRV: the tauri 2.x crates (tauri, tauri-build, the plugins) all
+# declare rust-version 1.90. rust-toolchain.toml pins the (newer) toolchain
+# CI and local builds actually use; keep it >= this.
+rust-version = "1.90"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

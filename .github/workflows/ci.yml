@@ -61,12 +61,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev
-      # Pinned to master (not the moving `stable` branch): the README requires
-      # pinned SHAs to be in master's history, where `toolchain` is required.
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
-          components: rustfmt, clippy
+      # app/src-tauri/rust-toolchain.toml is the single source of truth for the
+      # toolchain (version + rustfmt/clippy). The runner's preinstalled rustup
+      # installs exactly that pin when run in its directory, so CI and local
+      # builds can't drift and a new stable release can't redden unrelated PRs.
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install && rustc --version
+        working-directory: app/src-tauri
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: app/src-tauri

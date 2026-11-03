@@ -43,11 +43,10 @@ impl F32leDecoder {
             on_sample(f32::from_le_bytes(self.carry));
             self.carry_len = 0;
         }
-        let mut whole = bytes.chunks_exact(4);
-        for b in &mut whole {
-            on_sample(f32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+        let (whole, rest) = bytes.as_chunks::<4>();
+        for b in whole {
+            on_sample(f32::from_le_bytes(*b));
         }
-        let rest = whole.remainder();
         self.carry[..rest.len()].copy_from_slice(rest);
         self.carry_len = rest.len();
     }
@@ -126,7 +125,10 @@ pub struct BucketRms {
 
 impl BucketRms {
     pub fn new(cap: usize) -> Self {
-        assert!(cap >= 2 && cap % 2 == 0, "cap must be an even number >= 2");
+        assert!(
+            cap >= 2 && cap.is_multiple_of(2),
+            "cap must be an even number >= 2"
+        );
         BucketRms {
             cap,
             sums: Vec::new(),
