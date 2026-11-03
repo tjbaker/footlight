@@ -393,6 +393,7 @@ export const es: Messages = {
   settings: {
     menuLabel: "Ajustes",
     title: "Ajustes",
+    navLabel: "Secciones de ajustes",
     nav: {
       general: "General",
       rendering: "Renderizado",

@@ -108,6 +108,12 @@ export interface ModalOptions {
   /** What takes focus on open (default: the first Tab stop, else the dialog). */
   initialFocus?: HTMLElement;
   /**
+   * Which dialog this is ("settings", "guide", …): tagged on the backdrop so
+   * `claimModal` can tell a repeat request for the open dialog from a request
+   * for a different one.
+   */
+  kind?: string;
+  /**
    * Runs on EVERY close path (Escape, backdrop click, `close()`) while the
    * dialog is still in the DOM — e.g. Settings commits its focused text field.
    */
@@ -120,8 +126,37 @@ export interface ModalHandle {
   close: () => void;
 }
 
+/**
+ * The one-modal-at-a-time gate (#350). Every app dialog calls this first and
+ * builds + opens only when it returns true, so a native-menu event or a hotkey
+ * can never stack a second dialog over the first. With a modal already open
+ * the request opens nothing; the open dialog is brought forward instead (focus
+ * moves back into it if it had escaped), and:
+ * - for the SAME kind, `onReopen` runs with its dialog, e.g. Settings switches
+ *   to the requested panel;
+ * - for a DIFFERENT kind, that's all. The open dialog is never closed out from
+ *   under the user (it may be a confirmation or hold unsaved typing): close
+ *   it first, then open the other.
+ * Reads the DOM like `isModalOpen`, so a torn-down backdrop never blocks.
+ */
+export function claimModal(kind: string, onReopen?: (dialog: HTMLElement) => void): boolean {
+  const open = document.querySelector<HTMLElement>(MODAL_BACKDROP);
+  if (!open) return true;
+  const dialog = open.querySelector<HTMLElement>('[role="dialog"]');
+  if (dialog) {
+    if (open.dataset.modalKind === kind) onReopen?.(dialog);
+    // Back to where the dialog itself puts focus on open (its `initialFocus`),
+    // never just the first Tab stop: in History that is the destructive Clear all.
+    if (!dialog.contains(document.activeElement)) focusHome.get(open)?.();
+  }
+  return false;
+}
+
 /** Open modals, oldest first — only the topmost one answers Escape/Tab. */
 const openStack: HTMLElement[] = [];
+
+/** Each open backdrop's "focus where this dialog starts" (shared by open and `claimModal`). */
+const focusHome = new WeakMap<HTMLElement, () => void>();
 
 /**
  * Mount `dialog` in a backdrop as an accessible modal (#266): `role=dialog`,
@@ -140,6 +175,7 @@ export function openModal(opts: ModalOptions): ModalHandle {
   dialog.tabIndex = -1; // the focus fallback when the dialog has no Tab stops
 
   const backdrop = el("div", opts.backdropClass);
+  if (opts.kind) backdrop.dataset.modalKind = opts.kind;
   backdrop.append(dialog);
   document.body.append(backdrop);
   openStack.push(backdrop);
@@ -201,7 +237,9 @@ export function openModal(opts: ModalOptions): ModalHandle {
     if (e.target === backdrop) close();
   });
   document.addEventListener("keydown", onKey);
-  (opts.initialFocus ?? tabStops(dialog)[0] ?? dialog).focus();
+  const home = (): void => (opts.initialFocus ?? tabStops(dialog)[0] ?? dialog).focus();
+  focusHome.set(backdrop, home);
+  home();
 
   return { backdrop, close };
 }

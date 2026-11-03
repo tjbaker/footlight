@@ -75,6 +75,13 @@ describe("Settings nav (keyboard)", () => {
     expect(heading()).toBe(s.about.title);
     expect(document.querySelectorAll('.fl-set-navitem[aria-current="page"]')).toHaveLength(1);
   });
+
+  it("the nav has its own name, distinct from the dialog's (#350)", () => {
+    openSettings();
+    const nav = document.querySelector<HTMLElement>("nav.fl-set-nav")!;
+    expect(nav.getAttribute("aria-label")).toBe(s.navLabel);
+    expect(nav.getAttribute("aria-label")).not.toBe(nameOf(dialog()));
+  });
 });
 
 describe("Settings switches (keyboard)", () => {

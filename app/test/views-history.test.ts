@@ -223,3 +223,53 @@ describe("resilience", () => {
     expect(saved.map((e) => e.spec.out_name)).toEqual(["b"]);
   });
 });
+
+describe("focus stays in the dialog after a delete (#350)", () => {
+  const removeBtn = (row: HTMLElement): HTMLButtonElement =>
+    row.querySelector<HTMLButtonElement>(`button[title="${m.history.removeTitle}"]`)!;
+  /** Focus the row named `name`'s remove button and click it, as a keyboard user would. */
+  const removeRow = (name: string): void => {
+    const btn = removeBtn(rows().find((r) => r.querySelector(".nm")!.textContent === name)!);
+    btn.focus();
+    btn.click();
+  };
+  const focusedRowName = (): string | null | undefined =>
+    document.activeElement?.closest(".fl-hist")?.querySelector(".nm")?.textContent;
+
+  it("moves to the next row, then the previous, then the filter field", async () => {
+    await openModal([entry({ name: "a" }), entry({ name: "b" }), entry({ name: "c" })]);
+
+    removeRow("b"); // a middle row: the row below takes its place
+    expect(document.activeElement).toBe(removeBtn(rows()[1]!));
+    expect(focusedRowName()).toBe("c");
+
+    removeRow("c"); // the last row: nothing below, so the row above
+    expect(focusedRowName()).toBe("a");
+
+    removeRow("a"); // the only row: the filter field
+    expect(rows()).toHaveLength(0);
+    expect(document.activeElement).toBe(filterInput());
+  });
+
+  it("counts rows as shown, so a filtered list moves within what is visible", async () => {
+    // keep-1 is entry #1 but shown row #0: the next shown row is keep-2, where
+    // an index into the full list would skip ahead to keep-3.
+    await openModal([
+      entry({ name: "drop" }),
+      entry({ name: "keep-1" }),
+      entry({ name: "keep-2" }),
+      entry({ name: "keep-3" }),
+    ]);
+    setValue(filterInput(), "keep");
+    removeRow("keep-1");
+    expect(focusedRowName()).toBe("keep-2");
+  });
+
+  it("Clear all moves focus to the filter field (it hides itself)", async () => {
+    await openModal([entry({ name: "a" }), entry({ name: "b" })]);
+    const clearAll = buttonByText(document.body, m.history.clearAll);
+    clearAll.focus();
+    clearAll.click();
+    expect(document.activeElement).toBe(filterInput());
+  });
+});

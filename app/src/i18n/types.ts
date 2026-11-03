@@ -39,6 +39,8 @@ export interface HelpMessages {
 export interface SettingsMessages {
   menuLabel: string;
   title: string;
+  /** The left nav's accessible name, distinct from the dialog's `title`. */
+  navLabel: string;
   /** Left-nav item labels. */
   nav: {
     general: string;

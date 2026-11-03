@@ -117,3 +117,12 @@ describe("locale parity (every locale matches the en key set)", () => {
     });
   }
 });
+
+describe("Settings nav name (#350)", () => {
+  it("every locale names the Settings nav apart from the dialog title", () => {
+    for (const catalog of Object.values(locales)) {
+      expect(catalog.settings.navLabel).toBeTruthy();
+      expect(catalog.settings.navLabel).not.toBe(catalog.settings.title);
+    }
+  });
+});

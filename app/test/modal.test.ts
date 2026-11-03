@@ -334,3 +334,92 @@ describe("every dialog is built on openModal", () => {
     expect(document.activeElement).toBe(clear);
   });
 });
+
+describe("only one modal at a time (#350)", () => {
+  const dialogs = (): HTMLElement[] =>
+    Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]'));
+  const titleOf = (dialog: HTMLElement): string | null | undefined =>
+    document.getElementById(dialog.getAttribute("aria-labelledby")!)?.textContent;
+  const openHistory = () =>
+    openHistoryModal({ platform: mockPlatform, openSpec: vi.fn(), setThumb: vi.fn() });
+
+  it("a request for a different dialog is ignored while one is open (every opener)", async () => {
+    const openers: [string, () => unknown][] = [
+      ["settings", () => openSettings()],
+      ["guide", openGuide],
+      ["shortcuts", openShortcuts],
+      ["history", openHistory],
+    ];
+    for (const [first, openFirst] of openers) {
+      resetHarness();
+      await openFirst();
+      const [only] = dialogs();
+      for (const [other, openOther] of openers) {
+        if (other !== first) await openOther();
+      }
+      await flush();
+      expect(dialogs()).toEqual([only]);
+    }
+  });
+
+  it("re-requesting the open dialog brings it forward instead of stacking a copy", () => {
+    openGuide();
+    const guide = dialogs()[0]!;
+    focusedOpener(); // focus escaped the dialog (e.g. a native menu took it)
+    openGuide();
+    expect(dialogs()).toEqual([guide]);
+    expect(guide.contains(document.activeElement)).toBe(true);
+  });
+
+  it("bringing History forward refocuses its filter, never the destructive Clear all", async () => {
+    await openHistory();
+    focusedOpener(); // focus escaped the dialog
+    await openHistory();
+    expect(document.activeElement).toBe(
+      document.querySelector(`input[placeholder="${messages.editor.history.filterPlaceholder}"]`),
+    );
+  });
+
+  it("Settings re-requested with a panel switches to it; without one it keeps the current panel", () => {
+    const opener = focusedOpener();
+    openSettings();
+    const heading = (): string | null | undefined =>
+      document.querySelector(".fl-set-main .fl-set-secth")?.textContent;
+    expect(heading()).toBe(messages.settings.general.title);
+
+    openSettings("about"); // the native "About" menu item
+    expect(dialogs()).toHaveLength(1);
+    expect(heading()).toBe(messages.settings.about.title);
+
+    openSettings(); // the native "Settings…" item: no panel asked for
+    expect(dialogs()).toHaveLength(1);
+    expect(heading()).toBe(messages.settings.about.title);
+
+    // Closing the one dialog still returns focus to the original opener.
+    escape();
+    expect(isModalOpen()).toBe(false);
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("the clear-confirm can't be stacked on another dialog, nor another on it", async () => {
+    const root = await mountLoaded(mountEditor);
+    const clear = buttonByText(root, messages.editor.topbar.clear);
+
+    openGuide();
+    clear.click();
+    expect(dialogs().map(titleOf)).toEqual([messages.help.title]);
+    escape();
+
+    clear.click();
+    clear.click(); // a second request for the same confirm opens nothing new
+    openSettings();
+    expect(dialogs().map(titleOf)).toEqual([messages.editor.clear.title]);
+  });
+
+  it("a dialog torn down without close() never blocks the next one", () => {
+    openGuide();
+    document.body.innerHTML = "";
+    openShortcuts();
+    expect(dialogs().map(titleOf)).toEqual([messages.shortcuts.modalTitle]);
+  });
+});
