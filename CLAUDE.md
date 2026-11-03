@@ -74,6 +74,12 @@ fs, no subprocess. Timestamp/crop parsing, `computeCrop`, `buildEasedCropX`, and
 `buildFfmpegArgs` argument-array builder all live here, so the Tauri/web frontend can
 import them without pulling Node into the bundle.
 
+Pure areas that are not geometry/render live in their own browser-safe modules,
+which `core.ts` re-exports (`export * from`) so every `core.js` / `engine.js` /
+`@core` import keeps working: `commands.ts` (the ffmpeg/ffprobe arg builders and
+output parsers: probe, frame extraction, cropdetect, scenes, the loudness pass).
+These modules never import from `core.ts`, so the re-exports cannot form a cycle.
+
 `src/engine.ts` holds **only** the Node-touching parts — `probeDimensions` (ffprobe)
 and `run` (subprocess spawn) — and `export * from "./core.js"` so existing
 `import { ... } from "./engine.js"` call sites keep working. **Rule: anything pure
@@ -160,8 +166,8 @@ backed by the Rust `#[tauri::command]`s in `app/src-tauri/src/main.rs`) when
 expose the same capabilities (frame/probe/scenes/loudness/track/render/cover and
 more) by shelling out to ffmpeg/ffprobe and the root `footlight` CLI — keep the
 two backends in sync when changing the interface. The Rust side HAND-MIRRORS the
-pure builders in `src/core.ts` (it cannot import TS); every mirror carries a
-`#[cfg(test)]` test pinned to the TS fixtures so drift fails CI.
+pure builders in `src/core.ts` and `src/commands.ts` (it cannot import TS); every
+mirror carries a `#[cfg(test)]` test pinned to the TS fixtures so drift fails CI.
 
 ## Conventions
 

@@ -4,10 +4,10 @@
 //! scene cuts and the loudness envelopes, plus the per-call temp-file helper.
 //!
 //! The ffmpeg/ffprobe arg arrays and output parsers below are a HAND MIRROR of
-//! the canonical pure builders in src/core.ts (frameExtractArgs, ffprobeStreamArgs
-//! / parseProbe, cropdetectArgs / parseCropdetect, scenesArgs / parseScenes) — the
-//! CLI and the Node dev server import those directly; Rust can't, so keep this in
-//! sync when they change.
+//! the canonical pure builders in src/commands.ts (frameExtractArgs,
+//! ffprobeStreamArgs / parseProbe, cropdetectArgs / parseCropdetect, scenesArgs /
+//! parseScenes) — the CLI and the Node dev server import those directly; Rust
+//! can't, so keep this in sync when they change.
 
 use serde::Serialize;
 use tokio::process::Command;
@@ -76,7 +76,7 @@ async fn extract_frame_bytes(source: &str, t: f64) -> Result<Vec<u8>, String> {
 }
 
 /// Args for one single-frame ffmpeg extraction with the given seek args, writing
-/// a JPEG to `out`. HAND MIRROR of the seek-prefix split in core.ts
+/// a JPEG to `out`. HAND MIRROR of the seek-prefix split in commands.ts
 /// `frameExtractArgs` / `frameExtractTailArgs` (`-ss <t>` vs `-sseof -0.2`),
 /// except the native shell writes a temp file instead of MJPEG on stdout.
 fn frame_extract_args<'a>(seek: &[&'a str], source: &'a str, out: &'a str) -> Vec<&'a str> {
@@ -98,7 +98,7 @@ async fn run_frame_extract(seek: &[&str], source: &str, out: &str) -> Result<boo
 }
 
 /// ffprobe args for the first video stream's width/height + container duration.
-/// HAND MIRROR of core.ts `ffprobeStreamArgs` — keep in sync.
+/// HAND MIRROR of commands.ts `ffprobeStreamArgs` — keep in sync.
 pub(crate) fn ffprobe_stream_args(source: &str) -> Vec<&str> {
     vec![
         "-v",
@@ -114,7 +114,7 @@ pub(crate) fn ffprobe_stream_args(source: &str) -> Vec<&str> {
 }
 
 /// Parse `ffprobe_stream_args` JSON stdout into (width, height, duration),
-/// defaulting missing fields to 0. HAND MIRROR of core.ts `parseProbe` (which
+/// defaulting missing fields to 0. HAND MIRROR of commands.ts `parseProbe` (which
 /// also throws only on unparseable JSON).
 pub(crate) fn parse_probe(stdout: &[u8]) -> Result<(u32, u32, f64), String> {
     let json: serde_json::Value = serde_json::from_slice(stdout)
@@ -137,7 +137,7 @@ pub(crate) fn parse_probe(stdout: &[u8]) -> Result<(u32, u32, f64), String> {
 }
 
 /// ffmpeg args for a cropdetect (BLACK BARS ONLY) probe; the analysis lands on
-/// stderr — pass it to `last_crop_suggestion`. HAND MIRROR of core.ts
+/// stderr — pass it to `last_crop_suggestion`. HAND MIRROR of commands.ts
 /// `cropdetectArgs` — keep in sync.
 fn cropdetect_args(source: &str) -> Vec<&str> {
     vec![
@@ -188,7 +188,7 @@ pub(crate) async fn probe(source: String) -> Result<ProbeResult, String> {
 }
 
 /// ffmpeg args for scene-cut detection (downscale → scene filter → showinfo).
-/// HAND MIRROR of core.ts `scenesArgs` (SCENE_THRESHOLD = 0.4) — keep in sync.
+/// HAND MIRROR of commands.ts `scenesArgs` (SCENE_THRESHOLD = 0.4) — keep in sync.
 fn scenes_args(source: &str) -> Vec<&str> {
     vec![
         "-hide_banner",
@@ -203,7 +203,7 @@ fn scenes_args(source: &str) -> Vec<&str> {
 }
 
 /// Parse scene-cut timestamps (seconds, rounded to ms) from showinfo's
-/// `pts_time:` markers on stderr. HAND MIRROR of core.ts `parseScenes`.
+/// `pts_time:` markers on stderr. HAND MIRROR of commands.ts `parseScenes`.
 fn parse_scenes(stderr: &str) -> Vec<f64> {
     let mut times = Vec::new();
     for token in stderr.split("pts_time:").skip(1) {
@@ -246,7 +246,7 @@ const ONSET_FRAME_SEC: f64 = 0.02;
 
 /// ffmpeg args for the one-pass loudness run: the ebur128 analysis filter logs
 /// per-frame momentary LUFS to stderr while mono 8 kHz f32le PCM lands on
-/// stdout. HAND MIRROR of core.ts `loudnessCombinedArgs` — keep in sync.
+/// stdout. HAND MIRROR of commands.ts `loudnessCombinedArgs` — keep in sync.
 fn loudness_combined_args(source: &str) -> Vec<&str> {
     vec![
         "-hide_banner",
@@ -270,7 +270,7 @@ fn loudness_combined_args(source: &str) -> Vec<&str> {
 
 /// Per-frame momentary `M:` LUFS readings from ebur128's verbose log, in time
 /// order. Unparseable/non-finite readings (-inf/nan over silence / startup) ->
-/// the floor (-∞). HAND MIRROR of core.ts `parseEbur128Momentary`.
+/// the floor (-∞). HAND MIRROR of commands.ts `parseEbur128Momentary`.
 fn parse_ebur128_momentary(log: &str) -> Vec<f64> {
     let mut momentary: Vec<f64> = Vec::new();
     for line in log.lines() {
@@ -379,9 +379,9 @@ fn last_crop_suggestion(stderr: &str) -> Option<String> {
 
 // Unit tests for the pure pieces of the shell: the hand-mirrored ffmpeg/ffprobe
 // arg builders and output parsers, plus the path helpers. Where a piece mirrors
-// src/core.ts, the test mirrors the corresponding vitest case (cited per test)
-// with the SAME inputs and expected values, so drift between the two
-// implementations fails one suite or the other.
+// src/commands.ts or src/core.ts, the test mirrors the corresponding vitest case
+// (cited per test) with the SAME inputs and expected values, so drift between
+// the two implementations fails one suite or the other.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -458,7 +458,7 @@ mod tests {
     }
 
     /// Mirrors test/commands.test.ts "frameExtractTailArgs" — the EOF fallback
-    /// seeks relative to EOF; extract_frame passes `-sseof -0.2`, core.ts
+    /// seeks relative to EOF; extract_frame passes `-sseof -0.2`, commands.ts
     /// FRAME_TAIL_SEEK_SEC = 0.2.
     #[test]
     fn frame_extract_args_eof_fallback_seeks_from_eof() {
@@ -559,7 +559,7 @@ mod tests {
     // --- scenes -----------------------------------------------------------
 
     /// Mirrors test/commands.test.ts "downscales to 144p before the
-    /// shared-threshold scene filter" (SCENE_THRESHOLD = 0.4 in core.ts).
+    /// shared-threshold scene filter" (SCENE_THRESHOLD = 0.4 in commands.ts).
     #[test]
     fn scenes_args_downscale_then_scene_filter() {
         assert!(scenes_args("in.mp4").contains(&"scale=-2:144,select='gt(scene,0.4)',showinfo"));
