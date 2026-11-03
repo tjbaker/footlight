@@ -81,8 +81,8 @@ const NAV: { id: PanelId; icon: string; label: () => string; build: () => HTMLEl
 /** Input types whose value commits on `change` (blur/Enter) rather than per click. */
 const TEXT_INPUT_TYPES = new Set(["text", "password", "search", "url", "number"]);
 
-/** The open Settings modal's panel switch (set on each open; only called while one is mounted). */
-let showOpenPanel: (id: PanelId) => void = () => undefined;
+/** Each Settings dialog's panel switch, keyed by the dialog (dropped with it). */
+const panelSwitch = new WeakMap<HTMLElement, (id: PanelId) => void>();
 
 /**
  * Show the Settings modal, landing on `panel` (default General). If Settings
@@ -90,8 +90,8 @@ let showOpenPanel: (id: PanelId) => void = () => undefined;
  * when one was asked for; any other open modal blocks it (`claimModal`).
  */
 export function openSettings(panel?: PanelId): void {
-  const reopen = (): void => {
-    if (panel) showOpenPanel(panel);
+  const reopen = (dialog: HTMLElement): void => {
+    if (panel) panelSwitch.get(dialog)?.(panel);
   };
   if (!claimModal("settings", reopen)) return;
   const s = messages.settings;
@@ -173,7 +173,10 @@ export function openSettings(panel?: PanelId): void {
 
   modal.append(head, setRoot, foot);
   renderPanel(current);
-  showOpenPanel = renderPanel;
+  // A re-request for the panel already showing leaves it be (scroll and all).
+  panelSwitch.set(modal, (id) => {
+    if (id !== current) renderPanel(id);
+  });
 
   // Every dismiss path commits the focused text field while it is still mounted.
   const { close: dismiss } = openModal({

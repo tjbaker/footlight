@@ -145,13 +145,18 @@ export function claimModal(kind: string, onReopen?: (dialog: HTMLElement) => voi
   const dialog = open.querySelector<HTMLElement>('[role="dialog"]');
   if (dialog) {
     if (open.dataset.modalKind === kind) onReopen?.(dialog);
-    if (!dialog.contains(document.activeElement)) (tabStops(dialog)[0] ?? dialog).focus();
+    // Back to where the dialog itself puts focus on open (its `initialFocus`),
+    // never just the first Tab stop: in History that is the destructive Clear all.
+    if (!dialog.contains(document.activeElement)) focusHome.get(open)?.();
   }
   return false;
 }
 
 /** Open modals, oldest first — only the topmost one answers Escape/Tab. */
 const openStack: HTMLElement[] = [];
+
+/** Each open backdrop's "focus where this dialog starts" (shared by open and `claimModal`). */
+const focusHome = new WeakMap<HTMLElement, () => void>();
 
 /**
  * Mount `dialog` in a backdrop as an accessible modal (#266): `role=dialog`,
@@ -232,7 +237,9 @@ export function openModal(opts: ModalOptions): ModalHandle {
     if (e.target === backdrop) close();
   });
   document.addEventListener("keydown", onKey);
-  (opts.initialFocus ?? tabStops(dialog)[0] ?? dialog).focus();
+  const home = (): void => (opts.initialFocus ?? tabStops(dialog)[0] ?? dialog).focus();
+  focusHome.set(backdrop, home);
+  home();
 
   return { backdrop, close };
 }

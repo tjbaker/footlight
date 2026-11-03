@@ -371,6 +371,15 @@ describe("only one modal at a time (#350)", () => {
     expect(guide.contains(document.activeElement)).toBe(true);
   });
 
+  it("bringing History forward refocuses its filter, never the destructive Clear all", async () => {
+    await openHistory();
+    focusedOpener(); // focus escaped the dialog
+    await openHistory();
+    expect(document.activeElement).toBe(
+      document.querySelector(`input[placeholder="${messages.editor.history.filterPlaceholder}"]`),
+    );
+  });
+
   it("Settings re-requested with a panel switches to it; without one it keeps the current panel", () => {
     const opener = focusedOpener();
     openSettings();
