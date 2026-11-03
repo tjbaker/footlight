@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 
 import { renderCliArgs, type RenderCliOptions } from "../src/render-args.js";
 
-// The SAME cases the Rust mirror (`render_cli_args` in app/src-tauri/src/main.rs)
+// The SAME cases the Rust mirror (`render_cli_args` in app/src-tauri/src/render.rs)
 // reads via include_str!, so the two argv builders cannot drift apart.
 const fixtures = JSON.parse(
   readFileSync(new URL("./fixtures/render-cli-args.json", import.meta.url), "utf8"),

@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared parseTimestamp fixtures: test/engine.test.ts and the Rust parse_timestamp mirror (app/src-tauri/src/main.rs, via include_str!) both run every case, so the two parsers cannot drift.",
+  "_comment": "Shared parseTimestamp fixtures: test/engine.test.ts and the Rust parse_timestamp mirror (app/src-tauri/src/cover.rs, via include_str!) both run every case, so the two parsers cannot drift.",
   "accept": [
     ["1:08", 68],
     ["2:59", 179],

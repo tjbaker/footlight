@@ -474,7 +474,7 @@ async function handleCheckOutdir(outdir, res, repoRoot) {
  * aside to `<path>.corrupt` so the bytes aren't silently destroyed. Any OTHER
  * read error (permissions, I/O) is thrown, not defaulted — the file may be
  * fine, and a default would let the next save clobber it. Mirrors
- * `read_json_or_default` in app/src-tauri/src/main.rs — keep the two in parity.
+ * `read_json_or_default` in app/src-tauri/src/store.rs — keep the two in parity.
  */
 async function readJsonOrDefault(path, fallback, isValid = () => true) {
   let text;
@@ -500,7 +500,7 @@ async function readJsonOrDefault(path, fallback, isValid = () => true) {
  * Serialize `value` and replace `path` ATOMICALLY: write a uniquely named temp
  * file in the same directory, flush it to disk, then rename it over `path`. A crash mid-write
  * leaves the previous file intact, never a truncated one (#263). Mirrors
- * `write_json_atomic` in app/src-tauri/src/main.rs.
+ * `write_json_atomic` in app/src-tauri/src/store.rs.
  */
 async function writeJsonAtomic(path, value) {
   const tmp = `${path}.${randomUUID()}.tmp`;

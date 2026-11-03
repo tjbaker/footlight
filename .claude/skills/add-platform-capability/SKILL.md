@@ -15,7 +15,12 @@ of these exist:
    `app/dev-server/server.mjs` (the dependency-free `node:http` endpoint that
    serves it, shelling out to ffmpeg/ffprobe or the root `footlight` CLI).
 3. **Native backend** — `app/src/platform/tauri.ts` (the invoke) **and** the
-   `#[tauri::command]` in `app/src-tauri/src/main.rs`.
+   `#[tauri::command]` in its domain module under `app/src-tauri/src/`
+   (`media.rs` ffmpeg/ffprobe, `cover.rs`, `render.rs` CLI runs and output
+   files, `store.rs` persistence and secrets, `fonts.rs`, `menu.rs` windows;
+   see `app/src-tauri/README.md`). Make it `pub(crate)` and **register it** in
+   the `tauri::generate_handler![…]` list in `main.rs`'s `invoke_handler`, or
+   the invoke fails at runtime. Shell out through `subprocess::run_output`.
 4. **Mirror tests** — if the Rust side mirrors a pure TS builder (it cannot
    import TS), add a `#[cfg(test)]` test pinned to the SAME fixtures the TS
    tests use, so drift fails CI. This is the only sanctioned duplication

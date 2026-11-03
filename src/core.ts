@@ -971,7 +971,7 @@ export interface CoverFrameOptions {
  * clip-relative, so they are evaluated at `max(0, t - in_point)`. Precedence is
  * the render's: `cropPath` > `cropWindow` > `crop_offset`.
  *
- * The native Rust backend (app/src-tauri/src/main.rs `cover_frame_args`) hand-
+ * The native Rust backend (app/src-tauri/src/cover.rs `cover_frame_args`) hand-
  * mirrors this builder — keep the two in sync.
  */
 export function coverFrameArgs(row: ClipRow, t: number, opts: CoverFrameOptions): string[] {

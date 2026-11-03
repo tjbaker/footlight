@@ -26,7 +26,7 @@ import { BucketRmsAccumulator, F32leDecoder, FrameRmsAccumulator } from "./pcm-e
 // owns only the numbers.
 //
 // Pure (text/samples in, numbers out) so it stays browser-safe and file-free in
-// tests. The native Rust backend (app/src-tauri/src/main.rs) hand-mirrors these
+// tests. The native Rust backend (app/src-tauri/src/media.rs) hand-mirrors these
 // (same LUFS floor/ceiling + LOUDNESS_BUCKETS count) — keep them in sync when the
 // args or mapping here change.
 // ---------------------------------------------------------------------------
@@ -254,7 +254,7 @@ export function detectSwells(
 // with `detectOnsets` — the same split as `detect` → `detectSwells`.
 //
 // Pure (samples/envelope in, numbers out), browser-safe and file-free in tests.
-// The native Rust backend (app/src-tauri/src/main.rs) hand-mirrors
+// The native Rust backend (app/src-tauri/src/pcm_envelope.rs) hand-mirrors
 // `onsetEnvelope` (same frame size + rounding) — keep them in sync.
 // ---------------------------------------------------------------------------
 

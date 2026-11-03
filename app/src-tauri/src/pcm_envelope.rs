@@ -325,7 +325,7 @@ mod tests {
         }
     }
 
-    // --- moved from main.rs: the bucketLoudness / onsetEnvelope mirrors ------
+    // --- the bucketLoudness / onsetEnvelope mirrors ---------------------------
 
     /// Mirrors test/loudness.test.ts "normalizes so the max value is exactly 1
     /// (a rising ramp)" — same 8000-sample ramp, 80 buckets.

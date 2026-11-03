@@ -33,10 +33,11 @@ cargo tauri build    # or: npx tauri build
 
 ## What the native side does
 
-`src/main.rs` registers 21 `#[tauri::command]`s — the native half of the
-`FootlightPlatform` interface, mirroring the Node dev backend in
-`../dev-server/server.mjs`. They live in modules by area, each with its tests
-beside it:
+21 `#[tauri::command]`s form the native half of the `FootlightPlatform`
+interface, mirroring the Node dev backend in `../dev-server/server.mjs`. Each
+command lives in its domain module, with its tests beside it, and `src/main.rs`
+is just wiring: it registers all of them in its `invoke_handler` and installs
+the menu and quit handling. The modules:
 
 - **media** (`src/media.rs`) — `extract_frame`, `probe`, `scenes`, `loudness`
   (shell out to ffmpeg/ffprobe);

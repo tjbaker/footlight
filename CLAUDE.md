@@ -161,14 +161,19 @@ so the round-trip box → offset → crop is consistent.
 
 The frontend talks to one `FootlightPlatform` interface (`app/src/platform/`),
 selected at runtime in `platform/index.ts`: the **native Tauri backend** (`tauri.ts`,
-backed by the Rust `#[tauri::command]`s in `app/src-tauri/src/main.rs`) when
+backed by the Rust `#[tauri::command]`s in `app/src-tauri/src/`) when
 `__TAURI__` is on `window`, else the **web dev backend** (`web.ts` →
 `app/dev-server/server.mjs`, a dependency-free `node:http` server on :8787). Both
 expose the same capabilities (frame/probe/scenes/loudness/track/render/cover and
 more) by shelling out to ffmpeg/ffprobe and the root `footlight` CLI — keep the
-two backends in sync when changing the interface. The Rust side HAND-MIRRORS the
-pure builders in `src/core.ts`, `src/commands.ts` and `src/audio.ts` (it cannot
-import TS); every mirror carries a `#[cfg(test)]` test pinned to the TS fixtures so drift fails CI.
+two backends in sync when changing the interface. On the Rust side each command
+lives in its **domain module** (`media.rs`, `cover.rs`, `render.rs`, `store.rs`,
+`fonts.rs`, `menu.rs`; subprocesses go through `subprocess.rs`) and is
+**registered** in `main.rs`'s `invoke_handler` — `main.rs` is wiring only. The
+Rust side HAND-MIRRORS the pure builders in `src/core.ts`, `src/commands.ts`,
+`src/audio.ts`, `src/pcm-envelope.ts` and `src/render-args.ts` (it cannot
+import TS); every mirror carries a `#[cfg(test)]` test pinned to the TS
+fixtures so drift fails CI.
 
 ## Conventions
 

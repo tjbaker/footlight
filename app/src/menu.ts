@@ -3,7 +3,7 @@
 /**
  * In-app Help menu. This is plain DOM (no framework) so it works identically in
  * the browser dev build and inside the Tauri webview. The native Tauri menu
- * (main.rs) mirrors these items, but THIS is the one that is guaranteed to
+ * (app/src-tauri/src/menu.rs) mirrors these items, but THIS is the one that is guaranteed to
  * function in the verifiable web build. All external links go through
  * `platform.openExternal` so they behave correctly in both backends.
  *
