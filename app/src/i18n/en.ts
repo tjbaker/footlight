@@ -393,6 +393,7 @@ export const en: Messages = {
   settings: {
     menuLabel: "Settings",
     title: "Settings",
+    navLabel: "Settings sections",
     nav: {
       general: "General",
       rendering: "Rendering",

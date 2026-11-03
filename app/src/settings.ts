@@ -26,7 +26,7 @@
  */
 
 import { messages } from "./i18n/index.js";
-import { el, button, openModal } from "./ui.js";
+import { el, button, claimModal, openModal } from "./ui.js";
 import {
   ICON_FILM,
   ICON_GEAR,
@@ -81,8 +81,19 @@ const NAV: { id: PanelId; icon: string; label: () => string; build: () => HTMLEl
 /** Input types whose value commits on `change` (blur/Enter) rather than per click. */
 const TEXT_INPUT_TYPES = new Set(["text", "password", "search", "url", "number"]);
 
-/** Show the Settings modal, landing on `panel` (default General). */
-export function openSettings(panel: PanelId = "general"): void {
+/** The open Settings modal's panel switch (set on each open; only called while one is mounted). */
+let showOpenPanel: (id: PanelId) => void = () => undefined;
+
+/**
+ * Show the Settings modal, landing on `panel` (default General). If Settings
+ * is already open it is brought forward instead, switching to `panel` only
+ * when one was asked for; any other open modal blocks it (`claimModal`).
+ */
+export function openSettings(panel?: PanelId): void {
+  const reopen = (): void => {
+    if (panel) showOpenPanel(panel);
+  };
+  if (!claimModal("settings", reopen)) return;
   const s = messages.settings;
 
   const modal = el("div", "fl-modal settings");
@@ -106,11 +117,11 @@ export function openSettings(panel: PanelId = "general"): void {
   // body: nav + main
   const setRoot = el("div", "fl-set fl-grow");
   const nav = el("nav", "fl-set-nav");
-  nav.setAttribute("aria-label", s.title);
+  nav.setAttribute("aria-label", s.navLabel);
   const main = el("div", "fl-set-main");
 
   const navItems = new Map<PanelId, HTMLElement>();
-  let current: PanelId = panel;
+  let current: PanelId = panel ?? "general";
 
   // Text fields persist on `change`, which a browser fires on blur but NOT when
   // a focused field is simply removed. So before closing the modal or swapping
@@ -162,6 +173,7 @@ export function openSettings(panel: PanelId = "general"): void {
 
   modal.append(head, setRoot, foot);
   renderPanel(current);
+  showOpenPanel = renderPanel;
 
   // Every dismiss path commits the focused text field while it is still mounted.
   const { close: dismiss } = openModal({
@@ -169,6 +181,7 @@ export function openSettings(panel: PanelId = "general"): void {
     backdropClass: "fl-modal-backdrop",
     labelledBy: title,
     beforeClose: commitFocusedField,
+    kind: "settings",
   });
   closeBtn.addEventListener("click", dismiss);
 }

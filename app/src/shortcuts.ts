@@ -11,10 +11,11 @@
  */
 
 import { messages } from "./i18n/index.js";
-import { openModal } from "./ui.js";
+import { claimModal, openModal } from "./ui.js";
 
-/** Show the Keyboard shortcuts modal. */
+/** Show the Keyboard shortcuts modal (unless a modal is already open; see `claimModal`). */
 export function openShortcuts(): void {
+  if (!claimModal("shortcuts")) return;
   const m = messages.shortcuts;
 
   const modal = document.createElement("div");
@@ -67,6 +68,7 @@ export function openShortcuts(): void {
     dialog: modal,
     backdropClass: "modal-backdrop",
     labelledBy: h3,
+    kind: "shortcuts",
   });
   close.addEventListener("click", dismiss);
 }

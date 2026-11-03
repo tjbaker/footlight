@@ -17,7 +17,7 @@
 
 import { parseTimestamp } from "@core";
 import { messages } from "../i18n/index.js";
-import { el, button, input, openModal } from "../ui.js";
+import { el, button, input, claimModal, openModal } from "../ui.js";
 import { ICON_X, ICON_SEARCH, ICON_TRASH } from "../icons.js";
 import { shorten, baseName, safeParse, kfCount, escapeHtml, fmtTC } from "../editor-util.js";
 import { offsetMode, fmtClockTime, dayLabel } from "../editor-format.js";
@@ -34,6 +34,7 @@ export interface HistoryViewDeps {
 
 /** Open the render-history modal. Async only to await the initial load. */
 export async function openHistoryModal(deps: HistoryViewDeps): Promise<void> {
+  if (!claimModal("history")) return;
   const { platform, openSpec, setThumb } = deps;
   const m = messages.editor;
 
@@ -53,6 +54,7 @@ export async function openHistoryModal(deps: HistoryViewDeps): Promise<void> {
     entries = [];
     void save();
     draw();
+    filterInput.focus(); // Clear all just hid itself: keep focus in the dialog
   });
   const closeBtn = button("", "fl-iconbtn");
   closeBtn.innerHTML = ICON_X;
@@ -87,6 +89,7 @@ export async function openHistoryModal(deps: HistoryViewDeps): Promise<void> {
     backdropClass: "fl-modal-backdrop",
     labelledBy: title,
     initialFocus: filterInput,
+    kind: "history",
   });
   closeBtn.addEventListener("click", dismiss);
 
@@ -141,9 +144,14 @@ export async function openHistoryModal(deps: HistoryViewDeps): Promise<void> {
     rm.innerHTML = ICON_TRASH;
     rm.title = m.history.removeTitle;
     rm.addEventListener("click", () => {
+      const at = Array.from(body.querySelectorAll(".fl-hist")).indexOf(row);
       entries = entries.filter((e) => e.id !== entry.id);
       void save();
       draw();
+      // The focused button went with its row: keep focus in the dialog on the
+      // row that took its place, else the one above, else the filter.
+      const rms = body.querySelectorAll<HTMLElement>(".fl-hist .rm");
+      (rms[at] ?? rms[at - 1] ?? filterInput).focus();
     });
     actions.append(openBtn, rm);
     side.append(time, actions);

@@ -8,10 +8,11 @@
 
 import { messages } from "./i18n/index.js";
 import type { GuideBlock, GuideSection } from "./i18n/types.js";
-import { openModal } from "./ui.js";
+import { claimModal, openModal } from "./ui.js";
 
-/** Show the User Guide modal. */
+/** Show the User Guide modal (unless a modal is already open; see `claimModal`). */
 export function openGuide(): void {
+  if (!claimModal("guide")) return;
   const g = messages.help;
 
   const modal = document.createElement("div");
@@ -60,6 +61,7 @@ export function openGuide(): void {
     dialog: modal,
     backdropClass: "modal-backdrop",
     labelledBy: h3,
+    kind: "guide",
   });
   close.addEventListener("click", dismiss);
 }

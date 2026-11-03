@@ -33,7 +33,7 @@ import { fadesToSpec, fadesFromSpec, fadesFit } from "./editor-fades.js";
 import { framingToSpec } from "./editor-framing.js";
 import { createGeneration } from "./generation.js";
 import type { EditorStore, EditorState } from "./editor-store.js";
-import { el, button, openModal } from "./ui.js";
+import { el, button, claimModal, openModal } from "./ui.js";
 import { openHistoryModal } from "./views/history.js";
 import { renderOptions, saveOutdir, pushRecent } from "./editor-prefs.js";
 import type { ViewerView } from "./views/viewer.js";
@@ -611,6 +611,7 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
   /** Confirm before Clear when there's work to lose; nudges toward Export first. */
   function confirmClear(): void {
     if (!state.source && state.clips.length === 0) return; // nothing to clear
+    if (!claimModal("clear-confirm")) return;
     const modal = el("div", "fl-modal");
     modal.setAttribute("aria-label", m.clear.title);
     const h = el("div", "fl-modal-h");
@@ -635,6 +636,7 @@ export function createEditorActions(deps: EditorActionsDeps): EditorActions {
       backdropClass: "fl-modal-backdrop",
       labelledBy: title,
       initialFocus: cancelBtn,
+      kind: "clear-confirm",
     });
   }
 

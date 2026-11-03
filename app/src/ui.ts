@@ -108,6 +108,12 @@ export interface ModalOptions {
   /** What takes focus on open (default: the first Tab stop, else the dialog). */
   initialFocus?: HTMLElement;
   /**
+   * Which dialog this is ("settings", "guide", …): tagged on the backdrop so
+   * `claimModal` can tell a repeat request for the open dialog from a request
+   * for a different one.
+   */
+  kind?: string;
+  /**
    * Runs on EVERY close path (Escape, backdrop click, `close()`) while the
    * dialog is still in the DOM — e.g. Settings commits its focused text field.
    */
@@ -118,6 +124,30 @@ export interface ModalHandle {
   backdrop: HTMLElement;
   /** Tear the modal down and restore focus. Idempotent. */
   close: () => void;
+}
+
+/**
+ * The one-modal-at-a-time gate (#350). Every app dialog calls this first and
+ * builds + opens only when it returns true, so a native-menu event or a hotkey
+ * can never stack a second dialog over the first. With a modal already open
+ * the request opens nothing; the open dialog is brought forward instead (focus
+ * moves back into it if it had escaped), and:
+ * - for the SAME kind, `onReopen` runs with its dialog, e.g. Settings switches
+ *   to the requested panel;
+ * - for a DIFFERENT kind, that's all. The open dialog is never closed out from
+ *   under the user (it may be a confirmation or hold unsaved typing): close
+ *   it first, then open the other.
+ * Reads the DOM like `isModalOpen`, so a torn-down backdrop never blocks.
+ */
+export function claimModal(kind: string, onReopen?: (dialog: HTMLElement) => void): boolean {
+  const open = document.querySelector<HTMLElement>(MODAL_BACKDROP);
+  if (!open) return true;
+  const dialog = open.querySelector<HTMLElement>('[role="dialog"]');
+  if (dialog) {
+    if (open.dataset.modalKind === kind) onReopen?.(dialog);
+    if (!dialog.contains(document.activeElement)) (tabStops(dialog)[0] ?? dialog).focus();
+  }
+  return false;
 }
 
 /** Open modals, oldest first — only the topmost one answers Escape/Tab. */
@@ -140,6 +170,7 @@ export function openModal(opts: ModalOptions): ModalHandle {
   dialog.tabIndex = -1; // the focus fallback when the dialog has no Tab stops
 
   const backdrop = el("div", opts.backdropClass);
+  if (opts.kind) backdrop.dataset.modalKind = opts.kind;
   backdrop.append(dialog);
   document.body.append(backdrop);
   openStack.push(backdrop);

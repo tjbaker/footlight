@@ -394,6 +394,7 @@ export const ptBR: Messages = {
   settings: {
     menuLabel: "Configurações",
     title: "Configurações",
+    navLabel: "Seções das configurações",
     nav: {
       general: "Geral",
       rendering: "Renderização",
