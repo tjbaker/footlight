@@ -46,6 +46,13 @@ export function button(label: string, cls?: string, onClick?: () => void): HTMLB
   return b;
 }
 
+let autoIds = 0;
+/** `e`'s id, assigning a unique `fl-<prefix>-N` one first if it has none (for aria-*by). */
+export function ensureId(e: HTMLElement, prefix: string): string {
+  if (!e.id) e.id = `fl-${prefix}-${++autoIds}`;
+  return e.id;
+}
+
 /** An inspector section header (`<div class="fl-sect-h"><span class="fl-label">…`). */
 export function sectionHeader(text: string): HTMLElement {
   const h = el("div", "fl-sect-h");
@@ -77,8 +84,11 @@ export function isModalOpen(): boolean {
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-/** The dialog's Tab stops, in document order, skipping hidden subtrees. */
-function tabStops(dialog: HTMLElement): HTMLElement[] {
+/**
+ * The container's Tab stops, in document order, skipping hidden subtrees and
+ * disabled controls: what the modal's Tab trap cycles through.
+ */
+export function tabStops(dialog: HTMLElement): HTMLElement[] {
   const visible = (e: HTMLElement): boolean => {
     for (let n: HTMLElement | null = e; n && n !== dialog; n = n.parentElement) {
       if (n.hidden || getComputedStyle(n).display === "none") return false;
@@ -112,7 +122,6 @@ export interface ModalHandle {
 
 /** Open modals, oldest first — only the topmost one answers Escape/Tab. */
 const openStack: HTMLElement[] = [];
-let titleIds = 0;
 
 /**
  * Mount `dialog` in a backdrop as an accessible modal (#266): `role=dialog`,
@@ -127,8 +136,7 @@ export function openModal(opts: ModalOptions): ModalHandle {
 
   dialog.setAttribute("role", "dialog");
   dialog.setAttribute("aria-modal", "true");
-  if (!labelledBy.id) labelledBy.id = `fl-modal-title-${++titleIds}`;
-  dialog.setAttribute("aria-labelledby", labelledBy.id);
+  dialog.setAttribute("aria-labelledby", ensureId(labelledBy, "modal-title"));
   dialog.tabIndex = -1; // the focus fallback when the dialog has no Tab stops
 
   const backdrop = el("div", opts.backdropClass);

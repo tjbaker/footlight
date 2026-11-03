@@ -502,7 +502,7 @@ pre.log { max-height: 240px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .fl-modal.settings { width: 760px; height: 600px; max-height: 86vh; }
 .fl-set { display: flex; flex: 1; min-height: 0; }
 .fl-set-nav { width: 178px; flex: none; border-right: 1px solid var(--line-soft); padding: 10px; background: var(--bg-2); display: flex; flex-direction: column; gap: 2px; }
-.fl-set-navitem { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 9px; color: var(--muted); font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid transparent; }
+.fl-set-navitem { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 9px; color: var(--muted); font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid transparent; width: 100%; background: none; text-align: left; line-height: inherit; }
 .fl-set-navitem:hover { color: var(--text); background: var(--panel); }
 .fl-set-navitem.on { color: var(--text); background: var(--panel); border-color: var(--line); }
 .fl-set-navitem svg { width: 16px; height: 16px; flex: none; color: var(--faint); }
@@ -515,7 +515,8 @@ pre.log { max-height: 240px; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* provider chips */
 .fl-prov-row { display: flex; gap: 9px; flex-wrap: wrap; }
-.fl-prov { display: flex; align-items: center; gap: 9px; padding: 10px 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--field-bg); cursor: pointer; }
+.fl-prov { display: flex; align-items: center; gap: 9px; padding: 10px 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--field-bg); cursor: pointer; color: inherit; line-height: inherit; text-align: left; }
+.fl-prov:hover { background: var(--field-bg); } /* no base-button hover tint */
 .fl-prov.on { border-color: var(--accent-line); background: var(--accent-soft); }
 .fl-prov.add { border-style: dashed; color: var(--muted); }
 .fl-prov .pdot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
@@ -560,10 +561,12 @@ pre.log { max-height: 240px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .fl-adv-toggle { display: flex; gap: 12px; align-items: flex-start; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--field-bg); }
 .fl-adv-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
 .fl-adv-sub { color: var(--muted); font-size: 12px; margin-top: 3px; line-height: 1.45; }
-.fl-switch { width: 38px; height: 22px; border-radius: 999px; background: var(--panel-3); border: 1px solid var(--line); flex: none; position: relative; margin-top: 1px; transition: background .15s; cursor: pointer; }
+.fl-switch { width: 38px; height: 22px; border-radius: 999px; background: var(--panel-3); border: 1px solid var(--line); flex: none; position: relative; margin-top: 1px; transition: background .15s; cursor: pointer; padding: 0; }
 .fl-switch.on { background: var(--accent); border-color: var(--accent-deep); }
 .fl-switch .knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: var(--shadow-sm); }
 .fl-switch.on .knob { left: 18px; }
+/* Settings' keyboard-operable controls (#265): a visible ring for keyboard focus only. */
+.fl-switch:focus-visible, .fl-set-navitem:focus-visible, .fl-prov:focus-visible, .fl-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .fl-adv-body { margin-top: 13px; padding-left: 2px; }
 
 /* rendering: range slider + preset chips */

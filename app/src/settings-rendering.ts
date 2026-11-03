@@ -11,8 +11,10 @@ import { el, button } from "./ui.js";
 import {
   ICON_FOLDER,
   block,
+  labelBy,
   labeledRow,
   panelHeader,
+  pressOnly,
   segmented,
   toggleSwitch,
 } from "./settings-controls.js";
@@ -46,6 +48,7 @@ export function buildRenderingPanel(): HTMLElement {
   range.max = "28";
   range.step = "1";
   range.value = String(prefs.crf);
+  labelBy(range, qualityBlock.label);
   const ends = el("div", "fl-range-ends");
   const readout = el("span");
   const qualityWord = (crf: number): string =>
@@ -58,6 +61,7 @@ export function buildRenderingPanel(): HTMLElement {
           : s.qualitySmaller;
   const paintReadout = () => {
     readout.textContent = `CRF ${prefs.crf} · ${qualityWord(prefs.crf)}`;
+    range.setAttribute("aria-valuetext", readout.textContent); // "CRF 19 · High", not "19"
   };
   const left = el("span");
   left.textContent = s.crfEndBest;
@@ -76,13 +80,16 @@ export function buildRenderingPanel(): HTMLElement {
   // Encoder preset chips
   const presetBlock = block(s.preset);
   const presetRow = el("div", "fl-preset-row");
+  presetRow.setAttribute("role", "group");
+  labelBy(presetRow, presetBlock.label);
   for (const p of PRESETS) {
     const chip = button(p, p === prefs.preset ? "fl-preset on" : "fl-preset", () => {
-      for (const c of Array.from(presetRow.children)) c.classList.remove("on");
-      chip.classList.add("on");
+      pressOnly(presetRow, chip);
       prefs.preset = p;
       save();
     });
+    chip.type = "button";
+    chip.setAttribute("aria-pressed", String(p === prefs.preset));
     presetRow.append(chip);
   }
   const presetHint = el("div", "fl-set-secsub");
@@ -111,6 +118,7 @@ export function buildRenderingPanel(): HTMLElement {
       save();
     },
   );
+  labelBy(bitrateSeg, bitrateLab);
   bitrateWrap.append(bitrateLab, bitrateSeg);
   const syncAudioUi = () => {
     audioHint.textContent = prefs.audio === "copy" ? s.audioCopyHint : s.audioReencodeHint;
@@ -128,6 +136,7 @@ export function buildRenderingPanel(): HTMLElement {
       save();
     },
   );
+  labelBy(audioSeg, audioBlock.label);
   syncAudioUi();
   audioBlock.body.append(audioSeg, audioHint, bitrateWrap);
   root.append(audioBlock.root);
@@ -145,10 +154,15 @@ export function buildRenderingPanel(): HTMLElement {
   dryBody.append(dryTitle, drySub);
   dryToggle.append(
     dryBody,
-    toggleSwitch(prefs.dryRun, (v) => {
-      prefs.dryRun = v;
-      save();
-    }),
+    toggleSwitch(
+      prefs.dryRun,
+      (v) => {
+        prefs.dryRun = v;
+        save();
+      },
+      dryTitle,
+      drySub,
+    ),
   );
   dryBlock.body.append(dryToggle);
   root.append(dryBlock.root);
@@ -167,10 +181,15 @@ export function buildRenderingPanel(): HTMLElement {
   capBody.append(capTitle, capSub);
   capToggle.append(
     capBody,
-    toggleSwitch(prefs.burnCaptions, (v) => {
-      prefs.burnCaptions = v;
-      save();
-    }),
+    toggleSwitch(
+      prefs.burnCaptions,
+      (v) => {
+        prefs.burnCaptions = v;
+        save();
+      },
+      capTitle,
+      capSub,
+    ),
   );
 
   // --- Fonts folder: a typed path (web) / Browse… (Tauri) bound to its own
