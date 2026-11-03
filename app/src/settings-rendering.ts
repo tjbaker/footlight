@@ -8,8 +8,8 @@
 import { messages } from "./i18n/index.js";
 import { platform } from "./platform/index.js";
 import { el, button } from "./ui.js";
+import { ICON_FOLDER } from "./icons.js";
 import {
-  ICON_FOLDER,
   block,
   labelBy,
   labeledRow,

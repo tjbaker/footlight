@@ -11,25 +11,25 @@
 import type { CropPathKeyframe } from "@core";
 import { easedCropXAt } from "./autotrack.js";
 import { cropBoxToOffset, type Box, type Dims } from "@manifest";
+import { activeContentRegion } from "./editor-crop.js";
 import { clamp } from "./editor-util.js";
 
 /**
- * The working region a `crop_offset` is computed against (source px): the content
- * box's dimensions when content-crop mode is active (and the box is usable), else
- * the full frame.
+ * The working region a `crop_offset` is computed against (source px): the size
+ * of the even-rounded `content_crop` the engine crops to when content-crop mode
+ * is active (and the box is usable), else the full frame. Not the raw drawn box:
+ * an odd or fractional box renders 1px smaller each way (#338).
  */
 export function currentRegion(contentMode: boolean, contentBox: Box | null, dims: Dims): Dims {
-  // crop_offset is computed relative to the content region if one is set.
-  if (contentMode && contentBox && contentBox.w > 0) {
-    return { width: contentBox.w, height: contentBox.h };
-  }
-  return dims;
+  const r = activeContentRegion(contentMode, contentBox);
+  return r ? { width: r.w, height: r.h } : dims;
 }
 
 /**
  * The `crop_offset` string for `cropBox` within its working region. When a content
  * box is active the box x is shifted into content-relative coordinates first (the
- * region origin), mirroring how the engine resolves offsets inside a content crop.
+ * rendered region's origin), mirroring how the engine resolves offsets inside a
+ * content crop.
  */
 export function offsetForBox(
   cropBox: Box,
@@ -37,18 +37,17 @@ export function offsetForBox(
   contentBox: Box | null,
   region: Dims,
 ): string {
-  let box = cropBox;
-  if (contentMode && contentBox) {
-    box = { ...cropBox, x: cropBox.x - contentBox.x };
-  }
+  const r = activeContentRegion(contentMode, contentBox);
+  const box = r ? { ...cropBox, x: cropBox.x - r.x } : cropBox;
   return cropBoxToOffset(box, region);
 }
 
 /**
  * The drawn-box x for the AI-track preview at clip-relative time `t - inPoint`.
  * The cropPath x is in working-region pixels; when a content box is active it is
- * relative to that box's origin, so we add it back to land in source-frame
- * coordinates. Clamped into the frame to match `boxCenterToCropX`/`computeCrop`.
+ * relative to the rendered region's origin, so we add it back to land in
+ * source-frame coordinates. Clamped into the frame to match
+ * `boxCenterToCropX`/`computeCrop`.
  */
 export function trackedBoxXAt(
   cropPath: CropPathKeyframe[],
@@ -60,10 +59,7 @@ export function trackedBoxXAt(
   contentBox: Box | null,
 ): number {
   const rel = clamp(t - inPoint, 0, Number.POSITIVE_INFINITY);
-  let x = easedCropXAt(cropPath, rel);
-  if (contentMode && contentBox) {
-    x += contentBox.x;
-  }
+  const x = easedCropXAt(cropPath, rel) + (activeContentRegion(contentMode, contentBox)?.x ?? 0);
   const maxX = dims.width - cropBox.w;
   return clamp(x, 0, Math.max(0, maxX));
 }

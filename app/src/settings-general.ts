@@ -9,14 +9,8 @@ import { loadAutoTrackSettings, saveAutoTrackSettings } from "./autotrack.js";
 import { platform } from "./platform/index.js";
 import type { ThemeMode } from "./settings-util.js";
 import { el, button } from "./ui.js";
-import {
-  ICON_FOLDER,
-  block,
-  labeledRow,
-  panelHeader,
-  segmented,
-  toggleSwitch,
-} from "./settings-controls.js";
+import { ICON_FOLDER } from "./icons.js";
+import { block, labeledRow, panelHeader, segmented, toggleSwitch } from "./settings-controls.js";
 import {
   type Timecode,
   AUTOSAVE_KEY,

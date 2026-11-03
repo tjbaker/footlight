@@ -8,7 +8,8 @@ import { messages } from "./i18n/index.js";
 import { platform } from "./platform/index.js";
 import { APP_NAME, APP_VERSION, LICENSE, REPO_URL, ISSUES_NEW_URL } from "./version.js";
 import { el, button } from "./ui.js";
-import { ICON_BRAND, ICON_LINK, block, panelHeader } from "./settings-controls.js";
+import { ICON_BRAND, ICON_LINK } from "./icons.js";
+import { block, panelHeader } from "./settings-controls.js";
 
 export function buildAboutPanel(): HTMLElement {
   const s = messages.settings.about;

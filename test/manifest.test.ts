@@ -7,6 +7,7 @@ import {
   cropBoxToWindow,
   isFullHeightWindow,
   contentCropFromBox,
+  contentRegionFromBox,
   scheduleToString,
   serializeManifestCSV,
   serializeManifestJSON,
@@ -106,6 +107,24 @@ describe("contentCropFromBox", () => {
 
   it("rounds odd values down to even", () => {
     expect(contentCropFromBox({ x: 61, y: 35, w: 1801, h: 1011 })).toBe("1800:1010:60:34");
+  });
+});
+
+describe("contentRegionFromBox", () => {
+  it("is the emitted content_crop parsed back as the engine parses it (#338)", () => {
+    const drawn = { x: 61, y: 35, w: 1801, h: 1011 };
+    const [w, h, x, y] = parseContentCrop(contentCropFromBox(drawn))!;
+    expect(contentRegionFromBox(drawn)).toEqual({ x, y, w, h });
+    expect(contentRegionFromBox(drawn)).toEqual({ x: 60, y: 34, w: 1800, h: 1010 });
+  });
+
+  it("even-rounds a fractional box to the nearest even edge", () => {
+    expect(contentRegionFromBox({ x: 59.6, y: 0.4, w: 999.5, h: 801.2 })).toEqual({
+      x: 60,
+      y: 0,
+      w: 1000,
+      h: 800,
+    });
   });
 });
 

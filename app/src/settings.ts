@@ -9,8 +9,8 @@
  * build metadata from `version.ts` (About).
  *
  * This module is the modal shell: the nav, the panel switch and dismissal.
- * Each panel is its own `settings-<panel>.ts`; their shared builders and icons
- * are in settings-controls.ts (#270).
+ * Each panel is its own `settings-<panel>.ts`; their shared builders are in
+ * settings-controls.ts (#270) and their icons in icons.ts.
  *
  * Persistence is split by sensitivity, never inline in a config/session file:
  * - the BYOK API key lives in the OS keychain via the platform `secretStore`
@@ -32,9 +32,9 @@ import {
   ICON_GEAR,
   ICON_INFO,
   ICON_KEYBOARD,
-  ICON_SPARK,
+  ICON_SPARK_SINGLE,
   ICON_X,
-} from "./settings-controls.js";
+} from "./icons.js";
 import { buildGeneralPanel } from "./settings-general.js";
 import { buildRenderingPanel } from "./settings-rendering.js";
 import { buildAiPanel } from "./settings-ai.js";
@@ -63,7 +63,7 @@ const NAV: { id: PanelId; icon: string; label: () => string; build: () => HTMLEl
     label: () => messages.settings.nav.rendering,
     build: buildRenderingPanel,
   },
-  { id: "ai", icon: ICON_SPARK, label: () => messages.settings.nav.ai, build: buildAiPanel },
+  { id: "ai", icon: ICON_SPARK_SINGLE, label: () => messages.settings.nav.ai, build: buildAiPanel },
   {
     id: "shortcuts",
     icon: ICON_KEYBOARD,
@@ -104,7 +104,7 @@ export function openSettings(panel?: PanelId): void {
   const titleWrap = el("div");
   titleWrap.style.cssText = "display:flex; align-items:center; gap:11px;";
   const spark = el("span", "fl-assist-spark");
-  spark.innerHTML = ICON_SPARK;
+  spark.innerHTML = ICON_SPARK_SINGLE;
   const title = el("span", "fl-label");
   title.style.fontSize = "14px";
   title.textContent = s.title;
