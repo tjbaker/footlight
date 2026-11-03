@@ -11,17 +11,22 @@
  */
 
 import { easedCropWindowAt } from "@core";
-import { contentCropFromBox, scheduleToString, type ClipSpec, type Dims } from "@manifest";
-import { cropWindowSpec as cropWindowSpecPure } from "./editor-crop.js";
+import { scheduleToString, type ClipSpec, type Dims } from "@manifest";
+import {
+  activeContentCrop,
+  activeContentRegion,
+  cropWindowSpec as cropWindowSpecPure,
+} from "./editor-crop.js";
 import { currentRegion as currentRegionPure, offsetForBox } from "./editor-offset.js";
 import { pushKeyframes } from "./editor-push.js";
 import { hasActiveTrack, clipLength, type EditorState } from "./editor-store.js";
 
-/** Content-box origin when content mode is active (source ↔ region shift). */
+/** The rendered content region's origin when content mode is active (the
+ *  source ↔ region shift) — the even-rounded `content_crop` origin, not the raw
+ *  drawn box's, so windows round-trip to the rendered pixels (#338). */
 export function contentOrigin(state: EditorState): { x: number; y: number } | null {
-  return state.contentMode && state.contentBox
-    ? { x: state.contentBox.x, y: state.contentBox.y }
-    : null;
+  const r = activeContentRegion(state.contentMode, state.contentBox);
+  return r ? { x: r.x, y: r.y } : null;
 }
 
 /**
@@ -96,8 +101,8 @@ export function framingToSpec(
       ? scheduleToString(state.keyframes)
       : currentOffset(state);
   }
-  if (state.contentMode && state.contentBox && state.contentBox.w > 0) {
-    spec.content_crop = contentCropFromBox(state.contentBox);
-  }
+  // Same gate as the working region: a sliver box (≤ 2px) is not emitted.
+  const contentCrop = activeContentCrop(state.contentMode, state.contentBox);
+  if (contentCrop) spec.content_crop = contentCrop;
   return spec;
 }

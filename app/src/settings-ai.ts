@@ -16,15 +16,8 @@ import { priceForModel } from "@assistant-cost";
 import { perFrameUsd, perRequestUsd } from "./settings-util.js";
 import { el, button, ensureId } from "./ui.js";
 import { createGeneration } from "./generation.js";
-import {
-  ICON_KEY,
-  ICON_SPARK,
-  block,
-  labelBy,
-  panelHeader,
-  segmented,
-  toggleSwitch,
-} from "./settings-controls.js";
+import { ICON_KEY, ICON_SPARK_SINGLE } from "./icons.js";
+import { block, labelBy, panelHeader, segmented, toggleSwitch } from "./settings-controls.js";
 import {
   type AiPrefs,
   AI_KEY,
@@ -307,7 +300,7 @@ export function buildAiPanel(): HTMLElement {
 
   // Cost callout with a live interval recompute
   const note = el("div", "fl-costnote");
-  note.innerHTML = ICON_SPARK;
+  note.innerHTML = ICON_SPARK_SINGLE;
   const ct = el("div", "ct");
   const noteText = el("span");
   const intervalCtl = segmented<string>(

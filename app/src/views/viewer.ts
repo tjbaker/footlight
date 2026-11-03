@@ -359,11 +359,12 @@ export function buildViewer(store: EditorStore, deps: ViewerViewDeps): ViewerVie
     // crop (`ghost.crop`) and/or a proposed content crop (`ghost.contentCrop`,
     // "W:H:X:Y") render as dashed accent-2 outlines WITHOUT mutating state —
     // committing happens on Accept. Boxes are in working-region px (offset by the
-    // active content box's origin so they land in source-frame coords, matching
-    // how the engine and `trackedBoxX` evaluate them).
+    // rendered content region's origin so they land in source-frame coords,
+    // matching how the engine and `trackedBoxX` evaluate them).
     if (ghostPreviews.length) {
-      const dx = state.contentMode && state.contentBox ? state.contentBox.x : 0;
-      const dy = state.contentMode && state.contentBox ? state.contentBox.y : 0;
+      const origin = deps.contentOrigin();
+      const dx = origin?.x ?? 0;
+      const dy = origin?.y ?? 0;
       const accent2 =
         getComputedStyle(document.documentElement).getPropertyValue("--accent-2").trim() ||
         "#ffb27a";
