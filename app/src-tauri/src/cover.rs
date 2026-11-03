@@ -67,7 +67,7 @@ fn is_timestamp_part(part: &str) -> bool {
         None => (part, None),
     };
     let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
-    digits(int) && frac.map_or(true, digits)
+    digits(int) && frac.is_none_or(digits)
 }
 
 /// Parse `HH:MM:SS`, `MM:SS`, or plain seconds into float seconds. Each part
