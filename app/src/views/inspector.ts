@@ -22,7 +22,7 @@
  * `getOutdir`/`getName`/`flashError`/`syncFromState`, …).
  */
 
-import { contentCropFromBox, scheduleToString, type Dims } from "@manifest";
+import { scheduleToString, type Dims } from "@manifest";
 import { planSampleTimes, samplesToCropPath } from "@track";
 import { messages } from "../i18n/index.js";
 import type { FootlightPlatform, ProbeResult } from "../platform/types.js";
@@ -38,7 +38,7 @@ import {
   type TextPosH,
 } from "../editor-util.js";
 import { parseFadeField, loopSeamTimes } from "../editor-fades.js";
-import { activeContentBox } from "../editor-crop.js";
+import { activeContentCrop } from "../editor-crop.js";
 import { boxToRegionWindow, describePush } from "../editor-push.js";
 import { hasActiveTrack, type EditorStore } from "../editor-store.js";
 import { loadRecents, loadOutdir } from "../editor-prefs.js";
@@ -557,11 +557,10 @@ export function buildInspector(store: EditorStore, deps: InspectorViewDeps): Ins
   }
 
   function refreshContentReadout(): void {
-    if (!state.contentMode || !state.contentBox || state.contentBox.w === 0) {
-      contentReadout.textContent = m.framing.contentOff;
-      return;
-    }
-    contentReadout.textContent = `${m.framing.contentCropPrefix}${contentCropFromBox(state.contentBox)}`;
+    const contentCrop = activeContentCrop(state.contentMode, state.contentBox);
+    contentReadout.textContent = contentCrop
+      ? `${m.framing.contentCropPrefix}${contentCrop}`
+      : m.framing.contentOff;
   }
 
   function refreshIO(): void {
@@ -658,7 +657,6 @@ export function buildInspector(store: EditorStore, deps: InspectorViewDeps): Ins
     const inPt = state.inPoint;
     const shotEnd = state.outPoint - inPt; // clip-relative shot length
     const region = deps.currentRegion();
-    const trackContent = activeContentBox(state.contentMode, state.contentBox);
     // Scene cuts inside the In/Out range, expressed clip-relative.
     const sceneCuts = state.sceneCuts
       .filter((c) => c > inPt && c < state.outPoint!)
@@ -693,7 +691,7 @@ export function buildInspector(store: EditorStore, deps: InspectorViewDeps): Ins
         // and the content crop (if any) keeps frames in the working region.
         startSec: inPt,
         // Same gate as `framingToSpec`, so the tracked region is the rendered one.
-        contentCrop: trackContent ? contentCropFromBox(trackContent) : undefined,
+        contentCrop: activeContentCrop(state.contentMode, state.contentBox),
       });
       const path = samplesToCropPath(samples, region);
       if (path.length === 0) {

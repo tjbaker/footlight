@@ -11,9 +11,9 @@
  */
 
 import { easedCropWindowAt } from "@core";
-import { contentCropFromBox, scheduleToString, type ClipSpec, type Dims } from "@manifest";
+import { scheduleToString, type ClipSpec, type Dims } from "@manifest";
 import {
-  activeContentBox,
+  activeContentCrop,
   activeContentRegion,
   cropWindowSpec as cropWindowSpecPure,
 } from "./editor-crop.js";
@@ -102,7 +102,7 @@ export function framingToSpec(
       : currentOffset(state);
   }
   // Same gate as the working region: a sliver box (≤ 2px) is not emitted.
-  const content = activeContentBox(state.contentMode, state.contentBox);
-  if (content) spec.content_crop = contentCropFromBox(content);
+  const contentCrop = activeContentCrop(state.contentMode, state.contentBox);
+  if (contentCrop) spec.content_crop = contentCrop;
   return spec;
 }

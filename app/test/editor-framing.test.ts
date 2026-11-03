@@ -14,8 +14,9 @@ import { describe, it, expect } from "vitest";
 import { buildFfmpegArgs, type CropPathKeyframe } from "@core";
 import type { Box, Dims } from "@manifest";
 import { cropRegionRect, resizeCrop } from "../src/editor-crop.js";
-import { currentRegion, framingToSpec } from "../src/editor-framing.js";
+import { contentOrigin, currentRegion, framingToSpec } from "../src/editor-framing.js";
 import { trackedBoxXAt } from "../src/editor-offset.js";
+import { boxToRegionWindow, pushPreviewBox } from "../src/editor-push.js";
 import { createInitialEditorState } from "../src/editor-store.js";
 
 const box = (x: number, y: number, w: number, h: number): Box => ({ x, y, w, h });
@@ -58,6 +59,8 @@ function renderedBox(cropBox: Box, contentBox: Box | null): Box {
   const crops = [...vf.matchAll(/crop=(\d+):(\d+):(\d+):(\d+)/g)].map((m) =>
     m.slice(1).map(Number),
   );
+  // One literal crop per stage: the content crop (if any), then the 9:16 crop.
+  expect(crops).toHaveLength(spec.content_crop ? 2 : 1);
   const [w, h, x, y] = crops.at(-1)!;
   const [ox, oy] = crops.length > 1 ? [crops[0]![2]!, crops[0]![3]!] : [0, 0];
   return { x: ox + x!, y: oy + y!, w: w!, h: h! };
@@ -98,6 +101,24 @@ describe("framing inside an odd-sized content crop (#338)", () => {
     expect(dragged.x + dragged.w).toBeLessThanOrEqual(1200);
     expect(dragged.y + dragged.h).toBeLessThanOrEqual(850);
     expect(renderedBox(dragged, ODD_CONTENT)).toEqual(dragged);
+  });
+
+  it("a fractional drawn content box frames against its rendered region", () => {
+    // A pointer drag leaves fractional edges; contentCropFromBox → 1000:800:200:50.
+    const content = box(200.6, 50.4, 1000.7, 800.2);
+    const drawn = box(500, 150, 304, 540);
+    expect(framingToSpec(stateWith(drawn, content)).content_crop).toBe("1000:800:200:50");
+    expect(renderedBox(drawn, content)).toEqual(drawn);
+  });
+
+  it("a captured push window is relative to the rendered origin and previews back exactly", () => {
+    const drawn = box(500, 150, 304, 540);
+    const state = stateWith(drawn, ODD_CONTENT);
+    // What the inspector's push capture emits for this box.
+    const win = boxToRegionWindow(drawn, contentOrigin(state), currentRegion(state));
+    expect(contentOrigin(state)).toEqual({ x: 200, y: 50 });
+    expect(win).toEqual({ x: 300, y: 100, w: 304, h: 540 });
+    expect(pushPreviewBox([{ t: 0, ...win }], 0, contentOrigin(state))).toEqual(drawn);
   });
 
   it("the AI-track preview re-adds the rendered origin, not the raw one", () => {

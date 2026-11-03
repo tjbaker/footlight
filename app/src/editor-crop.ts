@@ -10,6 +10,7 @@
 
 import { TARGET_AR, computeCrop, roundEven } from "@core";
 import {
+  contentCropFromBox,
   contentRegionFromBox,
   cropBoxToWindow,
   isFullHeightWindow,
@@ -85,6 +86,17 @@ export function cropRegionRect(
  *  framing math (`activeContentRegion`) and the `content_crop` emission. */
 export function activeContentBox(contentMode: boolean, contentBox: Box | null): Box | null {
   return contentMode && contentBox && contentBox.w > 2 && contentBox.h > 2 ? contentBox : null;
+}
+
+/** The `content_crop` string to emit for the active content box, else
+ *  undefined — the one emission gate shared by `framingToSpec`, the tracker
+ *  call and the inspector readout, so none can disagree on a sliver box. */
+export function activeContentCrop(
+  contentMode: boolean,
+  contentBox: Box | null,
+): string | undefined {
+  const c = activeContentBox(contentMode, contentBox);
+  return c ? contentCropFromBox(c) : undefined;
 }
 
 /** The region the engine actually crops to for the active content box (its
