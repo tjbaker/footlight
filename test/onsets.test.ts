@@ -8,7 +8,7 @@
  * data out, no files, no subprocess — mirroring the detectSwells test style.
  *
  * The fixtures marked "pinned" are HAND-MIRRORED by the native Rust backend's
- * tests (app/src-tauri/src/main.rs `onset_envelope_*`) — keep them in sync.
+ * tests (app/src-tauri/src/pcm_envelope.rs `onset_envelope_*`) — keep them in sync.
  */
 
 import { describe, it, expect } from "vitest";
@@ -64,7 +64,7 @@ describe("onsetEnvelope", () => {
   });
 
   // PINNED fixture — mirrored by the Rust test `onset_envelope_pinned_fixture`
-  // in app/src-tauri/src/main.rs. sampleRate 200 → 4 samples/frame, so
+  // in app/src-tauri/src/pcm_envelope.rs. sampleRate 200 → 4 samples/frame, so
   // [1,1,0,0] → RMS √0.5, [1,1,1,1] → RMS 1; normalized + 4-decimal rounding
   // → [0.7071, 1].
   it("pinned: per-frame RMS, normalized and rounded to 4 decimals (rate 200)", () => {

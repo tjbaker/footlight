@@ -5,7 +5,7 @@
  *
  * Pure and browser-safe (no `node:` imports). The web dev backend
  * (`app/dev-server/server.mjs`) calls this directly; the native Tauri shell
- * cannot import TS, so `render_cli_args` in `app/src-tauri/src/main.rs` is a
+ * cannot import TS, so `render_cli_args` in `app/src-tauri/src/render.rs` is a
  * documented hand mirror. Both are pinned to the same cases in
  * `test/fixtures/render-cli-args.json`, so a drift on either side fails CI.
  */

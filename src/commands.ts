@@ -19,7 +19,7 @@
 // hand-rolling the same arg arrays and regexes. Pure (string in, string[]/value
 // out) so they stay browser-safe and unit-testable.
 //
-// The native Rust backend (`app/src-tauri/src/main.rs`) mirrors these commands
+// The native Rust backend (`app/src-tauri/src/media.rs`) mirrors these commands
 // by hand — it cannot import TS — so keep it in sync when the args/thresholds
 // here change.
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared computeCrop / parseContentCrop / clampCropWindow fixtures: test/engine.test.ts and the Rust mirrors (compute_crop / parse_content_crop / clamp_crop_window in app/src-tauri/src/main.rs, via include_str!) both run every case, so the two sides cannot drift. Results are [cw, ch, x, y]; content crops are [W, H, X, Y] or null.",
+  "_comment": "Shared computeCrop / parseContentCrop / clampCropWindow fixtures: test/engine.test.ts and the Rust mirrors (compute_crop / parse_content_crop / clamp_crop_window in app/src-tauri/src/cover.rs, via include_str!) both run every case, so the two sides cannot drift. Results are [cw, ch, x, y]; content crops are [W, H, X, Y] or null.",
   "computeCrop": {
     "accept": [
       [1920, 1080, "center", [608, 1080, 656, 0]],

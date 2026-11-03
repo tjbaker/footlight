@@ -22,7 +22,7 @@ import {
 
 type Quad = [number, number, number, number];
 
-/** Shared with the Rust mirrors in app/src-tauri/src/main.rs (include_str!). */
+/** Shared with the Rust mirrors in app/src-tauri/src/cover.rs (include_str!). */
 const cropFixtures = JSON.parse(
   readFileSync(new URL("./fixtures/crop.json", import.meta.url), "utf8"),
 ) as {
@@ -67,7 +67,7 @@ describe("parseTimestamp", () => {
     expect(() => parseTimestamp("abc")).toThrow();
   });
 
-  // Shared with the Rust `parse_timestamp` mirror (include_str! in main.rs).
+  // Shared with the Rust `parse_timestamp` mirror (include_str! in cover.rs).
   const fixtures = JSON.parse(
     readFileSync(new URL("./fixtures/timestamps.json", import.meta.url), "utf8"),
   ) as { accept: [string, number][]; reject: string[] };
@@ -102,7 +102,7 @@ describe("parseContentCrop", () => {
     expect(() => parseContentCrop("1800:0:60:34")).toThrow(/positive/);
   });
 
-  // Shared with the Rust `parse_content_crop` mirror (include_str! in main.rs).
+  // Shared with the Rust `parse_content_crop` mirror (include_str! in cover.rs).
   it.each(cropFixtures.parseContentCrop.accept)("accepts %j as %j", (input, want) => {
     expect(parseContentCrop(input)).toEqual(want);
   });
@@ -178,7 +178,7 @@ describe("computeCrop", () => {
     expect(c).toEqual({ cw: 1080, ch: 1920, x: 0, y: 0 });
   });
 
-  // Shared with the Rust `compute_crop` mirror (include_str! in main.rs).
+  // Shared with the Rust `compute_crop` mirror (include_str! in cover.rs).
   it.each(cropFixtures.computeCrop.accept)("%dx%d %j -> %j", (iw, ih, offset, [cw, ch, x, y]) => {
     expect(computeCrop(iw, ih, offset)).toEqual({ cw, ch, x, y });
   });
@@ -189,7 +189,7 @@ describe("computeCrop", () => {
 });
 
 describe("clampCropWindow", () => {
-  // Shared with the Rust `clamp_crop_window` mirror (include_str! in main.rs).
+  // Shared with the Rust `clamp_crop_window` mirror (include_str! in cover.rs).
   it.each(cropFixtures.clampCropWindow.accept)(
     "%j in %dx%d -> %j",
     (win, workW, workH, [cw, ch, x, y]) => {

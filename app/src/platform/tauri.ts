@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * tauriPlatform — the native backend. Each capability is a Tauri `invoke` of a
- * Rust `#[tauri::command]` (see app/src-tauri/src/main.rs) that shells out to
+ * Rust `#[tauri::command]` (in its domain module under app/src-tauri/src/,
+ * registered in main.rs) that shells out to
  * ffmpeg/ffprobe and the footlight CLI directly, with no localhost HTTP hop.
  *
  * The `@tauri-apps/*` imports are dynamic so that this module is safe to load
@@ -180,7 +181,7 @@ export const tauriPlatform: FootlightPlatform = {
   },
 
   // Secret storage backed by the OS keychain via the Rust `keyring` crate (see
-  // get_secret / set_secret / delete_secret in app/src-tauri/src/main.rs). The
+  // get_secret / set_secret / delete_secret in app/src-tauri/src/store.rs). The
   // bundle identifier is the keyring service; `key` is the account name.
   async getSecret(key: string): Promise<string | null> {
     return invoke<string | null>("get_secret", { key });

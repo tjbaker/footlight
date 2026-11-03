@@ -47,7 +47,8 @@ jobs:
   # it statically), so a PR could break `cargo tauri build` and stay green.
   # `cargo test` both compiles the shell (subsuming the old `cargo check` gate)
   # and runs the Rust unit tests that pin the hand-mirrored arg builders /
-  # parsers in main.rs to src/core.ts — no bundling, no release profile.
+  # parsers in the src-tauri modules (cover.rs, media.rs, render.rs, …) to
+  # their src/*.ts originals — no bundling, no release profile.
   tauri:
     name: tauri (cargo test)
     runs-on: ubuntu-latest

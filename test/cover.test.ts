@@ -8,7 +8,7 @@
  * `buildFfmpegArgs`.
  *
  * NOTE: the fixture values here are PINNED by the Rust hand mirror in
- * app/src-tauri/src/main.rs (`cover_frame_args` & friends) — its #[cfg(test)]
+ * app/src-tauri/src/cover.rs (`cover_frame_args` & friends) — its #[cfg(test)]
  * cases reuse these exact inputs and expected strings, so keep them in sync.
  */
 
