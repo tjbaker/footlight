@@ -1,8 +1,9 @@
 // Copyright 2026 Trevor Baker, all rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 //! Persisted app state: the render history and working session (JSON files in
-//! the app config dir, read with corrupt-file recovery and written atomically)
-//! and the OS-keychain secret store behind the frontend's `secretStore` seam.
+//! the app config dir, read with corrupt-file recovery and written atomically,
+//! all on the blocking-thread pool rather than an async worker) and the
+//! OS-keychain secret store behind the frontend's `secretStore` seam.
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
@@ -12,15 +13,55 @@ use tauri::{AppHandle, Manager};
 /// namespaced to this app in the OS keychain.
 const KEYRING_SERVICE: &str = "com.tjbaker.footlight";
 
-/// Path to the persisted render-history file inside the app config dir, creating
-/// the config dir if it does not yet exist.
-fn history_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
-    let dir = app
-        .path()
+/// Persisted render-history file name (in the app config dir).
+const HISTORY_FILE: &str = "history.json";
+/// Persisted working-session file name (in the app config dir).
+const SESSION_FILE: &str = "session.json";
+
+/// Path to the persisted JSON file `name` inside the app config dir, creating
+/// the config dir if it does not yet exist. Blocking (`create_dir_all`): call it
+/// only inside `on_blocking_pool`.
+fn store_path(dir: &std::path::Path, name: &str) -> Result<std::path::PathBuf, String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("create app config dir: {e}"))?;
+    Ok(dir.join(name))
+}
+
+/// The app config dir (path resolution only, no file I/O).
+fn config_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    app.path()
         .app_config_dir()
-        .map_err(|e| format!("resolve app config dir: {e}"))?;
-    std::fs::create_dir_all(&dir).map_err(|e| format!("create app config dir: {e}"))?;
-    Ok(dir.join("history.json"))
+        .map_err(|e| format!("resolve app config dir: {e}"))
+}
+
+/// Run blocking store file I/O on the runtime's blocking-thread pool, so an
+/// async command never stalls a tokio worker on `std::fs` (#340).
+async fn on_blocking_pool<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|e| format!("store task: {e}"))?
+}
+
+/// Load the JSON file `name` from the app config dir off the async runtime
+/// (missing/corrupt -> `T::default()`, see `read_json_or_default`).
+async fn load_json<T: serde::de::DeserializeOwned + Default + Send + 'static>(
+    app: &AppHandle,
+    name: &'static str,
+) -> Result<T, String> {
+    let dir = config_dir(app)?;
+    on_blocking_pool(move || read_json_or_default(&store_path(&dir, name)?)).await
+}
+
+/// Atomically persist `value` as the JSON file `name` in the app config dir,
+/// off the async runtime (see `write_json_atomic`).
+async fn save_json<T: Serialize + Send + 'static>(
+    app: &AppHandle,
+    name: &'static str,
+    value: T,
+) -> Result<(), String> {
+    let dir = config_dir(app)?;
+    on_blocking_pool(move || write_json_atomic(&store_path(&dir, name)?, &value)).await
 }
 
 /// Read a persisted JSON file, falling back to `T::default()` when it is missing.
@@ -87,7 +128,9 @@ fn write_json_atomic<T: Serialize>(path: &std::path::Path, value: &T) -> Result<
 /// the type.
 #[tauri::command]
 pub(crate) async fn load_history(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
-    read_json_or_default(&history_path(&app)?).map_err(|e| format!("load history: {e}"))
+    load_json(&app, HISTORY_FILE)
+        .await
+        .map_err(|e| format!("load history: {e}"))
 }
 
 /// Persist the full render-history array to the app config dir (atomically).
@@ -96,18 +139,9 @@ pub(crate) async fn save_history(
     app: AppHandle,
     entries: Vec<serde_json::Value>,
 ) -> Result<(), String> {
-    write_json_atomic(&history_path(&app)?, &entries).map_err(|e| format!("save history: {e}"))
-}
-
-/// Path to the persisted working-session file inside the app config dir, creating
-/// the config dir if it does not yet exist.
-fn session_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
-    let dir = app
-        .path()
-        .app_config_dir()
-        .map_err(|e| format!("resolve app config dir: {e}"))?;
-    std::fs::create_dir_all(&dir).map_err(|e| format!("create app config dir: {e}"))?;
-    Ok(dir.join("session.json"))
+    save_json(&app, HISTORY_FILE, entries)
+        .await
+        .map_err(|e| format!("save history: {e}"))
 }
 
 /// Load the persisted working session. A missing or corrupt file yields `None`
@@ -115,13 +149,17 @@ fn session_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
 /// shape) so Rust does not mirror the type.
 #[tauri::command]
 pub(crate) async fn load_session(app: AppHandle) -> Result<Option<serde_json::Value>, String> {
-    read_json_or_default(&session_path(&app)?).map_err(|e| format!("load session: {e}"))
+    load_json(&app, SESSION_FILE)
+        .await
+        .map_err(|e| format!("load session: {e}"))
 }
 
 /// Persist the working session to the app config dir (atomically).
 #[tauri::command]
 pub(crate) async fn save_session(app: AppHandle, data: serde_json::Value) -> Result<(), String> {
-    write_json_atomic(&session_path(&app)?, &data).map_err(|e| format!("save session: {e}"))
+    save_json(&app, SESSION_FILE, data)
+        .await
+        .map_err(|e| format!("save session: {e}"))
 }
 
 /// Build a keyring entry for `key` under this app's service. The platform
@@ -271,6 +309,35 @@ mod tests {
             .map(|e| e.unwrap().file_name())
             .collect();
         assert_eq!(names, vec![std::ffi::OsString::from("history.json")]);
+    }
+
+    /// The commands' async path: store I/O runs on a blocking-pool thread (not
+    /// the awaiting one), `store_path` creates the config dir there, values
+    /// round-trip, and the closure's `Err` comes back unchanged (#340).
+    #[test]
+    fn on_blocking_pool_runs_store_io_off_the_caller_and_propagates_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = dir.path().join("config");
+        let entries = vec![serde_json::json!({"id": "a"})];
+        tauri::async_runtime::block_on(async {
+            let caller = std::thread::current().id();
+            let (w_cfg, w_entries) = (cfg.clone(), entries.clone());
+            let worker = on_blocking_pool(move || {
+                write_json_atomic(&store_path(&w_cfg, HISTORY_FILE)?, &w_entries)?;
+                Ok(std::thread::current().id())
+            })
+            .await
+            .unwrap();
+            assert_ne!(worker, caller);
+            let r_cfg = cfg.clone();
+            let back: Vec<serde_json::Value> =
+                on_blocking_pool(move || read_json_or_default(&store_path(&r_cfg, HISTORY_FILE)?))
+                    .await
+                    .unwrap();
+            assert_eq!(back, entries);
+            let err = on_blocking_pool(|| Err::<(), _>("boom".to_string())).await;
+            assert_eq!(err, Err("boom".to_string()));
+        });
     }
 
     /// A failed write (target dir gone) errors and leaves nothing behind.
