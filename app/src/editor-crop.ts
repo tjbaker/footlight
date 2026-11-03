@@ -8,9 +8,9 @@
  * the H.264 encoder (`roundEven`), clamped inside the working region.
  */
 
-import { TARGET_AR, computeCrop, parseContentCrop, roundEven, type ContentCrop } from "@core";
+import { TARGET_AR, computeCrop, roundEven } from "@core";
 import {
-  contentCropFromBox,
+  contentRegionFromBox,
   cropBoxToWindow,
   isFullHeightWindow,
   type Box,
@@ -64,24 +64,36 @@ export function parseContentCropPx(str: string): Box | null {
 
 /**
  * The working region the crop box lives in, in SOURCE-pixel coordinates: the
- * content box when content-crop mode is active (and drawn), else the full frame.
- * Used to clamp moves/resizes and to know what "full height" means.
+ * rendered (even-rounded) content region when content-crop mode is active (and
+ * drawn), else the full frame. Used to clamp moves/resizes and to know what
+ * "full height" means — clamping to the rendered region, not the raw drawn box,
+ * keeps a box dragged to the far edge inside what the engine actually crops.
  */
 export function cropRegionRect(
   contentMode: boolean,
   contentBox: Box | null,
   dims: Dims,
 ): RegionRect {
-  const c = activeContentBox(contentMode, contentBox);
+  const c = activeContentRegion(contentMode, contentBox);
   if (c) return { x0: c.x, y0: c.y, x1: c.x + c.w, y1: c.y + c.h };
   return { x0: 0, y0: 0, x1: dims.width, y1: dims.height };
 }
 
 /** The content box when content-crop mode is active and the box is usable
- *  (larger than 2px each way), else null — the one gate for "is the working
- *  region a content box" shared by `cropRegionRect` and `fullHeightCropBox`. */
-function activeContentBox(contentMode: boolean, contentBox: Box | null): Box | null {
+ *  (larger than 2px each way), else null — the ONE gate for "is the working
+ *  region a content box", shared by the drawing/clamping helpers here, the
+ *  framing math (`activeContentRegion`) and the `content_crop` emission. */
+export function activeContentBox(contentMode: boolean, contentBox: Box | null): Box | null {
   return contentMode && contentBox && contentBox.w > 2 && contentBox.h > 2 ? contentBox : null;
+}
+
+/** The region the engine actually crops to for the active content box (its
+ *  even-rounded `content_crop`, via `contentRegionFromBox`), else null. Offsets
+ *  and windows are computed relative to THIS origin and size, not the raw
+ *  drawn box, so they round-trip to the rendered pixels (#338). */
+export function activeContentRegion(contentMode: boolean, contentBox: Box | null): Box | null {
+  const c = activeContentBox(contentMode, contentBox);
+  return c ? contentRegionFromBox(c) : null;
 }
 
 /**
@@ -131,12 +143,14 @@ export function resizeCrop(
  * (400x710 comes back 398 wide). That mismatch predates this helper.
  */
 export function fullHeightCropBox(contentMode: boolean, contentBox: Box | null, dims: Dims): Box {
-  const content = activeContentBox(contentMode, contentBox);
-  const [w, h, x0, y0]: ContentCrop = content
-    ? parseContentCrop(contentCropFromBox(content))!
-    : [dims.width, dims.height, 0, 0];
-  const c = computeCrop(w, h, "center");
-  return { x: x0 + c.x, y: y0 + c.y, w: c.cw, h: c.ch };
+  const r = activeContentRegion(contentMode, contentBox) ?? {
+    x: 0,
+    y: 0,
+    w: dims.width,
+    h: dims.height,
+  };
+  const c = computeCrop(r.w, r.h, "center");
+  return { x: r.x + c.x, y: r.y + c.y, w: c.cw, h: c.ch };
 }
 
 /**

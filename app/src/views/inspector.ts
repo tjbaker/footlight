@@ -38,6 +38,7 @@ import {
   type TextPosH,
 } from "../editor-util.js";
 import { parseFadeField, loopSeamTimes } from "../editor-fades.js";
+import { activeContentBox } from "../editor-crop.js";
 import { boxToRegionWindow, describePush } from "../editor-push.js";
 import { hasActiveTrack, type EditorStore } from "../editor-store.js";
 import { loadRecents, loadOutdir } from "../editor-prefs.js";
@@ -657,6 +658,7 @@ export function buildInspector(store: EditorStore, deps: InspectorViewDeps): Ins
     const inPt = state.inPoint;
     const shotEnd = state.outPoint - inPt; // clip-relative shot length
     const region = deps.currentRegion();
+    const trackContent = activeContentBox(state.contentMode, state.contentBox);
     // Scene cuts inside the In/Out range, expressed clip-relative.
     const sceneCuts = state.sceneCuts
       .filter((c) => c > inPt && c < state.outPoint!)
@@ -690,10 +692,8 @@ export function buildInspector(store: EditorStore, deps: InspectorViewDeps): Ins
         // The shot's In point in source seconds: frames are sampled from here,
         // and the content crop (if any) keeps frames in the working region.
         startSec: inPt,
-        contentCrop:
-          state.contentMode && state.contentBox && state.contentBox.w > 0
-            ? contentCropFromBox(state.contentBox)
-            : undefined,
+        // Same gate as `framingToSpec`, so the tracked region is the rendered one.
+        contentCrop: trackContent ? contentCropFromBox(trackContent) : undefined,
       });
       const path = samplesToCropPath(samples, region);
       if (path.length === 0) {
