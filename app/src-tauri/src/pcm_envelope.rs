@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Streaming RMS envelopes over the loudness pass's mono f32le PCM (#277).
 //!
-//! HAND MIRROR of src/pcm-envelope.ts (plus core.ts `PcmLoudnessStream`);
+//! HAND MIRROR of src/pcm-envelope.ts (plus audio.ts `PcmLoudnessStream`);
 //! Rust can't import the TS, so the tests below pin the same fixtures. The
 //! loudness command feeds ffmpeg's stdout through [`LoudnessPcm`] as it
 //! arrives instead of buffering the whole decode (about 32 KB/s of audio):
@@ -189,7 +189,7 @@ impl BucketRms {
 }
 
 /// The loudness pass's PCM half, streamed: `push` stdout chunks as they
-/// arrive, then `finish` for (`detect`, `onset_envelope`). Mirrors core.ts
+/// arrive, then `finish` for (`detect`, `onset_envelope`). Mirrors audio.ts
 /// `PcmLoudnessStream`.
 pub struct LoudnessPcm {
     decoder: F32leDecoder,
@@ -200,7 +200,7 @@ pub struct LoudnessPcm {
 }
 
 impl LoudnessPcm {
-    /// `onset_frame_len` samples per onset frame (core.ts `onsetFrameLen`).
+    /// `onset_frame_len` samples per onset frame (audio.ts `onsetFrameLen`).
     pub fn new(onset_frame_len: usize) -> Self {
         LoudnessPcm {
             decoder: F32leDecoder::default(),
@@ -233,7 +233,7 @@ impl LoudnessPcm {
 mod tests {
     use super::*;
 
-    /// Buffered helpers over the accumulators (what core.ts `bucketLoudness`
+    /// Buffered helpers over the accumulators (what audio.ts `bucketLoudness`
     /// / `onsetEnvelope` are), so the tests below read like their TS twins.
     fn bucket_loudness(samples: &[f32], buckets: usize) -> Vec<f64> {
         let mut acc = BucketRms::new(RMS_CHUNK_CAP);
