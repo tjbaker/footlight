@@ -139,6 +139,18 @@ export function contentCropFromBox(box: Box): string {
   return `${w}:${h}:${x}:${y}`;
 }
 
+/**
+ * The region the engine ACTUALLY crops to for a drawn content box, in source
+ * px: `contentCropFromBox`'s string parsed back exactly as the render parses
+ * it (`parseContentCrop`). Every edge is even-rounded, so an odd or fractional
+ * drawn box yields the origin and size the 9:16 crop is really relative to —
+ * the region `crop_offset` / `cropWindow` must be computed against.
+ */
+export function contentRegionFromBox(box: Box): Box {
+  const [w, h, x, y] = parseContentCrop(contentCropFromBox(box))!;
+  return { x, y, w, h };
+}
+
 /** Format a clip-relative time, trimming trailing zeros (0, 14.5, 21). */
 function formatTime(t: number): string {
   // Avoid -0 and exponent notation; trim trailing zeros from a fixed-decimal form.
