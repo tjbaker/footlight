@@ -1,0 +1,9 @@
+# The one pinned Rust toolchain for the Tauri shell: CI (`rustup toolchain
+# install` in this directory) and local `cargo` both resolve it from here, so
+# a new stable release can't add clippy lints that turn unrelated PRs red.
+# Bump it deliberately, in its own PR that fixes any new lints (CONTRIBUTING.md).
+# Must stay >= `rust-version` (the MSRV) in Cargo.toml.
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

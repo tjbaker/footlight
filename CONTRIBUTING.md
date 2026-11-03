@@ -62,6 +62,13 @@ the right install command for your platform.
 - **Linting is ESLint's job**: one root config covers both packages — run
   `npm run lint` at the repo root (CI enforces it). Recommended rules only;
   style belongs to Prettier, types to `tsc`.
+- **Rust** (the Tauri shell in `app/src-tauri/`): `cargo fmt` owns formatting,
+  and CI runs `cargo clippy --all-targets --locked -- -D warnings` plus
+  `cargo test --locked`. The toolchain is pinned in
+  `app/src-tauri/rust-toolchain.toml`, which both CI and local `cargo` (via
+  rustup) read, so a new stable release can't fail a PR that never touched Rust.
+  Bump the pin deliberately in its own PR that fixes whatever new lints that
+  version raises, and keep it at or above Cargo.toml's `rust-version` (the MSRV).
 - Keep changes focused and tested.
 
 ## Pull request expectations
