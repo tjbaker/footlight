@@ -1,5 +1,71 @@
 # Changelog
 
+## [0.9.0](https://github.com/tjbaker/footlight/compare/footlight-v0.8.1...footlight-v0.9.0) (2026-11-03)
+
+
+### Features
+
+* **app:** make the Settings controls keyboard-operable ([#349](https://github.com/tjbaker/footlight/issues/349)) ([b8340ed](https://github.com/tjbaker/footlight/commit/b8340eda7b0ce10658d808739fbe8d37703c1290))
+* **app:** one shared accessible modal helper for all five dialogs ([#344](https://github.com/tjbaker/footlight/issues/344)) ([14d0b7d](https://github.com/tjbaker/footlight/commit/14d0b7db0b3c0e7a952b493b1285b648add2f000))
+
+
+### Bug Fixes
+
+* **app:** compute crop offset and window against the rendered content region ([#357](https://github.com/tjbaker/footlight/issues/357)) ([b88a2fa](https://github.com/tjbaker/footlight/commit/b88a2fa3abf600c1ec3046b6169e6eef03b90e77))
+* **app:** delegate double-click crop reset to computeCrop ([#326](https://github.com/tjbaker/footlight/issues/326)) ([07020f2](https://github.com/tjbaker/footlight/commit/07020f21673f00be08f3f1e68bafd01e07b799c6))
+* **app:** drop stale async responses in the editor and Settings key test ([#342](https://github.com/tjbaker/footlight/issues/342)) ([f6378db](https://github.com/tjbaker/footlight/commit/f6378db15bfae87e68f980f24174269ebe5ba31e))
+* **app:** frontend robustness polish ([#343](https://github.com/tjbaker/footlight/issues/343)) ([c80b408](https://github.com/tjbaker/footlight/commit/c80b40854916a7c8f5eade56103f7abd6735c326))
+* **app:** give each native temp file a unique, auto-deleted path ([#293](https://github.com/tjbaker/footlight/issues/293)) ([1c01ee6](https://github.com/tjbaker/footlight/commit/1c01ee6403c8ed2747c35783030edc40e4831e42))
+* **app:** keep global hotkeys out of selects, buttons and open modals ([#288](https://github.com/tjbaker/footlight/issues/288)) ([c20058f](https://github.com/tjbaker/footlight/commit/c20058ff9d575c0c1347ea51501577361e8ec6e9))
+* **app:** keep the current source when a history entry's source fails to load ([#287](https://github.com/tjbaker/footlight/issues/287)) ([1a2cf4f](https://github.com/tjbaker/footlight/commit/1a2cf4f42094af31483c02f54910e92212acdc37))
+* **app:** one modal at a time, focus after history deletes, distinct Settings nav name ([#359](https://github.com/tjbaker/footlight/issues/359)) ([c6f7f82](https://github.com/tjbaker/footlight/commit/c6f7f82ac38b91eeca08502298b07a609d7ada32))
+* **app:** restrict the dev server to loopback and same-machine origins ([#282](https://github.com/tjbaker/footlight/issues/282)) ([9fb62bb](https://github.com/tjbaker/footlight/commit/9fb62bb81eb505fe12707d4770adefc2308c402d))
+* **app:** stop blocking on ffmpeg and kill abandoned subprocesses ([#331](https://github.com/tjbaker/footlight/issues/331)) ([52cc938](https://github.com/tjbaker/footlight/commit/52cc93883ac50fec8ad83ef5d7c3b9cbf029cc36))
+* **app:** translate the Activity window and remaining hard-coded strings ([#301](https://github.com/tjbaker/footlight/issues/301)) ([5c744a5](https://github.com/tjbaker/footlight/commit/5c744a5aad1006040eec43b1ba8b18e26cd32be6))
+* **captions:** sanitize the ASS Fontname so a comma or newline can't corrupt the Style line ([#325](https://github.com/tjbaker/footlight/issues/325)) ([ec6cb0b](https://github.com/tjbaker/footlight/commit/ec6cb0b4659cbea022091ea51570463ad702636c))
+* **cli:** skip a malformed JSON clip instead of aborting the batch ([#290](https://github.com/tjbaker/footlight/issues/290)) ([a2918d4](https://github.com/tjbaker/footlight/commit/a2918d4b31fcfcc9662f10f50be8abebb2dc9121))
+* **cli:** validate --audio-bitrate and keep out_name inside the outdir ([#327](https://github.com/tjbaker/footlight/issues/327)) ([f46801c](https://github.com/tjbaker/footlight/commit/f46801c8ac554edecc9920739dd12884049d24a8))
+* **engine:** accept BOM-prefixed and spaced CSV headers; fail fast on missing columns ([#286](https://github.com/tjbaker/footlight/issues/286)) ([846df30](https://github.com/tjbaker/footlight/commit/846df30726c9d08c66408a4eff44aceb2a445c81))
+* **engine:** decode subprocess output as streaming UTF-8 ([#324](https://github.com/tjbaker/footlight/issues/324)) ([8a861a5](https://github.com/tjbaker/footlight/commit/8a861a5394f1b30daa18147dfb5c2bd1b6101788))
+* **engine:** escape caption and fontsdir paths for both filtergraph levels ([#284](https://github.com/tjbaker/footlight/issues/284)) ([6188880](https://github.com/tjbaker/footlight/commit/61888803413343964ff27a499e197913654e36ea))
+* **engine:** reject malformed timestamps in parseTimestamp and its Rust mirror ([#292](https://github.com/tjbaker/footlight/issues/292)) ([c4d695b](https://github.com/tjbaker/footlight/commit/c4d695b23f873bd0d7ec25961ed2152d6b0a59e2))
+* **engine:** reject non-decimal-integer crop offsets and pin the Rust crop mirrors ([#330](https://github.com/tjbaker/footlight/issues/330)) ([53b9e1a](https://github.com/tjbaker/footlight/commit/53b9e1ac86922161ae6fccd80617ae2104bbd9ca))
+* **engine:** treat an ffmpeg killed by a signal as a failure ([#283](https://github.com/tjbaker/footlight/issues/283)) ([b172f1b](https://github.com/tjbaker/footlight/commit/b172f1b20c43016b50d3b73312980f167745fcf1))
+* **tauri:** map read-only, full-disk and not-a-folder errors like the dev server ([#341](https://github.com/tjbaker/footlight/issues/341)) ([62a9b2f](https://github.com/tjbaker/footlight/commit/62a9b2f42d56b89aeb1e9e299311d8dafdf18a26))
+* **tauri:** recover from a corrupt history/session file; write atomically ([#328](https://github.com/tjbaker/footlight/issues/328)) ([0742e96](https://github.com/tjbaker/footlight/commit/0742e966a3ed5d7bfcab28dd941d4cbde326c9d9))
+* **track:** enforce the planSampleTimes sample-count cap ([#323](https://github.com/tjbaker/footlight/issues/323)) ([9d9551a](https://github.com/tjbaker/footlight/commit/9d9551a286f8df21a322d4e1958abb1903f666a5))
+
+
+### Performance
+
+* stream the loudness pass instead of buffering full PCM ([#333](https://github.com/tjbaker/footlight/issues/333)) ([6afff40](https://github.com/tjbaker/footlight/commit/6afff40ae6ba376a5609d2516d81dadbaab22805))
+
+
+### Refactors
+
+* **app:** define each Settings icon once in icons.ts ([#354](https://github.com/tjbaker/footlight/issues/354)) ([8d162df](https://github.com/tjbaker/footlight/commit/8d162dfa4f4929fd3dbffe08000cf023417bee44))
+* **app:** delegate frontend crop/rounding/DOM helpers to their single source ([#300](https://github.com/tjbaker/footlight/issues/300)) ([59dc154](https://github.com/tjbaker/footlight/commit/59dc154acdde6d27c9d86cf9410d82df6bfcf7af))
+* **app:** split settings.ts into a modal shell plus one module per panel ([#345](https://github.com/tjbaker/footlight/issues/345)) ([a211be5](https://github.com/tjbaker/footlight/commit/a211be505ef263671508003f5cb2e98733be1e4d))
+* build render CLI flags in one pure helper ([#329](https://github.com/tjbaker/footlight/issues/329)) ([3d06e42](https://github.com/tjbaker/footlight/commit/3d06e42bd607caeb9a46498dbc1f781f9b37ca47))
+* **engine:** move the ffmpeg/ffprobe command builders and parsers to commands.ts ([#352](https://github.com/tjbaker/footlight/issues/352)) ([601957a](https://github.com/tjbaker/footlight/commit/601957a827d5b70db5b0fb794ffc19ad5951d76c))
+* **engine:** move the loudness, swell and onset analysis to audio.ts ([#353](https://github.com/tjbaker/footlight/issues/353)) ([183a58d](https://github.com/tjbaker/footlight/commit/183a58de1b85f0ead57c5fecf6e25585284163ec))
+* **tauri:** move history/session/secrets and fonts out of main.rs ([#334](https://github.com/tjbaker/footlight/issues/334)) ([1d58919](https://github.com/tjbaker/footlight/commit/1d58919718ea6d28636786375067ce9b481cacc5))
+* **tauri:** move render/track and the menu, windows and quit wiring out of main.rs ([#336](https://github.com/tjbaker/footlight/issues/336)) ([302df4c](https://github.com/tjbaker/footlight/commit/302df4c3d18bdaa1cbe0bf339711adb6645543bf))
+* **tauri:** move store file I/O off the async runtime ([#356](https://github.com/tjbaker/footlight/issues/356)) ([52c30f8](https://github.com/tjbaker/footlight/commit/52c30f85d3f51e51f3a54ae1fb5602d391597161))
+* **tauri:** move the media commands and crop mirrors out of main.rs ([#335](https://github.com/tjbaker/footlight/issues/335)) ([08fa4f7](https://github.com/tjbaker/footlight/commit/08fa4f709c12e7ce71036d430346a0ac59ccdb22))
+
+
+### Documentation
+
+* add SECURITY.md with private vulnerability reporting policy ([#280](https://github.com/tjbaker/footlight/issues/280)) ([1cd80ae](https://github.com/tjbaker/footlight/commit/1cd80ae83ffbb9c664a6517f987ad4b5d90998a2))
+* fix stale CLAUDE.md example and src-tauri README ([#296](https://github.com/tjbaker/footlight/issues/296)) ([d867571](https://github.com/tjbaker/footlight/commit/d867571630488df7da403e12752f0489aa4a3aee))
+* update stale main.rs pointers after the Tauri module split ([#358](https://github.com/tjbaker/footlight/issues/358)) ([d118d69](https://github.com/tjbaker/footlight/commit/d118d6963c626311b80a44c0261df091b8737299))
+
+
+### Build System
+
+* clean npm tarball with prepack build, NOTICE, and no sourcemaps ([#297](https://github.com/tjbaker/footlight/issues/297)) ([a0b60f2](https://github.com/tjbaker/footlight/commit/a0b60f28e44eec69487a854cd8109fbc5b073bfb))
+
 ## [0.8.1](https://github.com/tjbaker/footlight/compare/footlight-v0.8.0...footlight-v0.8.1) (2026-06-13)
 
 
